@@ -1,0 +1,12 @@
+// .vscode/tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Kill+Build+Run dottalkpp",
+      "type": "shell",
+      "command": "taskkill /IM dottalkpp.exe /F 2>$null; cmake --build build --config Debug; .\\build\\bin\\Debug\\dottalkpp.exe",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+﻿# ---- CMake / VS build output ----
+/build/
+/Debug/
+/Release/
+/out/
+/x64/
+/.ipch/
+/.vs/
+/CMakeFiles/
+/CMakeCache.txt
+cmake_install.cmake
+*.dir/
+/*.sln
+/*.vcxproj
+/*.vcxproj.filters
+/*.vcxproj.user
+*.obj
+*.pdb
+*.ilk
+*.log
+
+# ---- Misc ----
+*.user
+*.DS_Store
+Thumbs.db

@@ -23,3 +23,10 @@ cmake_install.cmake
 *.user
 *.DS_Store
 Thumbs.db
+build/
+*.zip
+*.bak
+*.sav
+*.SAV*
+src/cli/New folder/
+src/cli/*Copy*.cpp*

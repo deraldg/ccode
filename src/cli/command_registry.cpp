@@ -17,20 +17,21 @@ bool CommandRegistry::run(const std::string& name, xbase::DbArea& area, std::ist
     return true;
 }
 
-void CommandRegistry::help(std::ostream& os) const {
 static const std::vector<std::string> verbs = {
     // built-ins (handled in shell.cpp)
     "HELP","AREA","SELECT","USE","QUIT","EXIT",
 
     // implemented commands (registered in shell.cpp)
-    "LIST","COUNT","TOP","BOTTOM","GOTO",
+    "LIST","FIELDS","COUNT","TOP","BOTTOM","GOTO",
     "APPEND","DELETE","UNDELETE","DISPLAY","RECALL","PACK",
     "COPY","EXPORT","IMPORT","COLOR",
 
     // planned / not-yet-implemented (will show with * in help())
     "REPLACE","CREATE","STATUS","STRUCT","INDEX","SEEK","FIND","LOCATE","SET","BROWSE","SKIP"
 };
-    const std::unordered_set<std::string> builtins = {"AREA","SELECT","QUIT","EXIT"};
+const std::unordered_set<std::string> builtins = {"HELP","AREA","SELECT","USE","QUIT","EXIT"};
+
+void CommandRegistry::help(std::ostream& os) const {
 
     os << "Commands (* = not available yet):\n";
     constexpr int COLS = 3;

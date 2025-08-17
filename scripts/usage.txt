@@ -1,0 +1,14 @@
+# Clean configure + build Release
+.\scripts\rebuild.ps1 -Clean -Config Release
+
+# Build Debug without cleaning
+.\scripts\rebuild.ps1 -Config Debug
+
+# Build + copy DBFs into the run folder
+.\scripts\rebuild.ps1 -Config Release -CopyData
+
+# Build + run the program from build\bin\<Config>
+.\scripts\rebuild.ps1 -Config Release -Run
+
+# Everything at once (clean, build, copy data, run)
+.\scripts\rebuild.ps1 -Clean -Config Release -CopyData -Run

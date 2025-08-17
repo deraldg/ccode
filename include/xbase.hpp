@@ -9,7 +9,8 @@
 #include <optional>
 
 // [INDEX PATCH]
-#include <xindex/index_manager.hpp>
+#include "xindex/index_manager.hpp"
+
 
 namespace xbase {
 
@@ -61,6 +62,7 @@ public:
     void open(const std::string& filename);
     void close();
     bool isOpen() const noexcept { return static_cast<bool>(_fp); }
+    bool isDeleted() const;
 
     // Navigation
     bool gotoRec(int32_t recno);
@@ -85,8 +87,6 @@ public:
     int     fieldCount() const { return static_cast<int>(_fields.size()); }
     int     cpr() const { return _hdr.cpr; }
     std::string name() const { return _db_name; }
-    bool isDeleted() const noexcept { return !_recbuf.empty() && _recbuf[0] == IS_DELETED; }
-
 
 private:
     std::fstream _fp;

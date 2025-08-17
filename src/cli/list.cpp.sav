@@ -1,0 +1,121 @@
+// src/cli/list.cpp
+#include "command_registry.hpp"
+#include "predicates.hpp"
+#include "textio.hpp"
+
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <limits>
+
+using namespace xbase;
+
+namespace {
+
+struct ListOptions {
+    bool all{false};          // show all records (even if deleted)
+    bool onlyDeleted{false};  // show only deleted records
+    int  topN{std::numeric_limits<int>::max()};
+    // Simple FOR filter: LIST <field> <op> <value>
+    std::string fld, op, val;
+};
+
+static ListOptions parse_args(std::istringstream& iss) {
+    ListOptions opt{};
+    std::string t;
+
+    // Accepted forms:
+    //   LIST
+    //   LIST TOP 10
+    //   LIST ALL
+    //   LIST DELETED
+    //   LIST NAME = ALBERT
+    //   LIST TOP 25 NAME CONTAINS AL
+    while (iss >> t) {
+        if (textio::ieq(t, "ALL"))            { opt.all = true; continue; }
+        if (textio::ieq(t, "DELETED"))        { opt.onlyDeleted = true; continue; }
+        if (textio::ieq(t, "TOP")) {
+            int n = 0;
+            if (iss >> n && n > 0) opt.topN = n;
+            continue;
+        }
+        if (opt.fld.empty()) { opt.fld = t; continue; }
+        if (opt.op.empty())  { opt.op  = t; continue; }
+        if (opt.val.empty()) { opt.val = t; break; }
+    }
+    return opt;
+}
+
+static void print_header(const DbArea& area) {
+    const auto& Fs = area.fields();
+    std::cout << "# ";
+    for (const auto& f : Fs) {
+        // left-align names, width = field length
+        std::cout << std::left << std::setw(static_cast<int>(f.length)) << f.name << " ";
+    }
+    std::cout << std::right << "\n";
+}
+
+static void print_record(const DbArea& area) {
+    const auto& Fs = area.fields();
+    std::cout << std::setw(5) << area.recno() << " ";
+    for (int i = 1; i <= area.fieldCount(); ++i) {
+        std::string s = area.get(i);
+        const auto w = static_cast<int>(Fs[static_cast<size_t>(i - 1)].length);
+        if (static_cast<int>(s.size()) > w) s.resize(static_cast<size_t>(w));
+        std::cout << std::left << std::setw(w) << s << " ";
+    }
+    std::cout << std::right << "\n";
+}
+
+void cmd_list(DbArea& area, std::istringstream& iss) {
+    if (!area.isOpen()) {
+        std::cout << "No table open.\n";
+        return;
+    }
+
+    const auto opt = parse_args(iss);
+    print_header(area);
+
+    int printed = 0;
+
+    if (!area.top()) {
+        std::cout << "0 record(s) listed.\n";
+        return;
+    }
+
+    do {
+        if (!area.readCurrent()) break;
+
+        // Deleted filtering
+        const bool isDel = area.isDeleted();
+        if (!opt.all && !opt.onlyDeleted) {
+            // default: skip deleted
+            if (isDel) continue;
+        } else if (opt.onlyDeleted) {
+            if (!isDel) continue;
+        }
+        // (opt.all) shows everything
+
+        // FOR filter
+        if (!opt.fld.empty() && !opt.op.empty() && !opt.val.empty()) {
+            if (!predicates::eval(area, opt.fld, opt.op, opt.val)) {
+                continue;
+            }
+        }
+
+        print_record(area);
+        ++printed;
+        if (printed >= opt.topN) break;
+
+    } while (area.skip(1));
+
+    std::cout << printed << " record(s) listed.\n";
+}
+
+} // namespace
+
+// Exported registrar for your CLI bootstrap
+extern "C" void register_list(cli::CommandRegistry& cr) {
+    cr.add("LIST", cmd_list);
+}

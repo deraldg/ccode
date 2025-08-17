@@ -1,0 +1,121 @@
+gotcha—here’s a tight inventory of the “objects” in the current tree, grouped by module/namespace, with the public surface I can confirm from the headers you shared and the alpha-v3 zip. Where a header shows elisions (`...`), I’ve listed the key methods that are clearly present and the ones that are obviously required by the call-sites (e.g., in the CLI).
+
+# xbase (DBF engine)
+
+## `struct FieldDef`
+
+* **Members**: `std::string name`, `char type`, `uint8_t len`, `uint8_t dec`
+* **Purpose**: schema descriptor for one DBF column.
+
+## `class DbfFile`
+
+* **Open/close**: `bool open(const std::string& path)`, `void close()`, `bool isOpen() const`
+* **Header/schema**: `const std::vector<FieldDef>& fields() const`, `int charsPerRecord() const`
+* **Navigation**: `bool gotoRec(int32_t recno)`, `bool top()`, `bool bottom()`, `bool skip(int delta)`
+* **Record IO**: `bool readCurrent()`, `bool writeCurrent()`, `bool appendBlank()`, `bool deleteCurrent()`
+* **Record state**: `int32_t recordCount() const`, `int32_t currentRecNo() const`, `char deletedFlag() const`
+
+> Notes: Names above reflect what the CLI calls invoke (e.g., `recordCount()`, `deletedFlag()`), even where the header shows `...`.
+
+## `struct RecordView`
+
+* **Purpose**: typed access to the current record buffer with formatting.
+* **Typical API (used by CLI)**:
+  `std::string fieldAsString(int i, size_t width, bool padForChar) const`
+  plus helpers for numeric/logical/date formatting (invoked indirectly via `fieldAsString`).
+
+## `class DbArea`
+
+* **Purpose**: “selected area” abstraction that wraps a `DbfFile` + cursor.
+* **Open/close/use**: `bool use(const std::string& fileStem)`, `void close()`, `bool isOpen() const`
+* **Navigation**: `bool top()`, `bool bottom()`, `bool gotoRec(int32_t)`, `bool skip(int delta)`
+* **Introspection**: `int32_t recordCount() const`, `int32_t currentRecNo() const`
+* **Schema/view**: `const std::vector<FieldDef>& fields() const`, `const RecordView& view() const`
+* **Record state**: `char deletedFlag() const`
+
+> The CLI’s `LIST`/`FIELDS` implementations rely on: `fields()`, `view()`, `recordCount()`, `currentRecNo()`, `deletedFlag()`, `top()`, `skip()`.
+
+# xindex (index layer)
+
+## `struct Key` / `struct Range` (in `key_common.hpp`)
+
+* `Key{ std::vector<uint8_t> bytes; }`
+* `Range{ Key low; Key high; bool inclusive_low; bool inclusive_high; }`
+
+## `class IIndexBackend`
+
+* **Lifecycle**: `virtual bool open(const std::string& path)=0`, `virtual bool close()=0`
+* **Staleness**: `virtual void setFingerprint(const std::string& fp)=0`, `virtual bool wasStale() const=0`
+* **Build/Maintain**: `virtual bool rebuild(const std::vector<std::pair<Key,int32_t>>& kv)=0`
+* **CRUD**: `virtual bool upsert(const Key&, int32_t recno)=0`, `virtual bool erase(const Key&, int32_t recno)=0`
+* **Lookup/Scan**:
+  `virtual std::optional<int32_t> seek(const Key&) const=0`
+  `virtual void scan(const Range&, std::function<void(int32_t)>) const=0`
+* **Cursor** (optional nested interface): `struct Cursor { virtual bool first(const Range&)=0; virtual bool next(int32_t& out)=0; };`
+
+## `class BPlusTreeBackend : public IIndexBackend`
+
+* Implements the full `IIndexBackend` surface for an on-disk B+Tree.
+
+## `class BptMemBackend : public IIndexBackend`
+
+* In-memory multimap implementation (used for tests or as a simple backend).
+
+## `class IndexManager`
+
+* **Open/close**: `bool open(const std::string& basePath)`, `void close()`
+* **Staleness/build**: `bool wasStale() const`, `bool rebuild(std::function<void(std::function<void(const Key&,int32_t)>)>)`
+* **Point/range**: `std::optional<int32_t> seek(const Key&) const`,
+  `void scan(const Range&, std::function<void(int32_t)>) const`
+* **Cursors**: `std::unique_ptr<IIndexBackend::Cursor> cursorForKey(const Range&) const`
+
+> A small **KeyCodec** utility exists (header only) to pack/unpack field values into `Key` byte vectors.
+
+# cli (shell & commands)
+
+## `struct Settings` (`include/cli/settings.hpp`)
+
+* **Members**: `int page_lines = 20; bool show_deleted = false;`
+* Used by paging in `LIST`, etc.
+
+## `class CommandRegistry`
+
+* **Types**: `using Handler = std::function<void(xbase::DbArea&, std::istringstream&)>;`
+* **API**:
+  `void add(std::string name, Handler)` – registers a verb (case-insensitive via `textio::up`)
+  `bool run(const std::string& name, xbase::DbArea&, std::istringstream&) const`
+  `void help(std::ostream&) const` – prints a multi-column command table
+
+## Free command handlers (in `src/cli/cmd_*.cpp`)
+
+* `void cmd_USE(DbArea&, std::istringstream&)`
+* `void cmd_LIST(DbArea&, std::istringstream&)`
+* `void cmd_FIELDS(DbArea&, std::istringstream&)`
+* `void cmd_COUNT(...)`, `cmd_TOP(...)`, `cmd_BOTTOM(...)`, `cmd_GOTO(...)`
+* `cmd_APPEND`, `cmd_DELETE`, `cmd_RECALL` (`UNDELETE` alias), `cmd_PACK`
+* `cmd_COPY`, `cmd_EXPORT`, `cmd_IMPORT`
+* `cmd_DISPLAY`, `cmd_FIND`, `cmd_SEEK`
+* `cmd_COLOR`, `cmd_VERSION`
+* plus the shell built-ins handled in `shell.cpp`: `HELP`, `AREA`, `SELECT`, `EXIT/QUIT`
+
+# support utilities
+
+## `namespace textio` (`textio.hpp`)
+
+* `std::string up(std::string)` – uppercase
+* `void print_heading(std::ostream&, std::span<const std::string>, std::span<const int> widths)`
+* `void hr(std::ostream&, int width)`
+* `void pager(std::ostream&, int line_count, const cli::Settings&)` (called after `LIST` chunks)
+
+## `namespace csv` (`csv.hpp`)
+
+* `void write(std::ostream&, const std::vector<std::string>& row)`
+* `bool read(std::istream&, std::vector<std::string>& out_row)`
+
+## `namespace predicates` (`predicates.hpp`)
+
+* Useful functors/predicates used by `FIND`/`LOCATE` (e.g., contains, startswith, relational ops on numeric fields, etc.)
+
+---
+
+If you want, I can dump this as a living “API map” file and keep it synced as we touch code. Also, tell me if you’d like the free-function commands listed with their key options/flags next.

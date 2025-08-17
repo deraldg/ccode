@@ -2,6 +2,7 @@
 #include "textio.hpp"
 #include <algorithm>
 #include <cstring>
+#include "xbase.hpp"
 
 #if DOTTALK_WITH_INDEX
   #include "xindex/key_codec.hpp"
@@ -17,6 +18,12 @@ bool DbArea::readCurrent() {
     if (!_fp) return false;
     _del = _recbuf[0];
     return loadFieldsFromBuffer();
+}
+
+bool DbArea::isDeleted() const {
+    if (!_recbuf.empty())           // delete flag is first byte of DBF record
+        return _recbuf[0] == IS_DELETED;
+    return _del == IS_DELETED;      // fallback if buffer isn’t loaded
 }
 
 bool DbArea::writeCurrent() {

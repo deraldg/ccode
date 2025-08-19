@@ -1,52 +1,30 @@
-#include "command_registry.hpp"
-#include "textio.hpp"
-#include <vector>
-#include <unordered_set>
-#include <iomanip>
+#include "../../include/command_registry.hpp"
+#include <iostream>
 
 namespace cli {
 
-void CommandRegistry::add(std::string name, Handler h) {
-    map_.emplace(textio::up(name), std::move(h));
+CommandRegistry reg;
+
+void CommandRegistry::add(const std::string& name, Handler h) {
+  map_[name] = std::move(h);
 }
 
-bool CommandRegistry::run(const std::string& name, xbase::DbArea& area, std::istringstream& iss) const {
-    auto it = map_.find(textio::up(name));
-    if (it == map_.end()) return false;
-    it->second(area, iss);
-    return true;
+bool CommandRegistry::run(xbase::DbArea& area, const std::string& line) {
+  std::istringstream iss(line);
+  std::string cmd;
+  if (!(iss >> cmd)) return true; // empty line: treat as handled
+  return run(area, cmd, iss);
 }
 
-static const std::vector<std::string> verbs = {
-    // built-ins (handled in shell.cpp)
-    "HELP","AREA","SELECT","USE","QUIT","EXIT",
-
-    // implemented commands (registered in shell.cpp)
-    "LIST","FIELDS","COUNT","TOP","BOTTOM","GOTO",
-    "APPEND","DELETE","UNDELETE","DISPLAY","RECALL","PACK",
-    "COPY","EXPORT","IMPORT","COLOR",
-
-    // planned / not-yet-implemented (will show with * in help())
-    "REPLACE","CREATE","STATUS","STRUCT","INDEX","SEEK","FIND","LOCATE","SET","BROWSE","SKIP"
-};
-const std::unordered_set<std::string> builtins = {"HELP","AREA","SELECT","USE","QUIT","EXIT"};
+bool CommandRegistry::run(xbase::DbArea& area, const std::string& cmd, std::istringstream& args) {
+  auto it = map_.find(cmd);
+  if (it == map_.end()) return false;
+  it->second(area, args);
+  return true;
+}
 
 void CommandRegistry::help(std::ostream& os) const {
-
-    os << "Commands (* = not available yet):\n";
-    constexpr int COLS = 3;
-    constexpr int COLW = 18;
-    int col = 0;
-    for (const auto& v : verbs) {
-        const std::string V = textio::up(v);
-        const bool implemented = builtins.count(V) || (map_.find(V) != map_.end());
-        std::string cell = v + (implemented ? "" : " *");
-        if (col == 0) os << "  ";
-        os << std::left << std::setw(COLW) << cell;
-        col = (col + 1) % COLS;
-        if (col == 0) os << "\n";
-    }
-    if (col != 0) os << "\n";
+  for (const auto& kv : map_) os << kv.first << '\n';
 }
 
 } // namespace cli

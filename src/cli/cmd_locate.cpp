@@ -1,10 +1,13 @@
-#include <iostream>
+﻿#include <iostream>
 #include <sstream>
 #include <string>
-#include "command_registry.hpp"
 #include "textio.hpp"
 #include "predicates.hpp"
 #include "xbase.hpp"
+#include "../../include/command_registry.hpp"
+// optional if you use bare 'reg' instead of cli::reg:
+using cli::reg;
+
 
 using namespace std;
 

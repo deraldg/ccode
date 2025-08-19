@@ -1,0 +1,40 @@
+*** a/src/cli/cmd_append_blank.cpp
+--- b/src/cli/cmd_append_blank.cpp
+@@
+-// (existing includes / helpers left intact)
+-// Current behavior prompts interactively; switch to silent allocator with count.
+-#include "xbase.hpp"
+-#include <sstream>
+-#include <iostream>
+-
+-using namespace xbase;
+-
+-void cmd_APPEND_BLANK(DbArea& a, std::istringstream& iss) {
+-    int n = 1;
+-    if (!(iss >> n) || n < 1) n = 1;
+-
+-    // OLD: appended 1 and prompted interactively
+-    // NEW: append n blank records silently
+-    for (int i = 0; i < n; ++i) {
+-        a.append_blank();
+-    }
+-    std::cout << "Appended " << n << " blank record(s). New count: "
+-              << a.record_count() << ".\n";
+-}
++// Make APPEND BLANK [n] a silent allocator (no prompts), honoring optional count.
++#include "xbase.hpp"
++#include <sstream>
++#include <iostream>
++
++using namespace xbase;
++
++void cmd_APPEND_BLANK(DbArea& a, std::istringstream& iss) {
++    int n = 1;
++    if (!(iss >> n) || n < 1) n = 1;
++
++    for (int i = 0; i < n; ++i) {
++        a.append_blank();
++    }
++    std::cout << "Appended " << n << " blank record(s). New count: "
++              << a.record_count() << ".\n";
++}

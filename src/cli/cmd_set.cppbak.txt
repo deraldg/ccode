@@ -1,0 +1,54 @@
+#include <iostream>
+#include <sstream>
+#include <string>
+#include "command_registry.hpp"
+#include "textio.hpp"
+#include "cli/settings.hpp"
+#include "xbase.hpp"
+
+using namespace std;
+
+namespace {
+
+void cmd_SET(xbase::DbArea& /*area*/, std::istringstream& iss)
+{
+    // Syntax supported (subset):
+    //   SET DELETED ON|OFF
+    // Future: SET TALK, SET EXACT, etc.
+    std::string token;
+    if (!(iss >> token)) {
+        std::cout << "SET what? Try: SET DELETED ON|OFF\n";
+        return;
+    }
+    std::string u = textio::up(token);
+
+    if (u == "DELETED") {
+        std::string val;
+        if (!(iss >> val)) {
+            std::cout << "SET DELETED requires ON or OFF\n";
+            return;
+        }
+        std::string uv = textio::up(val);
+        if (uv == "ON") {
+            cli::Settings::setDeleted(true);
+            std::cout << "Deleted records are now hidden (SET DELETED ON).\n";
+        } else if (uv == "OFF") {
+            cli::Settings::setDeleted(false);
+            std::cout << "Deleted records are now visible (SET DELETED OFF).\n";
+        } else {
+            std::cout << "SET DELETED expects ON or OFF\n";
+        }
+        return;
+    }
+
+    std::cout << "Unknown SET option: " << token << "\n";
+}
+
+} // namespace
+
+// Register with the CLI on TU load
+static bool s_registered = [](){
+    static cli::CommandRegistry reg;
+    reg.add("SET", &cmd_SET);
+    return true;
+}();

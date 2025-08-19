@@ -1,0 +1,59 @@
+#include <sstream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <optional>
+#include <cctype>
+#include <cstdio>
+
+#include "xbase.hpp"
+#include "xindex/attach.hpp"
+#include "xindex/dbarea_adapt.hpp"
+
+static std::string trim(std::string s){
+    auto sp=[](unsigned char c){return std::isspace(c)!=0;};
+    while(!s.empty()&&sp((unsigned char)s.front())) s.erase(s.begin());
+    while(!s.empty()&&sp((unsigned char)s.back()))  s.pop_back();
+    return s;
+}
+static std::vector<std::string> split_commas(std::string s){
+    std::vector<std::string> out; size_t i=0;
+    while(i<s.size()){
+        size_t c=s.find(',',i);
+        out.push_back(trim(c==std::string::npos? s.substr(i): s.substr(i,c-i)));
+        if(c==std::string::npos) break; i=c+1;
+    }
+    out.erase(std::remove_if(out.begin(),out.end(),[](auto& t){return t.empty();}),out.end());
+    return out;
+}
+
+void cmd_SEEK(std::istringstream& iss, ShellContext& ctx) {
+    std::string key; if (!(iss >> key)) { ctx.out() << "Usage: SEEK <key>\n"; return; }
+
+    // Normalize like the index key builder does:
+    // e.g., if your tag L uses UPPER(LAST_NAME) and trims, do:
+    key = textio::trim(key);
+    key = textio::up(key);
+
+    if (g_index.hasActiveTag()) {
+        auto pos = g_index.seek(key);    // implement to return found/record no.
+        if (pos.found) {
+            if (auto* t = ctx.table()) t->goToRecno(pos.recno);
+            ctx.out() << "Found.\n";
+        } else {
+            ctx.out() << "Not found.\n";
+        }
+        return;
+    }
+
+    // Fallback: sequential scan on the likely field (LAST_NAME here)
+    if (auto* t = ctx.table()) {
+        t->goTop();
+        do {
+            auto v = t->get("LAST_NAME");         // adjust to your API
+            std::string probe = textio::up(textio::trim(v.toString()));
+            if (probe == key) { ctx.out() << "Found.\n"; return; }
+        } while (t->skip(1));
+    }
+    ctx.out() << "Not found.\n";
+}

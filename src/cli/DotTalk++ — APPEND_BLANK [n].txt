@@ -1,3 +1,8 @@
+// DotTalk++ — APPEND_BLANK [n]
+// Appends n blank records (delete flag=' ', body=' ') without prompting.
+
+//now switched to append - add data
+
 #include "xbase.hpp"
 #include <iostream>
 #include <sstream>
@@ -11,7 +16,7 @@ static uint16_t rd_le16(const unsigned char* p){ return uint16_t(p[0] | (p[1]<<8
 static uint32_t rd_le32(const unsigned char* p){ return uint32_t(p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24)); }
 static void wr_le32(unsigned char* p, uint32_t v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; p[2]=(v>>16)&0xFF; p[3]=(v>>24)&0xFF; }
 
-void cmd_APPEND(xbase::DbArea& a, std::istringstream& iss)
+void cmd_APPEND_BLANK(xbase::DbArea& a, std::istringstream& iss)
 {
     if (!a.isOpen()) { std::cout << "No table open.\n"; return; }
 

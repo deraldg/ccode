@@ -1,11 +1,14 @@
-#include <iostream>
+﻿#include <iostream>
 #include <sstream>
 #include <string>
 #include <fstream>
 #include <vector>
 #include <cstdio>   // std::remove, std::rename
-#include "command_registry.hpp"
 #include "xbase.hpp"
+#include "../../include/command_registry.hpp"
+// optional if you use bare 'reg' instead of cli::reg:
+using cli::reg;
+
 
 // Robust PACK implementation with external linkage for cmd_PACK:
 // - Reads original header + field descriptors

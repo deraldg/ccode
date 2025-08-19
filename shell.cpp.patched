@@ -33,6 +33,18 @@ void cmd_FIELDS(xbase::DbArea&, std::istringstream&);
 void cmd_FIND  (xbase::DbArea&, std::istringstream&);
 void cmd_SEEK  (xbase::DbArea&, std::istringstream&);
 
+void cmd_CLEAR  (xbase::DbArea&, std::istringstream&);
+void cmd_CREATE (xbase::DbArea&, std::istringstream&);
+void cmd_DUMP   (xbase::DbArea&, std::istringstream&);
+void cmd_EDIT   (xbase::DbArea&, std::istringstream&);
+void cmd_LOCATE (xbase::DbArea&, std::istringstream&);
+void cmd_RECNO  (xbase::DbArea&, std::istringstream&);
+void cmd_REFRESH(xbase::DbArea&, std::istringstream&);
+void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
+void cmd_STATUS (xbase::DbArea&, std::istringstream&);
+void cmd_STRUCT (xbase::DbArea&, std::istringstream&);
+void cmd_ZAP    (xbase::DbArea&, std::istringstream&);
+void cmd_APPEND_BLANK(xbase::DbArea&, std::istringstream&);
 // ---- Indexing command handlers (compiled when enabled) ----
 #if DOTTALK_WITH_INDEX
 void cmd_INDEX    (xbase::DbArea&, std::istringstream&);   // e.g., INDEX ON <expr> TAG <tag> [ASC|DESC]
@@ -40,25 +52,6 @@ void cmd_SETINDEX (xbase::DbArea&, std::istringstream&);   // e.g., SET INDEX TO
 void cmd_ASCEND   (xbase::DbArea&, std::istringstream&);
 void cmd_DESCEND  (xbase::DbArea&, std::istringstream&);
 #endif
-
-// Already present ones...
-void cmd_APPEND_BLANK(xbase::DbArea&, std::istringstream&);
-void cmd_CLEAR(xbase::DbArea&, std::istringstream&);
-void cmd_CREATE(xbase::DbArea&, std::istringstream&);
-void cmd_DUMP(xbase::DbArea&, std::istringstream&);
-void cmd_EDIT(xbase::DbArea&, std::istringstream&);
-//void cmd_LOCATE(xbase::DbArea&, std::istringstream&);
-void cmd_RECNO(xbase::DbArea&, std::istringstream&);
-void cmd_REFRESH(xbase::DbArea&, std::istringstream&);
-void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
-void cmd_STATUS(xbase::DbArea&, std::istringstream&);
-void cmd_STRUCT(xbase::DbArea&, std::istringstream&);
-//void cmd_ZAP(xbase::DbArea&, std::istringstream&);
-
-// New ones
-void cmd_DIR   (xbase::DbArea&, std::istringstream&);
-void cmd_BANG  (xbase::DbArea&, std::istringstream&);
-//void cmd_RECNO (xbase::DbArea&, std::istringstream&);
 
 int run_shell()
 {
@@ -129,44 +122,28 @@ int run_shell()
     cli::reg.add("INDEX",     [](DbArea& A, std::istringstream& S){ cmd_INDEX(A,S); });
     cli::reg.add("SETINDEX",  [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
     cli::reg.add("SET INDEX", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // if spaced keys are supported
-    cli::reg.add("SET INDEX TO", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // optional nicety
     cli::reg.add("ASCEND",    [](DbArea& A, std::istringstream& S){ cmd_ASCEND(A,S); });
     cli::reg.add("DESCEND",   [](DbArea& A, std::istringstream& S){ cmd_DESCEND(A,S); });
 #endif
 
-
+    // --- Extra lifecycle / edit / info commands being wired in ---
     cli::reg.add("APPEND BLANK", [](DbArea& A, std::istringstream& S){ cmd_APPEND_BLANK(A,S); });
     cli::reg.add("CLEAR",        [](DbArea& A, std::istringstream& S){ cmd_CLEAR(A,S); });
     cli::reg.add("CREATE",       [](DbArea& A, std::istringstream& S){ cmd_CREATE(A,S); });
     cli::reg.add("DUMP",         [](DbArea& A, std::istringstream& S){ cmd_DUMP(A,S); });
     cli::reg.add("EDIT",         [](DbArea& A, std::istringstream& S){ cmd_EDIT(A,S); });
-//  cli::reg.add("LOCATE",       [](DbArea& A, std::istringstream& S){ cmd_LOCATE(A,S); });
+    cli::reg.add("LOCATE",       [](DbArea& A, std::istringstream& S){ cmd_LOCATE(A,S); });
     cli::reg.add("RECNO",        [](DbArea& A, std::istringstream& S){ cmd_RECNO(A,S); });
     cli::reg.add("REFRESH",      [](DbArea& A, std::istringstream& S){ cmd_REFRESH(A,S); });
     cli::reg.add("REPLACE",      [](DbArea& A, std::istringstream& S){ cmd_REPLACE(A,S); });
     cli::reg.add("STATUS",       [](DbArea& A, std::istringstream& S){ cmd_STATUS(A,S); });
     cli::reg.add("STRUCT",       [](DbArea& A, std::istringstream& S){ cmd_STRUCT(A,S); });
-//  cli::reg.add("ZAP",          [](DbArea& A, std::istringstream& S){ cmd_ZAP(A,S); });
-
-// System / utilities
-    reg.add("DIR",     [](DbArea& A, std::istringstream& S){ cmd_DIR(A,S);   });
-    reg.add("!",       [](DbArea& A, std::istringstream& S){ cmd_BANG(A,S);  });
-//  reg.add("RECNO",   [](DbArea& A, std::istringstream& S){ cmd_RECNO(A,S); });
-    reg.add("CLS",          cmd_CLEAR);
-
- // cli::reg.add("SETINDEX",     [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
- // cli::reg.add("SET INDEX",    [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
- // cli::reg.add("SET INDEX TO", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // optional nicety
-
-
-// Optional helpful aliases:
-    reg.add("CLS",          cmd_CLEAR);
-
+    cli::reg.add("ZAP",          [](DbArea& A, std::istringstream& S){ cmd_ZAP(A,S); });
     cli::reg.add("HELP", [&](DbArea&, std::istringstream&){
         cli::reg.help(std::cout);
     });
 
-    std::cout << "DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.\n";
+    std::cout << "DotTalk++ — type HELP. SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.\n";
 
     std::string line;
     while (true) {

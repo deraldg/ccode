@@ -1,0 +1,13 @@
+# from repo root
+mkdir -Force releases\alpha-v3.1
+
+# Copy the build artifacts you already have locally
+Copy-Item C:\Users\deral\code\ccode\dist\ccode-alpha.3-20250819-105949.zip            releases\alpha-v3.1\
+Copy-Item C:\Users\deral\code\ccode\dist\ccode-alpha.3-20250819-105949.manifest.txt   releases\alpha-v3.1\
+
+# Copy the two docs you downloaded from chat (adjust paths if needed)
+Copy-Item "$HOME\Downloads\DotTalkPP_alpha3_ReleaseNotes.docx" releases\alpha-v3.1\  -ErrorAction SilentlyContinue
+Copy-Item "$HOME\Downloads\CHANGELOG.md"                       releases\alpha-v3.1\  -ErrorAction SilentlyContinue
+
+# (Optional) Checksums for integrity
+Get-FileHash -Algorithm SHA256 releases\alpha-v3.1\* | Format-Table -Auto

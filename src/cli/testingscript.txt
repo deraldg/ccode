@@ -1,0 +1,198 @@
+PS C:\Users\deral\code\ccode> cmake -S . -B build
+-- ================================
+-- Source dir : C:/Users/deral/code/ccode
+-- Build dir  : C:/Users/deral/code/ccode/build
+-- Layout     : INTEGRATED (no externals/)
+-- CLI dir    : C:/Users/deral/code/ccode/src/cli
+-- Indexing   : ON
+-- ================================
+-- Configuring done (0.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: C:/Users/deral/code/ccode/build
+PS C:\Users\deral\code\ccode> cmake --build build --config Release
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode> cmake --build build --config Release
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode> cmake -S . -B build
+-- ================================
+-- Source dir : C:/Users/deral/code/ccode
+-- Build dir  : C:/Users/deral/code/ccode/build
+-- Layout     : INTEGRATED (no externals/)
+-- CLI dir    : C:/Users/deral/code/ccode/src/cli
+-- Indexing   : ON
+-- ================================
+-- Configuring done (0.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: C:/Users/deral/code/ccode/build
+PS C:\Users\deral\code\ccode> cmake --build build --config Release
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode> cmake --build build --config Release
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode> cmake --build build --config Release
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode> cmake -S . -B build
+-- ================================
+-- Source dir : C:/Users/deral/code/ccode
+-- Build dir  : C:/Users/deral/code/ccode/build
+-- Layout     : INTEGRATED (no externals/)
+-- CLI dir    : C:/Users/deral/code/ccode/src/cli
+-- Indexing   : ON
+-- ================================
+-- Configuring done (0.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: C:/Users/deral/code/ccode/build
+PS C:\Users\deral\code\ccode> cmake --build build --config Release
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode> cmake --build build --config Release
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode> cmake -S . -B build -DDOTTALK_WITH_INDEX=ON
+-- ================================
+-- Source dir : C:/Users/deral/code/ccode
+-- Build dir  : C:/Users/deral/code/ccode/build
+-- Layout     : INTEGRATED (no externals/)
+-- CLI dir    : C:/Users/deral/code/ccode/src/cli
+-- Indexing   : ON
+-- ================================
+-- Configuring done (0.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: C:/Users/deral/code/ccode/build
+PS C:\Users\deral\code\ccode> cmake --build build --config Release --target dottalkpp -- /t:Rebuild
+MSBuild version 17.14.18+a338add32 for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule C:/Users/deral/code/ccode/CMakeLists.txt
+  attach.cpp
+  bpt_backend.cpp
+  bptree_backend.cpp
+  common.cpp
+  dbarea_adapt.cpp
+  index_manager.cpp
+  index_tag.cpp
+  key_codec.cpp
+C:\Users\deral\code\ccode\src\xindex\index_manager.cpp(22,13): warning C4505: 'xindex::ieq': unreferenced function with internal linkage has been remo
+ved [C:\Users\deral\code\ccode\build\xindex.vcxproj]
+  xindex.vcxproj -> C:\Users\deral\code\ccode\build\Release\xindex.lib
+  Building Custom Rule C:/Users/deral/code/ccode/CMakeLists.txt
+  dbf_file.cpp
+  fields.cpp
+  record_view.cpp
+  xbase.vcxproj -> C:\Users\deral\code\ccode\build\Release\xbase.lib
+  Building Custom Rule C:/Users/deral/code/ccode/CMakeLists.txt
+  cmd_append.cpp
+  cmd_append_blank.cpp
+  cmd_bang.cpp
+  cmd_bottom.cpp
+  cmd_clear.cpp
+  cmd_color.cpp
+  cmd_copy.cpp
+  cmd_count.cpp
+  cmd_create.cpp
+  cmd_delete.cpp
+  cmd_dir.cpp
+  cmd_display.cpp
+  cmd_dump.cpp
+  cmd_edit.cpp
+  cmd_export.cpp
+  cmd_fields.cpp
+  cmd_find.cpp
+  cmd_goto.cpp
+  cmd_help.cpp
+  cmd_import.cpp
+  cmd_index.cpp
+  cmd_list.cpp
+  cmd_locate.cpp
+C:\Users\deral\code\ccode\src\cli\cmd_delete.cpp(117,33): warning C4459: declaration of 'reg' hides global declaration [C:\Users\deral\code\ccode\buil
+d\dottalkpp.vcxproj]
+  cmd_order.cpp
+      C:\Users\deral\code\ccode\include\command_registry.hpp(31,24):
+      see declaration of 'cli::reg'
+
+C:\Users\deral\code\ccode\src\cli\cmd_dir.cpp(37,41): warning C4996: 'localtime': This function or variable may be unsafe. Consider using localtime_s
+instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\Users\deral\code\ccode\build\dottalkpp.vcxproj]
+  cmd_pack.cpp
+C:\Users\deral\code\ccode\src\cli\cmd_dir.cpp(59,45): warning C4996: 'localtime': This function or variable may be unsafe. Consider using localtime_s
+instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\Users\deral\code\ccode\build\dottalkpp.vcxproj]
+  cmd_recall.cpp
+C:\Users\deral\code\ccode\src\cli\cmd_dir.cpp(68,45): warning C4996: 'localtime': This function or variable may be unsafe. Consider using localtime_s
+instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\Users\deral\code\ccode\build\dottalkpp.vcxproj]
+  cmd_recno.cpp
+  cmd_refresh.cpp
+  cmd_replace.cpp
+  cmd_seek.cpp
+  cmd_set.cpp
+  cmd_setindex.cpp
+  cmd_status.cpp
+  cmd_struct.cpp
+  cmd_test.cpp
+  cmd_top.cpp
+  cmd_use.cpp
+  cmd_version.cpp
+  cmd_zap.cpp
+  colors.cpp
+C:\Users\deral\code\ccode\src\cli\cmd_locate.cpp(77,33): warning C4459: declaration of 'reg' hides global declaration [C:\Users\deral\code\ccode\build
+\dottalkpp.vcxproj]
+      C:\Users\deral\code\ccode\include\command_registry.hpp(31,24):
+      see declaration of 'cli::reg'
+
+C:\Users\deral\code\ccode\src\cli\cmd_pack.cpp(152,33): warning C4459: declaration of 'reg' hides global declaration [C:\Users\deral\code\ccode\build\
+dottalkpp.vcxproj]
+  command_registry.cpp
+  csv.cpp
+  main.cpp
+  order_state.cpp
+  parse.cpp
+  predicates.cpp
+      C:\Users\deral\code\ccode\include\command_registry.hpp(31,24):
+      see declaration of 'cli::reg'
+
+C:\Users\deral\code\ccode\src\cli\cmd_replace.cpp(111,20): warning C4244: 'initializing': conversion from 'int' to 'char', possible loss of data [C:\U
+sers\deral\code\ccode\build\dottalkpp.vcxproj]
+  shell.cpp
+  textio.cpp
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\algorithm(3799,24): warning C4244: '=': conversion from 'int
+' to 'char', possible loss of data [C:\Users\deral\code\ccode\build\dottalkpp.vcxproj]
+  (compiling source file '../src/cli/cmd_replace.cpp')
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\algorithm(3799,24):
+      the template instantiation context (the oldest one first) is
+          C:\Users\deral\code\ccode\src\cli\cmd_replace.cpp(29,14):
+          see reference to function template instantiation '_OutIt std::transform<std::_String_iterator<std::_String_val<std::_Simple_types<_Elem>>>,s
+  td::_String_iterator<std::_String_val<std::_Simple_types<_Elem>>>,`anonymous-namespace'::up::<lambda_1>>(const _InIt,const _InIt,_OutIt,_Fn)' being
+  compiled
+          with
+          [
+              _OutIt=std::_String_iterator<std::_String_val<std::_Simple_types<char>>>,
+              _Elem=char,
+              _InIt=std::_String_iterator<std::_String_val<std::_Simple_types<char>>>,
+              _Fn=`anonymous-namespace'::up::<lambda_1>
+          ]
+
+  dottalkpp.vcxproj -> C:\Users\deral\code\ccode\build\Release\dottalkpp.exe
+PS C:\Users\deral\code\ccode>

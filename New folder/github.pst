@@ -1,0 +1,5 @@
+# Create the repo on GitHub first (empty, no README), then:
+git remote add origin https://github.com/<deraldg/ccode.git
+git branch -M master
+git push -u origin master
+git push --tags

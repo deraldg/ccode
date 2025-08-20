@@ -2,6 +2,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <cstdlib>
+#include <array>   // <-- added
 #include "xbase.hpp"
 #include "textio.hpp"
 #include "command_registry.hpp"
@@ -9,6 +11,28 @@
 #include "cmd_version.hpp"
 
 using xbase::DbArea;
+
+// ---- (NEW) simple column printer + curated lists for HELP BROKEN/STUBBED ----
+namespace {
+    template <typename Seq>
+    void print_cmd_list(const Seq& seq) {
+        if (seq.size() == 0) {
+            std::cout << "  (none)\n";
+            return;
+        }
+        int col = 0;
+        for (const auto& s : seq) {
+            std::cout << "  " << s;
+            ++col;
+            if (col == 6) { std::cout << "\n"; col = 0; }
+        }
+        if (col != 0) std::cout << "\n";
+    }
+
+    // Tweak these lists as your implementation status changes:
+    static constexpr std::array<const char*, 0> HELP_BROKEN_CMDS{};          // ok: zero-length std::array
+    static constexpr std::array<const char*, 2> HELP_STUBBED_CMDS{{"LOCATE", "ZAP"}};
+}
 
 // ---- Core command handlers (extern/forward decls) ----
 void cmd_USE   (xbase::DbArea&, std::istringstream&);
@@ -30,8 +54,9 @@ void cmd_COLOR (xbase::DbArea&, std::istringstream&);
 void cmd_FIELDS(xbase::DbArea&, std::istringstream&);
 
 // FIND/SEEK are available either way; SEEK may route to index or linear
-void cmd_FIND  (xbase::DbArea&, std::istringstream&);
-void cmd_SEEK  (xbase::DbArea&, std::istringstream&);
+void cmd_FIND (xbase::DbArea&, std::istringstream&);
+void cmd_SEEK (xbase::DbArea&, std::istringstream&);
+void cmd_SETORDER (xbase::DbArea&, std::istringstream&);
 
 // ---- Indexing command handlers (compiled when enabled) ----
 #if DOTTALK_WITH_INDEX
@@ -132,8 +157,9 @@ int run_shell()
     cli::reg.add("SET INDEX TO", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // optional nicety
     cli::reg.add("ASCEND",    [](DbArea& A, std::istringstream& S){ cmd_ASCEND(A,S); });
     cli::reg.add("DESCEND",   [](DbArea& A, std::istringstream& S){ cmd_DESCEND(A,S); });
+    cli::reg.add("SETORDER",  [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
+    cli::reg.add("SET ORDER", [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
 #endif
-
 
     cli::reg.add("APPEND BLANK", [](DbArea& A, std::istringstream& S){ cmd_APPEND_BLANK(A,S); });
     cli::reg.add("CLEAR",        [](DbArea& A, std::istringstream& S){ cmd_CLEAR(A,S); });
@@ -149,21 +175,38 @@ int run_shell()
 //  cli::reg.add("ZAP",          [](DbArea& A, std::istringstream& S){ cmd_ZAP(A,S); });
 
 // System / utilities
-    reg.add("DIR",     [](DbArea& A, std::istringstream& S){ cmd_DIR(A,S);   });
-    reg.add("!",       [](DbArea& A, std::istringstream& S){ cmd_BANG(A,S);  });
-//  reg.add("RECNO",   [](DbArea& A, std::istringstream& S){ cmd_RECNO(A,S); });
-    reg.add("CLS",          cmd_CLEAR);
+    cli::reg.add("DIR",     [](DbArea& A, std::istringstream& S){ cmd_DIR(A,S);   });
+    cli::reg.add("!",       [](DbArea& A, std::istringstream& S){ cmd_BANG(A,S);  });
+//  cli::reg.add("RECNO",   [](DbArea& A, std::istringstream& S){ cmd_RECNO(A,S); });
+    cli::reg.add("CLS",          cmd_CLEAR);
 
  // cli::reg.add("SETINDEX",     [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
  // cli::reg.add("SET INDEX",    [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
  // cli::reg.add("SET INDEX TO", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // optional nicety
-
+ // cli::reg.add("SETORDER",     [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
 
 // Optional helpful aliases:
-    reg.add("CLS",          cmd_CLEAR);
+    cli::reg.add("CLS",          cmd_CLEAR);
 
-    cli::reg.add("HELP", [&](DbArea&, std::istringstream&){
-        cli::reg.help(std::cout);
+    // ---- HELP with optional BROKEN/STUBBED argument ----
+    cli::reg.add("HELP", [&](DbArea&, std::istringstream& S){
+        std::string arg; S >> arg;
+        arg = textio::up(textio::trim(arg));
+        if (arg.empty()) {
+            cli::reg.help(std::cout);
+            return;
+        }
+        if (arg == "BROKEN") {
+            std::cout << "BROKEN commands (work to do):\n";
+            print_cmd_list(HELP_BROKEN_CMDS);
+            return;
+        }
+        if (arg == "STUBBED") {
+            std::cout << "STUBBED commands (planned/not implemented):\n";
+            print_cmd_list(HELP_STUBBED_CMDS);
+            return;
+        }
+        std::cout << "Usage: HELP [BROKEN|STUBBED]\n";
     });
 
     std::cout << "DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.\n";

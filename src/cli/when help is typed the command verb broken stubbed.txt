@@ -1,4 +1,16 @@
-﻿// shell.cpp — restored command registry + indexing hooks
+when help is typed the command verbs are displayed 
+give help an optional argument
+no argument means it works as always
+BROKEN means work to do
+STUBBED list future commands to implement
+
+HELP BROKEN/STUBBED
+
+this should only modify one file I hope.
+
+next is the current code for shell.cpp >>
+
+// shell.cpp — restored command registry + indexing hooks
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -207,3 +219,5 @@ int run_shell()
     }
     return 0;
 }
+
+

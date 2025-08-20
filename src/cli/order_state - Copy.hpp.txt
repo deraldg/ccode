@@ -1,0 +1,17 @@
+// src/cli/order_state.hpp
+#pragma once
+#include <string>
+
+namespace xbase { class DbArea; }
+
+namespace orderstate {
+
+// Per-area active index tracking for the CLI layer (no xbase.hpp changes).
+bool        hasOrder(const xbase::DbArea& A) noexcept;
+std::string orderName(const xbase::DbArea& A);   // filename only
+std::string orderPath(const xbase::DbArea& A);   // full path
+void        clearOrder(xbase::DbArea& A);
+void        setOrder(xbase::DbArea& A, std::string path);
+bool        attachCompanionIndexIfExists(xbase::DbArea& A);  // <db>.inx next to table
+
+} // namespace orderstate

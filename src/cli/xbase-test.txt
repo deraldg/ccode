@@ -1,0 +1,114 @@
+CLS
+COLOR DEFAULT
+HELP
+
+* --- Workspace sanity ---
+AREA
+SELECT 0
+AREA
+
+* --- CREATE a fresh table and inspect structure ---
+CREATE TEST (ID N(5), NAME C(20), DOB D, ACTIVE L)
+STRUCT
+FIELDS
+STATUS
+
+* --- Append some rows, then replace values ---
+APPEND_BLANK 5
+GOTO 1
+REPLACE ID WITH 1
+REPLACE NAME WITH "ALICE"
+REPLACE ACTIVE WITH .T.
+REPLACE DOB WITH {2020-01-15}
+
+GOTO 2
+REPLACE ID WITH 2
+REPLACE NAME WITH "BOB"
+REPLACE ACTIVE WITH .F.
+REPLACE DOB WITH {2019-12-03}
+
+GOTO 3
+REPLACE ID WITH 3
+REPLACE NAME WITH "CARL"
+REPLACE ACTIVE WITH .T.
+REPLACE DOB WITH {2018-07-04}
+
+GOTO 4
+REPLACE ID WITH 4
+REPLACE NAME WITH "DORA"
+REPLACE ACTIVE WITH .T.
+REPLACE DOB WITH {2017-05-21}
+
+GOTO 5
+REPLACE ID WITH 5
+REPLACE NAME WITH "ELLA"
+REPLACE ACTIVE WITH .F.
+REPLACE DOB WITH {2016-10-11}
+
+* --- Listing & counting ---
+TOP 3
+BOTTOM 2
+LIST 20
+COUNT
+DISPLAY
+
+* --- Delete / Undelete / Recall / Pack lifecycle ---
+GOTO 2
+DELETE
+DISPLAY
+UNDELETE
+DISPLAY
+GOTO 2
+DELETE
+DISPLAY
+RECALL
+DISPLAY
+PACK
+COUNT
+LIST 20
+
+* --- Indexing tests (no-op messages if indexing disabled) ---
+INDEX ON NAME TAG N
+SET INDEX TO N
+ASCEND
+LIST 20
+DESCEND
+LIST 20
+SEEK "CARL"
+
+* --- FIND/LOCATE (if predicates wired; otherwise expect graceful message) ---
+FIND "DORA"
+LOCATE FOR NAME = "ELLA"
+
+* --- Navigation & status ---
+GOTO 3
+STATUS
+STRUCT
+FIELDS
+
+* --- Color & screen control ---
+COLOR GREEN
+LIST 5
+COLOR AMBER
+LIST 5
+COLOR DEFAULT
+LIST 5
+
+* --- Multi-area (if supported; otherwise should report gracefully) ---
+SELECT 1
+AREA
+SELECT 0
+AREA
+
+* --- Save/Export/Import (if implemented; otherwise should report gracefully) ---
+EXPORT "TEST.csv"
+IMPORT "TEST.csv" AS TEST2
+USE TEST2
+LIST 10
+CLOSE
+
+* --- Re-open original and final checks ---
+USE TEST
+LIST 10
+
+QUIT

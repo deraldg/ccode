@@ -1,76 +1,205 @@
+// src/cli/cmd_index.cpp
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "xindex/simple_index.hpp"
+#include "order_state.hpp"
+
+#include <algorithm>
+#include <filesystem>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <algorithm>
 #include <cctype>
-#include <cstdio>
 
-#include "xbase.hpp"
-#include "xindex/index_spec.hpp"
-#include "xindex/attach.hpp"
-#include "xindex/dbarea_adapt.hpp"
+namespace fs = std::filesystem;
+using xbase::DbArea;
+using xindex::IndexMeta;
+using xindex::SimpleIndex;
 
-using xindex::IndexSpec;
+static std::string up(std::string s)            { return textio::up(s); }
+static std::string trim(const std::string& s)   { return textio::trim(s); }
+static bool ieq(const std::string& a, const std::string& b){ return up(a)==up(b); }
 
-static std::string up(std::string s){ for(auto& c:s) c=(char)std::toupper((unsigned char)c); return s; }
-static std::string trim(std::string s){
-    auto sp=[](unsigned char c){return std::isspace(c)!=0;};
-    while(!s.empty()&&sp((unsigned char)s.front())) s.erase(s.begin());
-    while(!s.empty()&&sp((unsigned char)s.back()))  s.pop_back();
-    return s;
-}
-static std::vector<std::string> split_csv(std::string s){
-    std::vector<std::string> out; size_t i=0;
-    while(i<s.size()){
-        size_t c=s.find(',',i);
-        out.push_back(trim(c==std::string::npos? s.substr(i): s.substr(i,c-i)));
-        if(c==std::string::npos) break; i=c+1;
+static bool read_quoted_or_token(std::istringstream& iss, std::string& out) {
+    iss >> std::ws;
+    if (!iss.good()) return false;
+    int c = iss.peek();
+    if (c=='"' || c=='\'') {
+        char q = (char)iss.get();
+        std::ostringstream tmp;
+        for (int ch; (ch=iss.get())!=EOF;) {
+            if (ch==q) break;
+            tmp << (char)ch;
+        }
+        out = tmp.str();
+        return true;
     }
-    out.erase(std::remove_if(out.begin(),out.end(),[](auto& t){return t.empty();}),out.end());
-    return out;
+    return (bool)(iss >> out);
 }
 
-void cmd_INDEX(xbase::DbArea& area, std::istringstream& iss) {
+// TRIM-AWARE field lookup (fix for trailing spaces in DBF header names)
+static int findFieldIndex(const DbArea& A, const std::string& name) {
+    const auto& F = A.fields();
+    std::string U = up(trim(name));
+    for (size_t j = 0; j < F.size(); ++j) {
+        if (up(trim(F[j].name)) == U)   // trim the DBF header name too
+            return (int)j;
+    }
+    return -1;
+}
+
+static bool isMemo(const DbArea& A, int idx) {
+    const auto& F = A.fields();
+    if (idx < 0 || (size_t)idx >= F.size()) return false;
+    int T = std::toupper((unsigned char)F[idx].type);
+    return T == 'M';
+}
+
+// TRIM when listing available fields (nice UX)
+static void listAvailableFields(const DbArea& A) {
+    const auto& F = A.fields();
+    for (size_t j=0; j<F.size(); ++j) {
+        if (j) std::cout << ", ";
+        std::cout << trim(F[j].name);
+    }
+    std::cout << "\n";
+}
+
+static void collectFieldIndicesFromExpr(const DbArea& A,
+                                        const std::string& expr,
+                                        std::vector<int>& out)
+{
+    // Very simple splitter on '+', ignoring quoted literals
     std::string tok;
-    if(!(iss>>tok) || up(tok)!="ON"){
-        std::puts("Syntax: INDEX ON <field[,field...]> [TAG <name>] [ASCEND|DESCEND] [UNIQUE]");
+    bool inQ = false; char q = 0;
+    auto pushTok = [&](){
+        std::string t = trim(tok);
+        if (!t.empty()) {
+            bool quoted = (t.size()>=2) && ((t.front()=='"'&&t.back()=='"')||(t.front()=='\''&&t.back()=='\''));
+            if (!quoted) {
+                int idx = findFieldIndex(A, t);
+                if (idx >= 0 && !isMemo(A, idx)) {
+                    if (std::find(out.begin(), out.end(), idx) == out.end())
+                        out.push_back(idx);
+                }
+            }
+        }
+        tok.clear();
+    };
+
+    for (char c : expr) {
+        if (inQ) {
+            tok.push_back(c);
+            if (c == q) inQ = false;
+        } else {
+            if (c=='"' || c=='\'') { inQ = true; q = c; tok.push_back(c); }
+            else if (c=='+') pushTok();
+            else tok.push_back(c);
+        }
+    }
+    pushTok();
+}
+
+void cmd_INDEX(DbArea& A, std::istringstream& iss) {
+    if (!A.isOpen()) { std::cout << "No table open.\n"; return; }
+
+    std::string onTok;
+    if (!(iss >> onTok) || !ieq(onTok, "ON")) {
+        std::cout << "Usage:\n"
+                     "  INDEX ON <field> [ASC|DESC] [TO <name>]\n"
+                     "  INDEX ON EXPR \"<expr>\" [ASC|DESC] [TO <name>]\n";
         return;
     }
 
-    std::string rest; std::getline(iss, rest);
-    std::string uprest = up(rest);
-
-    size_t posTag  = uprest.find(" TAG ");
-    size_t posAsc  = uprest.find(" ASCEND");
-    size_t posDesc = uprest.find(" DESCEND");
-    size_t posUni  = uprest.find(" UNIQUE");
-
-    size_t optStart = std::string::npos;
-    for(size_t p : {posTag,posAsc,posDesc,posUni}) if(p!=std::string::npos) optStart = optStart==std::string::npos? p: std::min(optStart,p);
-
-    auto fields = split_csv(optStart==std::string::npos? rest : rest.substr(0,optStart));
-    if(fields.empty()){ std::puts("INDEX: no fields provided."); return; }
-
-    IndexSpec spec;
-    spec.fields    = fields;
-    spec.tag       = fields.front();
-    spec.ascending = (posDesc==std::string::npos);
-    spec.unique    = (posUni !=std::string::npos);
-
-    if(posTag!=std::string::npos){
-        size_t p = posTag + 5;
-        while(p<rest.size() && std::isspace((unsigned char)rest[p])) ++p;
-        size_t q=p; while(q<rest.size() && !std::isspace((unsigned char)rest[q])) ++q;
-        if(q>p) spec.tag = rest.substr(p,q-p);
+    std::string first;
+    if (!read_quoted_or_token(iss, first)) {
+        std::cout << "INDEX: missing <field> or EXPR.\n";
+        return;
     }
 
-    auto& mgr = xindex::ensure_manager(area);
-    auto& tag = mgr.ensure_tag(spec);
-    (void)tag;
-    mgr.set_active(spec.tag);
-    mgr.set_direction(spec.ascending);
-    mgr.save(xindex::db_current_dbf_path(area));
+    IndexMeta meta;
+    std::string toName;
+    bool hasExpr = false;
 
-    std::printf("Built index TAG %s on %zu field(s). Order: %s.\n",
-        spec.tag.c_str(), spec.fields.size(), spec.ascending? "ASC":"DESC");
+    if (ieq(first, "EXPR")) {
+        hasExpr = true;
+        if (!read_quoted_or_token(iss, meta.expression) || meta.expression.empty()) {
+            std::cout << "INDEX ON EXPR: missing expression string.\n";
+            return;
+        }
+    } else {
+        meta.expression = first; // field name
+    }
+
+   // Optional tail: [ASC|DESC] [TO <name>] | [TAG <name>] 
+    std::string tok;
+    while (iss >> tok) {
+        if (ieq(tok, "ASC")) meta.ascending = true;
+        else if (ieq(tok, "DESC")) meta.ascending = false;
+        else if (ieq(tok, "TO") || ieq(tok, "TAG")) {
+            if (!read_quoted_or_token(iss, toName)) {
+                std::cout << "INDEX: TO requires a file name.\n";
+                return;
+            }
+        }
+    }
+
+    // Determine referenced fields (and block MEMO)
+    if (!hasExpr) {
+        int idx = findFieldIndex(A, meta.expression);
+        if (idx < 0) {
+            std::cout << "INDEX: unknown field '" << meta.expression << "'.\nAvailable: ";
+            listAvailableFields(A);
+            std::cout << "Tip: INDEX ON EXPR \"LAST_NAME + FIRST_NAME\"\n";
+            return;
+        }
+        if (isMemo(A, idx)) {
+            std::cout << "Cannot index MEMO field: " << meta.expression << "\n";
+            return;
+        }
+        meta.field_indices.push_back(idx);
+    } else {
+        collectFieldIndicesFromExpr(A, meta.expression, meta.field_indices);
+        if (meta.field_indices.empty()) {
+            std::cout << "INDEX ON EXPR: expression doesn’t reference any table fields; "
+                         "this would create a constant index. Aborting.\n";
+            return;
+        }
+    }
+
+    // Output path: default next to the DBF as <dbfname>.inx
+    fs::path out;
+    {
+        fs::path dbp = A.name();                 // may be just "students.dbf"
+        fs::path dbdir = dbp.parent_path();      // may be empty
+        if (toName.empty()) {
+            out = dbp; out.replace_extension(".inx");
+        } else {
+            fs::path t = toName;
+            if (t.extension().empty()) t.replace_extension(".inx");
+            out = t.parent_path().empty() ? (dbdir / t.filename()) : t;
+        }
+    }
+
+    std::string err;
+    try {
+        if (!SimpleIndex::build_and_save(A, meta, out, &err)) {
+            std::cout << "INDEX failed: " << err << "\n";
+            return;
+        }
+    } catch (const std::exception& ex) {
+        std::cout << "INDEX failed: " << ex.what() << "\n";
+        return;
+    } catch (...) {
+        std::cout << "INDEX failed: unknown error.\n";
+        return;
+    }
+
+    std::cout << "Index written: " << out.filename().string()
+              << "  (expr: " << meta.expression << ", "
+              << (meta.ascending ? "ASC" : "DESC") << ")\n";
+
+    // Make it the active order for this area
+    orderstate::setOrder(A, out.string());
 }

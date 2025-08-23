@@ -1,0 +1,25 @@
+[38;5;46mDotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.
+> CREATE <name> (<field specs>)     # make a new DBF (C/N/D/L)
+APPEND_BLANK [n]                  # append n blank records (non-interactive)
+REPLACE <field> WITH <value>      # edit current record (C/N/D/L)
+EDIT <field> WITH <value>         # alias of REPLACE
+DUMP [TOP n] [fields...]          # vertical record dump
+DISPLAY                           # show current record (field=value)
+STATUS | STRUCT | RECNO | TOP | BOTTOM
+CLEAR | CLS                       # clear the screen
+COLOR <GREEN|AMBER|DEFAULT>
+QUIT | EXIT
+
+Commands (* = not available yet):
+  HELP              AREA              SELECT
+  USE               QUIT              EXIT
+  LIST              FIELDS            COUNT
+  TOP               BOTTOM            GOTO
+  APPEND            DELETE            UNDELETE
+  DISPLAY           RECALL            PACK
+  COPY              EXPORT            IMPORT
+  COLOR             REPLACE           CREATE
+  STATUS            STRUCT            INDEX *
+  SEEK              FIND              LOCATE *
+  SET *             BROWSE *          SKIP *
+> [0m

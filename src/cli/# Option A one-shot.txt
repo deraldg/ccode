@@ -1,7 +1,0 @@
-# Option A: one-shot
-git apply patch_append_suite.diff
-
-# Option B: individually
-git apply patch_cmd_append_blank.diff
-git apply patch_cmd_append.diff
-git apply patch_cmd_edit.diff

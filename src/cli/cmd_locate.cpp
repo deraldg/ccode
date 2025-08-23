@@ -1,12 +1,15 @@
-﻿#include <iostream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include "textio.hpp"
 #include "predicates.hpp"
 #include "xbase.hpp"
-#include "../../include/command_registry.hpp"
-// optional if you use bare 'reg' instead of cli::reg:
-using cli::reg;
+#include "command_registry.hpp"
+
+
+//#include "../../include/command_registry.hpp"
+// optional if you use bare 'reg' instead of cli::registry():
+// using cli::registry();
 
 
 using namespace std;
@@ -33,6 +36,8 @@ namespace {
 
 void cmd_LOCATE(xbase::DbArea& area, std::istringstream& iss)
 {
+    std::cout << "[ENTER LOCATE]\n";
+      
     if (!area.isOpen()) {
         std::cout << "No table is open. Use USE <file> first.\n";
         return;
@@ -66,7 +71,7 @@ void cmd_LOCATE(xbase::DbArea& area, std::istringstream& iss)
     } while (area.skip(+1) && area.readCurrent());
 
     if (!found) {
-        std::cout << "Not found.\n";
+        std::cout << "Not Located.\n";
     }
 }
 
@@ -75,6 +80,7 @@ void cmd_LOCATE(xbase::DbArea& area, std::istringstream& iss)
 // Register command
 static bool s_registered = [](){
     static cli::CommandRegistry reg;
-    reg.add("LOCATE", &cmd_LOCATE);
+//  should all commands be registered this way?
+//  cli::registry().add("LOCATE", &cmd_LOCATE);
     return true;
 }();

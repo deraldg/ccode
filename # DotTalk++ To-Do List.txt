@@ -1,0 +1,45 @@
+DotTalk++ To-Do List
+
+## ✅ Completed
+- **v2 Cherry Pack**
+  - Hardened `APPEND` implementation using `DbArea::appendBlank()`
+  - Safe validation of arguments (no crash on garbage or missing args)
+  - Added safe no-op hooks: `order_notify_mutation(db)`, `order_auto_top(db)`
+  - Scripts to update HELP text and inject auto-TOP call after `INDEX ON ...`
+
+## 🔜 Planned
+- **v3 Cherry Pack**
+  - Wire a real `order_auto_top(db)` implementation
+    - Call into existing `TOP` logic or `db.gotoFirst()` equivalent
+    - Ensure cursor auto-positions to first record after `INDEX ON ...`
+
+## 📝 Future Considerations
+- Integrate `order_notify_mutation(db)` with index manager so new appends/deletes update active index views automatically
+- Re-enable `APPEND_BLANK` as a friendly alias once robust version is available
+- Improve HELP to group related commands (CREATE/APPEND/REPLACE in one block, INDEX/SEEK/FIND in another, etc.)
+- Smoke tests: expand coverage for `APPEND`, `INDEX`, `SEEK`, `PACK`, `RECALL`
+- Auto-commit settings for build scripts to simplify alpha release tagging
+
+
+Filter the command line so that it only accepts the following as the first character of a input cli line:
+
+A through Z
+a through z
+0 through 9
+chars to allow comments from scripts - no action taken,
+*
+<
+#
+@
+$
+
+anything else is 'command not found'
+
+allow the user to input a path:file_name in the prompt (I think the buffer is 80 bytes) for the program to read and parse as if commands were passed by the key board or input by scripts. 
+
+limit the command line input file size to 2048 bytes for now
+
+
+
+if a default file like help.txt doesn't exist create the initial file so the program doesn't choke.
+

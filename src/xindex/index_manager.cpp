@@ -1,6 +1,7 @@
 #include "xindex/index_manager.hpp"
 #include "xindex/index_spec.hpp"
 #include "xindex/index_key.hpp"
+#include "xindex/index_tag.hpp"
 #include "xindex/dbarea_adapt.hpp"
 
 #include <fstream>
@@ -10,14 +11,13 @@
 #include <cstdlib>
 #include <unordered_map>
 
-// Project headers expected in ccode:
 #include "xbase.hpp"
 #include "textio.hpp"
 
-namespace xindex {
-
 using std::string;
 using std::vector;
+
+namespace xindex {
 
 static bool ieq(std::string a, std::string b) {
     if (a.size()!=b.size()) return false;
@@ -25,6 +25,8 @@ static bool ieq(std::string a, std::string b) {
         if (std::toupper((unsigned char)a[i]) != std::toupper((unsigned char)b[i])) return false;
     return true;
 }
+
+IndexManager::~IndexManager() = default;
 
 std::string IndexManager::trim(std::string s) {
     auto issp = [](unsigned char c){ return std::isspace(c)!=0; };
@@ -39,12 +41,13 @@ std::string IndexManager::up(std::string s) {
 
 IndexManager::IndexManager(xbase::DbArea& area) : area_(area) {}
 
-bool IndexManager::load_for_table(std::string const& dbfPath) {
+bool IndexManager::load_for_table(const std::string& dbfPath) {
     auto p = inx_path(dbfPath);
-    return load_json(p); // currently returns false (stub), so we rebuild
+    (void)p; // reader stubbed; rebuild on demand
+    return false;
 }
 
-bool IndexManager::save(std::string const& dbfPath) {
+bool IndexManager::save(const std::string& dbfPath) {
     if (!dirty_) return true;
     auto p = inx_path(dbfPath);
     return save_json(p);
@@ -64,23 +67,24 @@ bool IndexManager::has_active() const {
     return !active_tag_.empty() && tags_.count(active_tag_)>0;
 }
 
-bool IndexManager::set_active(std::string const& tag) {
-    if (tags_.count(tag)==0) return false;
-    active_tag_ = tag;
-    dir_ascending_ = tags_[tag]->spec().ascending; // pick default from spec
+bool IndexManager::set_active(const std::string& tag) {
+    auto it = tags_.find(tag);
+    if (it == tags_.end()) return false;
+    active_tag_    = tag;
+    dir_ascending_ = it->second->spec().ascending;
     return true;
 }
 void IndexManager::clear_active() { active_tag_.clear(); }
 
 void IndexManager::set_direction(bool ascending) { dir_ascending_ = ascending; }
 
-std::string IndexManager::inx_path(std::string const& dbfPath) const {
+std::string IndexManager::inx_path(const std::string& dbfPath) const {
     auto pos = dbfPath.find_last_of('.');
     if (pos == std::string::npos) return dbfPath + ".inx";
     return dbfPath.substr(0, pos) + ".inx";
 }
 
-IndexKey IndexManager::make_key_from_tokens(IndexSpec const& spec, const std::vector<std::string>& toks) const {
+IndexKey IndexManager::make_key_from_tokens(const IndexSpec& spec, const std::vector<std::string>& toks) const {
     IndexKey k; k.parts.reserve(spec.fields.size());
     for (size_t i=0; i<spec.fields.size(); ++i) {
         std::string v = (i < toks.size() ? trim(toks[i]) : std::string());
@@ -89,12 +93,12 @@ IndexKey IndexManager::make_key_from_tokens(IndexSpec const& spec, const std::ve
             char* endp=nullptr; double d = std::strtod(v.c_str(), &endp);
             if (endp && *endp=='\0') { k.parts.emplace_back(d); continue; }
         }
-        k.parts.emplace_back(up(v)); // treat as string (C or canonical D)
+        k.parts.emplace_back(up(v));
     }
     return k;
 }
 
-IndexKey IndexManager::key_from_record(IndexSpec const& spec, int recno) const {
+IndexKey IndexManager::key_from_record(const IndexSpec& spec, int recno) const {
     IndexKey k; k.parts.reserve(spec.fields.size());
     for (auto const& fname : spec.fields) {
         std::string sv = db_get_string(area_, recno, fname);
@@ -104,7 +108,7 @@ IndexKey IndexManager::key_from_record(IndexSpec const& spec, int recno) const {
     return k;
 }
 
-IndexTag& IndexManager::ensure_tag(IndexSpec const& specIn) {
+IndexTag& IndexManager::ensure_tag(const IndexSpec& specIn) {
     IndexSpec spec = specIn;
     if (spec.tag.empty()) spec.tag = spec.fields.empty()? std::string("TAG") : spec.fields.front();
     auto it = tags_.find(spec.tag);
@@ -190,91 +194,27 @@ void IndexManager::on_zap() {
     dirty_ = true;
 }
 
-// ---- JSON persistence (safe writer; stubbed reader) ----
-static void write_json_string(std::ostream& os, const std::string& s) {
-    os << '"';
-    for (char c : s) {
-        if (c=='"' || c=='\\') { os << '\\' << c; }
-        else if (c=='\n') { os << "\\n"; }
-        else { os << c; }
-    }
-    os << '"';
+// Persistence stubs — keep simple and robust
+bool IndexManager::save_json(const std::string& path) { (void)path; return true; }
+bool IndexManager::load_json(const std::string& path) { (void)path; return false; }
+
+// ===== Introspection =====
+std::vector<std::string> IndexManager::listTags() const {
+    std::vector<std::string> out; out.reserve(tags_.size());
+    for (auto const& kv : tags_) out.push_back(kv.first);
+    return out;
 }
 
-bool IndexManager::save_json(std::string const& path) {
-    std::ofstream out(path, std::ios::binary);
-    if (!out) return false;
-
-    out << '{';
-
-    // "version": 1
-    write_json_string(out, "version"); out << ':' << 1 << ',';
-
-    // "tags": [
-    write_json_string(out, "tags"); out << ':';
-    out << '[';
-
-    bool firstTag = true;
-    for (auto& kv : tags_) {
-        auto& tag = *kv.second;
-        if (!firstTag) out << ','; firstTag = false;
-
-        out << '{';
-        // "tag": "<name>"
-        write_json_string(out, "tag"); out << ':';
-        write_json_string(out, tag.spec().tag); out << ',';
-
-        // "ascending": true/false
-        write_json_string(out, "ascending"); out << ':'
-            << (tag.spec().ascending ? "true":"false") << ',';
-
-        // "unique": true/false
-        write_json_string(out, "unique"); out << ':'
-            << (tag.spec().unique ? "true":"false") << ',';
-
-        // "fields": ["F1","F2",...]
-        write_json_string(out, "fields"); out << ':';
-        out << '[';
-        for (size_t i=0;i<tag.spec().fields.size();++i) {
-            if (i) out << ',';
-            write_json_string(out, tag.spec().fields[i]);
-        }
-        out << "],";
-
-        // "entries": [ {"k":[...],"r":N}, ... ]
-        write_json_string(out, "entries"); out << ':';
-        out << '[';
-        bool firstEnt = true;
-        for (auto const& kr : tag.entries()) {
-            if (!firstEnt) out << ','; firstEnt = false;
-            out << '{';
-            write_json_string(out, "k"); out << ':';
-            out << '[';
-            for (size_t i=0;i<kr.key.parts.size();++i) {
-                if (i) out << ',';
-                if (std::holds_alternative<std::string>(kr.key.parts[i])) {
-                    write_json_string(out, std::get<std::string>(kr.key.parts[i]));
-                } else {
-                    char buf[64]; std::snprintf(buf, sizeof(buf), "%.15g", std::get<double>(kr.key.parts[i]));
-                    write_json_string(out, std::string(buf));
-                }
-            }
-            out << "],";
-            write_json_string(out, "r"); out << ':' << kr.recno;
-            out << '}';
-        }
-        out << ']';
-
-        out << '}';
+std::string IndexManager::exprFor(const std::string& tag) const {
+    auto it = tags_.find(tag);
+    if (it == tags_.end()) return {};
+    const auto& sp = it->second->spec();
+    std::string expr;
+    for (size_t i=0; i<sp.fields.size(); ++i) {
+        if (i) expr += "+";
+        expr += sp.fields[i];
     }
-
-    out << ']'; // end tags
-    out << '}'; // end root
-    return true;
+    return expr;
 }
-
-// For now: skip reading; rebuild indexes on USE.
-// (We can re-enable parsing later once we finish aligning DbArea.)
-bool IndexManager::load_json(std::string const&) { return false; }
 
 } // namespace xindex

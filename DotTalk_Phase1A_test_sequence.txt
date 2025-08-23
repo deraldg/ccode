@@ -1,0 +1,39 @@
+# DotTalk++ Phase 1A — Status/Introspection Test
+# Paste these lines directly into the DotTalk++ prompt (or feed via stdin).
+
+CLS
+* --- Open, index, and snapshot ---
+USE students
+INDEX ON UPPER(LAST_NAME) TAG L
+INDEX ON UPPER(LAST_NAME)+UPPER(FIRST_NAME) TAG LF
+
+* AREA snapshot should include file/recs/recno and Active tag/Order
+AREA
+
+* STRUCT should show table header + columns with LEN/DEC and active order line
+STRUCT
+
+* STATUS should include Workspace/Table/Order/Index sections
+STATUS
+
+* Order direction change should reflect in AREA/STATUS
+DESCEND
+AREA
+STATUS
+
+* SELECT away and back; SELECT should echo AREA snapshot
+SELECT 0
+STATUS
+SELECT 1
+AREA
+STATUS
+
+* BRIEF/INDEX/JSON variants (if compiled in this build; otherwise will be ignored)
+STATUS BRIEF
+STATUS INDEX
+STATUS JSON
+
+* Close and verify empty area snapshot
+CLOSE
+AREA
+STATUS

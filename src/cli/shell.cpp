@@ -1,38 +1,23 @@
-﻿// shell.cpp — restored command registry + indexing hooks
+// shell.cpp   restored command registry + indexing hooks
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <cstdlib>
-#include <array>   // <-- added
+#include <array>
+
+#include "command_registry.hpp"
 #include "xbase.hpp"
 #include "textio.hpp"
-#include "command_registry.hpp"
 #include "colors.hpp"
 #include "cmd_version.hpp"
+#include "cmd_help.hpp"   // <-- NEW: routed HELP lives in its own module
+#include "order_state.hpp"
+
+
+//extern void cmd_FIND(xbase::DbArea&, std::istringstream&);
+//extern void cmd_SEEK(xbase::DbArea&, std::istringstream&);
 
 using xbase::DbArea;
-
-// ---- (NEW) simple column printer + curated lists for HELP BROKEN/STUBBED ----
-namespace {
-    template <typename Seq>
-    void print_cmd_list(const Seq& seq) {
-        if (seq.size() == 0) {
-            std::cout << "  (none)\n";
-            return;
-        }
-        int col = 0;
-        for (const auto& s : seq) {
-            std::cout << "  " << s;
-            ++col;
-            if (col == 6) { std::cout << "\n"; col = 0; }
-        }
-        if (col != 0) std::cout << "\n";
-    }
-
-    // Tweak these lists as your implementation status changes:
-    static constexpr std::array<const char*, 0> HELP_BROKEN_CMDS{};          // ok: zero-length std::array
-    static constexpr std::array<const char*, 2> HELP_STUBBED_CMDS{{"LOCATE", "ZAP"}};
-}
 
 // ---- Core command handlers (extern/forward decls) ----
 void cmd_USE   (xbase::DbArea&, std::istringstream&);
@@ -54,7 +39,7 @@ void cmd_COLOR (xbase::DbArea&, std::istringstream&);
 void cmd_FIELDS(xbase::DbArea&, std::istringstream&);
 
 // FIND/SEEK are available either way; SEEK may route to index or linear
-void cmd_FIND (xbase::DbArea&, std::istringstream&);
+void cmd_FIND(xbase::DbArea&, std::istringstream& iss);
 void cmd_SEEK (xbase::DbArea&, std::istringstream&);
 void cmd_SETORDER (xbase::DbArea&, std::istringstream&);
 
@@ -67,7 +52,7 @@ void cmd_DESCEND  (xbase::DbArea&, std::istringstream&);
 #endif
 
 // Already present ones...
-void cmd_APPEND_BLANK(xbase::DbArea&, std::istringstream&);
+//void cmd_APPEND_BLANK(xbase::DbArea&, std::istringstream&);
 void cmd_CLEAR(xbase::DbArea&, std::istringstream&);
 void cmd_CREATE(xbase::DbArea&, std::istringstream&);
 void cmd_DUMP(xbase::DbArea&, std::istringstream&);
@@ -97,10 +82,10 @@ int run_shell()
     XBaseEngine eng;
     eng.selectArea(0);
 
-    // --- Engine/area helpers ---
-    cli::reg.add("USE",     [](DbArea& A, std::istringstream& S){ cmd_USE(A,S); });
+    // --- Register commands -------------------------------------------------
+    cli::registry().add("USE",     [](DbArea& A, std::istringstream& S){ cmd_USE(A,S); });
 
-    cli::reg.add("SELECT",  [&](DbArea& /*A*/, std::istringstream& S){
+    cli::registry().add("SELECT",  [&](DbArea& /*A*/, std::istringstream& S){
         int n; S >> n;
         if (!S || n < 0 || n >= MAX_AREA) {
             std::cout << "Usage: SELECT <0.." << (MAX_AREA-1) << ">\n";
@@ -108,109 +93,114 @@ int run_shell()
         }
         eng.selectArea(n);
         std::cout << "Selected area " << n << ".\n";
-    });
-
-    cli::reg.add("AREA",    [&](DbArea&, std::istringstream&){
-        int i = eng.currentArea();
-        DbArea& cur = eng.area(i);
-        std::cout << "Current area: " << i << "\n";
-        if (cur.isOpen())
+        // Print AREA snapshot after switch
+        DbArea& cur = eng.area(eng.currentArea());
+        std::cout << "Current area: " << eng.currentArea() << "\n";
+        if (cur.isOpen()) {
             std::cout << "  File: " << cur.name()
                       << "  Recs: " << cur.recCount()
                       << "  Recno: " << cur.recno() << "\n";
-        else
+        } else {
             std::cout << "  (no file open)\n";
+        }
+    });
+
+    cli::registry().add("AREA",    [&](DbArea&, std::istringstream&){
+        int i = eng.currentArea();
+        DbArea& cur = eng.area(i);
+        std::cout << "Current area: " << i << "\n";
+        if (cur.isOpen()) {
+            std::cout << "  File: " << cur.name()
+                      << "  Recs: " << cur.recCount()
+                      << "  Recno: " << cur.recno() << "\n";
+            // Order state snapshot
+            try {
+                bool asc = orderstate::isAscending(cur);
+                std::string tag = orderstate::hasOrder(cur) ? orderstate::orderName(cur) : std::string("(none)");
+                std::cout << "  Order: " << (asc ? "ASCEND" : "DESCEND")
+                          << "  Active tag: " << tag << "\n";
+            } catch (...) {
+                // orderstate not available; ignore
+            }
+        } else {
+            std::cout << "  (no file open)\n";
+        }
     });
 
     // --- Record navigation & reporting ---
-    cli::reg.add("LIST",    [](DbArea& A, std::istringstream& S){ cmd_LIST(A,S); });
-    cli::reg.add("TOP",     [](DbArea& A, std::istringstream& S){ cmd_TOP(A,S); });
-    cli::reg.add("BOTTOM",  [](DbArea& A, std::istringstream& S){ cmd_BOTTOM(A,S); });
-    cli::reg.add("GOTO",    [](DbArea& A, std::istringstream& S){ cmd_GOTO(A,S); });
-    cli::reg.add("COUNT",   [](DbArea& A, std::istringstream& S){ cmd_COUNT(A,S); });
-    cli::reg.add("DISPLAY", [](DbArea& A, std::istringstream& S){ cmd_DISPLAY(A,S); });
+    cli::registry().add("LIST",    [](DbArea& A, std::istringstream& S){ cmd_LIST(A,S); });
+    cli::registry().add("TOP",     [](DbArea& A, std::istringstream& S){ cmd_TOP(A,S); });
+    cli::registry().add("BOTTOM",  [](DbArea& A, std::istringstream& S){ cmd_BOTTOM(A,S); });
+    cli::registry().add("GOTO",    [](DbArea& A, std::istringstream& S){ cmd_GOTO(A,S); });
+    cli::registry().add("COUNT",   [](DbArea& A, std::istringstream& S){ cmd_COUNT(A,S); });
+    cli::registry().add("DISPLAY", [](DbArea& A, std::istringstream& S){ cmd_DISPLAY(A,S); });
 
     // --- Data I/O & maintenance ---
-    cli::reg.add("COPY",    [](DbArea& A, std::istringstream& S){ cmd_COPY(A,S); });
-    cli::reg.add("EXPORT",  [](DbArea& A, std::istringstream& S){ cmd_EXPORT(A,S); });
-    cli::reg.add("IMPORT",  [](DbArea& A, std::istringstream& S){ cmd_IMPORT(A,S); });
-    cli::reg.add("APPEND",  [](DbArea& A, std::istringstream& S){ cmd_APPEND(A,S); });
-    cli::reg.add("DELETE",  [](DbArea& A, std::istringstream& S){ cmd_DELETE(A,S); });
-    cli::reg.add("RECALL",  [](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
-    cli::reg.add("UNDELETE",[](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
-    cli::reg.add("PACK",    [](DbArea& A, std::istringstream& S){ cmd_PACK(A,S); });
-    cli::reg.add("FIELDS",  [](DbArea& A, std::istringstream& S){ cmd_FIELDS(A,S); });
+    cli::registry().add("COPY",    [](DbArea& A, std::istringstream& S){ cmd_COPY(A,S); });
+    cli::registry().add("EXPORT",  [](DbArea& A, std::istringstream& S){ cmd_EXPORT(A,S); });
+    cli::registry().add("IMPORT",  [](DbArea& A, std::istringstream& S){ cmd_IMPORT(A,S); });
+    cli::registry().add("APPEND",  [](DbArea& A, std::istringstream& S){ cmd_APPEND(A,S); });
+    cli::registry().add("DELETE",  [](DbArea& A, std::istringstream& S){ cmd_DELETE(A,S); });
+    cli::registry().add("RECALL",  [](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
+    cli::registry().add("UNDELETE",[](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
+    cli::registry().add("PACK",    [](DbArea& A, std::istringstream& S){ cmd_PACK(A,S); });
+    cli::registry().add("FIELDS",  [](DbArea& A, std::istringstream& S){ cmd_FIELDS(A,S); });
 
     // --- Search ---
-    cli::reg.add("FIND",    [](DbArea& A, std::istringstream& S){ cmd_FIND(A,S); });
-    cli::reg.add("SEEK",    [](DbArea& A, std::istringstream& S){ cmd_SEEK(A,S); });
+//  cli::registry().add("FIND",    [](DbArea& A, std::istringstream& S){ cmd_FIND(A,S); });
+//  cli::registry().add("SEEK",    [](DbArea& A, std::istringstream& S){ cmd_SEEK(A,S); });
+
+    cli::registry().add("FIND", cmd_FIND);
+    cli::registry().add("SEEK", cmd_SEEK);
 
     // --- UI/utility ---
-    cli::reg.add("COLOR",   [](DbArea& A, std::istringstream& S){ cmd_COLOR(A,S); });
-    cli::reg.add("VERSION", [](DbArea& A, std::istringstream& S){ cmd_VERSION(A,S); });
+    cli::registry().add("COLOR",   [](DbArea& A, std::istringstream& S){ cmd_COLOR(A,S); });
+    cli::registry().add("VERSION", [](DbArea& A, std::istringstream& S){ cmd_VERSION(A,S); });
 
     // --- Indexing (only when enabled) ---
 #if DOTTALK_WITH_INDEX
-    cli::reg.add("INDEX",     [](DbArea& A, std::istringstream& S){ cmd_INDEX(A,S); });
-    cli::reg.add("SETINDEX",  [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
-    cli::reg.add("SET INDEX", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // if spaced keys are supported
-    cli::reg.add("SET INDEX TO", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // optional nicety
-    cli::reg.add("ASCEND",    [](DbArea& A, std::istringstream& S){ cmd_ASCEND(A,S); });
-    cli::reg.add("DESCEND",   [](DbArea& A, std::istringstream& S){ cmd_DESCEND(A,S); });
-    cli::reg.add("SETORDER",  [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
-    cli::reg.add("SET ORDER", [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
+    cli::registry().add("INDEX",       [](DbArea& A, std::istringstream& S){ cmd_INDEX(A,S); });
+    cli::registry().add("SETINDEX",    [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
+    cli::registry().add("SET INDEX",   [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });   // spaced key support
+    cli::registry().add("SET INDEX TO",[](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });   // nicety
+    cli::registry().add("ASCEND",      [](DbArea& A, std::istringstream& S){ cmd_ASCEND(A,S); });
+    cli::registry().add("DESCEND",     [](DbArea& A, std::istringstream& S){ cmd_DESCEND(A,S); });
+    cli::registry().add("SETORDER",    [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
+    cli::registry().add("SET ORDER",   [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
 #endif
 
-    cli::reg.add("APPEND BLANK", [](DbArea& A, std::istringstream& S){ cmd_APPEND_BLANK(A,S); });
-    cli::reg.add("CLEAR",        [](DbArea& A, std::istringstream& S){ cmd_CLEAR(A,S); });
-    cli::reg.add("CREATE",       [](DbArea& A, std::istringstream& S){ cmd_CREATE(A,S); });
-    cli::reg.add("DUMP",         [](DbArea& A, std::istringstream& S){ cmd_DUMP(A,S); });
-    cli::reg.add("EDIT",         [](DbArea& A, std::istringstream& S){ cmd_EDIT(A,S); });
-//  cli::reg.add("LOCATE",       [](DbArea& A, std::istringstream& S){ cmd_LOCATE(A,S); });
-    cli::reg.add("RECNO",        [](DbArea& A, std::istringstream& S){ cmd_RECNO(A,S); });
-    cli::reg.add("REFRESH",      [](DbArea& A, std::istringstream& S){ cmd_REFRESH(A,S); });
-    cli::reg.add("REPLACE",      [](DbArea& A, std::istringstream& S){ cmd_REPLACE(A,S); });
-    cli::reg.add("STATUS",       [](DbArea& A, std::istringstream& S){ cmd_STATUS(A,S); });
-    cli::reg.add("STRUCT",       [](DbArea& A, std::istringstream& S){ cmd_STRUCT(A,S); });
-//  cli::reg.add("ZAP",          [](DbArea& A, std::istringstream& S){ cmd_ZAP(A,S); });
+//  cli::registry().add("APPEND BLANK", [](DbArea& A, std::istringstream& S){ cmd_APPEND_BLANK(A,S); });
+    cli::registry().add("CLEAR",        [](DbArea& A, std::istringstream& S){ cmd_CLEAR(A,S); });
+//  cli::registry().add("CLS",          cmd_CLEAR);  // single, not duplicated
+    cli::registry().add("CREATE",       [](DbArea& A, std::istringstream& S){ cmd_CREATE(A,S); });
+    cli::registry().add("DUMP",         [](DbArea& A, std::istringstream& S){ cmd_DUMP(A,S); });
+    cli::registry().add("EDIT",         [](DbArea& A, std::istringstream& S){ cmd_EDIT(A,S); });
+//  cli::registry().add("LOCATE",       [](DbArea& A, std::istringstream& S){ cmd_LOCATE(A,S); });
+    cli::registry().add("RECNO",        [](DbArea& A, std::istringstream& S){ cmd_RECNO(A,S); });
+    cli::registry().add("REFRESH",      [](DbArea& A, std::istringstream& S){ cmd_REFRESH(A,S); });
+    cli::registry().add("REPLACE",      [](DbArea& A, std::istringstream& S){ cmd_REPLACE(A,S); });
+    cli::registry().add("STATUS",       [](DbArea& A, std::istringstream& S){ cmd_STATUS(A,S); });
+    cli::registry().add("STRUCT",       [](DbArea& A, std::istringstream& S){ cmd_STRUCT(A,S); });
+//  cli::registry().add("ZAP",          [](DbArea& A, std::istringstream& S){ cmd_ZAP(A,S); });
 
 // System / utilities
-    cli::reg.add("DIR",     [](DbArea& A, std::istringstream& S){ cmd_DIR(A,S);   });
-    cli::reg.add("!",       [](DbArea& A, std::istringstream& S){ cmd_BANG(A,S);  });
-//  cli::reg.add("RECNO",   [](DbArea& A, std::istringstream& S){ cmd_RECNO(A,S); });
-    cli::reg.add("CLS",          cmd_CLEAR);
+    cli::registry().add("DIR",     [](DbArea& A, std::istringstream& S){ cmd_DIR(A,S);   });
+    cli::registry().add("!",       [](DbArea& A, std::istringstream& S){ cmd_BANG(A,S);  });
 
- // cli::reg.add("SETINDEX",     [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
- // cli::reg.add("SET INDEX",    [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
- // cli::reg.add("SET INDEX TO", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); }); // optional nicety
- // cli::reg.add("SETORDER",     [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
+    // ---- HELP is now a first-class command module ----
+    cli::registry().add("HELP",    [](DbArea& A, std::istringstream& S){ cmd_HELP(A,S); });  // <  NEW
+    cli::registry().add("?",       [](DbArea& A, std::istringstream& S){ cmd_HELP(A,S); });  // <  optional alias
 
-// Optional helpful aliases:
-    cli::reg.add("CLS",          cmd_CLEAR);
+//debug
+    std::cout << "[wire] FIND -> " << (void*)&cmd_FIND << "\n";
+    std::cout << "[wire] SEEK -> " << (void*)&cmd_SEEK  << "\n";
 
-    // ---- HELP with optional BROKEN/STUBBED argument ----
-    cli::reg.add("HELP", [&](DbArea&, std::istringstream& S){
-        std::string arg; S >> arg;
-        arg = textio::up(textio::trim(arg));
-        if (arg.empty()) {
-            cli::reg.help(std::cout);
-            return;
-        }
-        if (arg == "BROKEN") {
-            std::cout << "BROKEN commands (work to do):\n";
-            print_cmd_list(HELP_BROKEN_CMDS);
-            return;
-        }
-        if (arg == "STUBBED") {
-            std::cout << "STUBBED commands (planned/not implemented):\n";
-            print_cmd_list(HELP_STUBBED_CMDS);
-            return;
-        }
-        std::cout << "Usage: HELP [BROKEN|STUBBED]\n";
-    });
 
+    // --- Startup CLS and banner ---
+    //  textio::cls();  // clear once when the app starts
     std::cout << "DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.\n";
 
+    // --- REPL --------------------------------------------------------------
     std::string line;
     while (true) {
         std::cout << "> " << std::flush;
@@ -226,7 +216,7 @@ int run_shell()
         if (U == "QUIT" || U == "EXIT") break;
 
         DbArea& cur = eng.area(eng.currentArea());
-        if (!cli::reg.run(cur, U, iss)) {   // <-- correct order: (DbArea&, cmd, stream)
+        if (!cli::registry().run(cur, U, iss)) {   // <-- correct order: (DbArea&, cmd, stream)
             std::cout << "Unknown command: " << cmd << "\n";
         }
     }

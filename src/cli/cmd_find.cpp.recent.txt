@@ -1,0 +1,124 @@
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <algorithm>
+#include <cctype>
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "record_view.hpp"
+
+// FIND <field> [=] <needle>
+// - field name: case-insensitive, trim-aware
+// - needle: case-insensitive substring match against RecordView::getString(field)
+
+static std::string strip_inline_comment(std::string s) {
+    bool in_single = false, in_double = false;
+    for (size_t i = 0; i < s.size(); ++i) {
+        char c = s[i];
+        if (c == '"'  && !in_single) in_double = !in_double;
+        else if (c == '\'' && !in_double) in_single = !in_single;
+        else if (c == '#' && !in_single && !in_double) { s.resize(i); break; }
+    }
+    return textio::trim(std::move(s));
+}
+
+static std::string dequote(std::string s) {
+    s = textio::trim(std::move(s));
+    if (s.size() >= 2) {
+        char a = s.front(), b = s.back();
+        if ((a == '"' && b == '"') || (a == '\'' && b == '\'')) {
+            s.erase(s.begin());
+            s.pop_back();
+        }
+    }
+    return s;
+}
+
+static std::string tolower_copy(std::string s) {
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+// Case-insensitive, trim-aware field resolver against db.fields()
+static int resolve_field_index(xbase::DbArea& db, const std::string& nameIn) {
+    const std::string name = textio::trim(nameIn);
+    const auto F = db.fields();
+    for (int i = 0; i < static_cast<int>(F.size()); ++i) {
+        if (textio::ieq(textio::trim(F[i].name), name)) return i; // 0-based index (matches RecordView)
+    }
+    return -1;
+}
+
+static void show_available_fields(xbase::DbArea& db) {
+    try {
+        const auto F = db.fields();
+        if (!F.empty()) {
+            std::cout << "Available:\n";
+            for (const auto& m : F) std::cout << "  " << textio::trim(m.name) << "\n";
+        }
+    } catch (...) { /* ignore */ }
+}
+
+void cmd_FIND(xbase::DbArea& db, std::istringstream& iss) {
+    // Read ONLY the remainder of the input after the verb
+    std::string rest_raw;
+    {
+        // consume any leading space at current position, then get remainder
+        if (iss.peek() == ' ') iss.get();
+        std::string tmp;
+        std::getline(iss, tmp);
+        rest_raw = textio::trim(tmp);
+    }
+
+    // Support inline trailing comments (# outside quotes)
+    std::string rest = strip_inline_comment(std::move(rest_raw));
+    if (rest.empty()) { std::cout << "Usage: FIND <field> <needle>\n"; return; }
+
+    // Split <field> and tail
+    std::istringstream args(rest);
+    std::string fld;
+    if (!(args >> fld)) { std::cout << "Usage: FIND <field> <needle>\n"; return; }
+
+    std::string tail;
+    std::getline(args, tail);                 // everything after the field token
+    tail = textio::trim(tail);
+    if (!tail.empty() && tail.front() == '=') {
+        tail.erase(tail.begin());             // allow optional '='
+        tail = textio::trim(tail);
+    }
+    const std::string needle = dequote(std::move(tail));
+
+    // Resolve field
+    const int fi = resolve_field_index(db, fld);
+    if (fi < 0) {
+        std::cout << "Unknown field: " << fld << "\n";
+        show_available_fields(db);
+        return;
+    }
+
+    if (!db.top()) { std::cout << "Empty table.\n"; return; }
+
+    const std::string needle_lc = tolower_copy(textio::trim(needle));
+    if (needle_lc.empty()) { std::cout << "Usage: FIND <field> <needle>\n"; return; }
+
+    int hits = 0;
+
+    // Linear scan: use RecordView display value
+    do {
+        if (!db.readCurrent()) continue;
+
+        RecordView rv(db);
+//      std::string cur = textio::rtrim(rv.getString(fi));   // 0-based field index
+        std::string cur = textio::rtrim(rv.getString(fi + 1)); // assume RecordView is 1-based
+
+        const std::string cur_trim = textio::trim(cur);
+        const std::string cur_lc   = tolower_copy(cur_trim);
+
+        if (!cur_lc.empty() && cur_lc.find(needle_lc) != std::string::npos) {
+            std::cout << db.recno() << ": " << cur_trim << "\n";
+            ++hits;
+        }
+    } while (db.skip(1));
+
+    if (!hits) std::cout << "Not found.\n";
+}

@@ -36,7 +36,8 @@ void cmd_FIELDS(DbArea& area, std::istringstream& /*unused*/)
     int w_idx  = std::max(1, digits(n));               // '#'
     int w_name = 4;                                     // 'Name'
     int w_type = 4;                                     // 'Type'
-    int w_len  = 3;                                     // 'Len'
+    int w_len  = 3;
+    int w_dec  = 3;                                     // 'Len'
 
     for (const FieldDef& f : defs) {
         w_name = std::max<int>(w_name, static_cast<int>(f.name.size()));
@@ -56,7 +57,7 @@ void cmd_FIELDS(DbArea& area, std::istringstream& /*unused*/)
     dash(w_idx);  std::cout << ' ';
     dash(w_name); std::cout << ' ';
     dash(w_type); std::cout << ' ';
-    dash(w_len);  std::cout << "\n";
+    dash(w_len);  std::cout << ' '; dash(w_dec);  std::cout << "\n";
 
     // Rows
     for (std::size_t i = 0; i < n; ++i) {
@@ -65,7 +66,8 @@ void cmd_FIELDS(DbArea& area, std::istringstream& /*unused*/)
             << std::right << std::setw(w_idx)  << (i+1) << ' '
             << std::left  << std::setw(w_name) << f.name << ' '
             << std::left  << std::setw(w_type) << f.type << ' '
-            << std::right << std::setw(w_len)  << static_cast<int>(f.length)
+            << std::right << std::setw(w_len)  << static_cast<int>(f.length) << ' '
+            << std::right << std::setw(w_dec)  << static_cast<int>(f.decimals)
             << "\n";
     }
 }

@@ -1,16 +1,24 @@
-#include <iostream>
+// src/cli/cmd_append_blank.cpp
 #include <sstream>
-#include "xbase.hpp"
+#include <string>
 
-using namespace xbase;
+namespace xbase { class DbArea; }
 
-void cmd_APPEND_BLANK(DbArea& A, std::istringstream& S) {
-    int n = 1; S >> n; if (n <= 0) n = 1;
-    int before = A.recCount();
-    for (int i=0;i<n;++i) A.appendBlank();   // your engine call
-    // position on the last appended record and ensure buffer is loaded
-    A.gotoRec(A.recCount());
-    A.readCurrent();
-    std::cout << "Appended " << n << " blank record(s). New count: " << A.recCount() << ".\n";
+// Implemented in cmd_append.cpp
+void cmd_APPEND(xbase::DbArea& A, std::istringstream& S);
+
+// Helper: get remaining unread text from an istringstream
+static std::string remaining(std::istringstream& in) {
+    const std::string& all = in.str();
+    const std::streampos p = in.tellg();
+    if (p == std::streampos(-1)) return all;                    // tellg() not set -> use full buffer
+    const size_t i = static_cast<size_t>(p);
+    return i < all.size() ? all.substr(i) : std::string{};
 }
 
+// dBASE-style "APPEND BLANK" wrapper:
+// Calls the normal APPEND handler but ensures "BLANK" is seen as the first argument.
+void cmd_APPEND_BLANK(xbase::DbArea& A, std::istringstream& S) {
+    std::istringstream proxy("BLANK " + remaining(S));
+    cmd_APPEND(A, proxy);
+}

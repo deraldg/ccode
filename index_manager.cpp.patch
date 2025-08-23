@@ -1,0 +1,23 @@
+--- src/xindex/index_manager.cpp.orig
++++ src/xindex/index_manager.cpp
+@@ -277,8 +277,8 @@
+ // (We can re-enable parsing later once we finish aligning DbArea.)
+ bool IndexManager::load_json(std::string const&) { return false; }
+ 
+-} // namespace xindex
+-
++
++// === Introspection helpers (added) ===
+ std::vector<std::string> IndexManager::listTags() const {
+     std::vector<std::string> out; out.reserve(tags_.size());
+     for (auto const& kv : tags_) out.push_back(kv.first);
+@@ -290,3 +290,9 @@
+     if (it == tags_.end()) return {};
+     return it->second->spec().expression;
+ }
++
++} // namespace xindex
++
++;
++    return it->second->spec().expression;
++}

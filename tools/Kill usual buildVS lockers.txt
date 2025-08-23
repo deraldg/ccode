@@ -1,0 +1,47 @@
+# 1) Kill usual build/VS lockers (if any auto-started)
+$names = @(
+  'devenv','MSBuild','MSBuildTaskHost','mspdbsrv','VBCSCompiler',
+  'cl','link','dotnet','node',
+  'ServiceHub.*','CodeAnalysisService','VsDebugConsole','vcperf'
+)
+$procs = foreach($n in $names){ Get-Process -Name $n -ErrorAction SilentlyContinue }
+if($procs){ $procs | Stop-Process -Force -ErrorAction SilentlyContinue }
+
+# 2) Make sure nothing is read-only
+attrib -R -S -H -A .\build\* /S /D 2>$null
+
+# 3) First try to remove any hidden .vs folders *inside* build (the usual culprit)
+Get-ChildItem -Force -Directory -Recurse -Filter ".vs" .\build 2>$null |
+  ForEach-Object {
+    try { Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop } catch { }
+  }
+
+# 4) Robust delete of build\ with retries
+$target = "build"
+for($i=1; $i -le 12; $i++){
+  try {
+    if(Test-Path $target){
+      Remove-Item $target -Recurse -Force -ErrorAction Stop
+    }
+    break
+  } catch {
+    Start-Sleep -Milliseconds 500
+    # re-kill anything that might have respawned
+    $procs = foreach($n in $names){ Get-Process -Name $n -ErrorAction SilentlyContinue }
+    if($procs){ $procs | Stop-Process -Force -ErrorAction SilentlyContinue }
+  }
+}
+
+# 5) If still stuck, rename nested .vs to break the lock path and try again
+if(Test-Path $target){
+  Get-ChildItem -Force -Directory -Recurse -Filter ".vs" .\build 2>$null |
+    ForEach-Object {
+      $new = "$($_.FullName).old.$([DateTime]::Now.ToString('yyyyMMddHHmmss'))"
+      try { Rename-Item $_.FullName $new -ErrorAction Stop } catch { }
+    }
+  try { Remove-Item $target -Recurse -Force -ErrorAction Stop } catch { }
+}
+
+# 6) Fresh configure + build (without launching VS)
+cmake -S . -B build
+cmake --build build --config Release --target dottalkpp

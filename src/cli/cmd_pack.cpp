@@ -1,4 +1,4 @@
-﻿// src/cli/cmd_pack.cpp
+// src/cli/cmd_pack.cpp
 #include <iostream>
 #include <sstream>
 #include <string>

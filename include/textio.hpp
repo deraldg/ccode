@@ -4,8 +4,18 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cstdlib>
 
 namespace textio {
+
+inline void cls(){
+#if defined(_WIN32)
+    std::system("cls");
+#else
+    std::system("clear");
+#endif
+}
+
 
 // ---------------- basic trimming & case helpers ----------------
 

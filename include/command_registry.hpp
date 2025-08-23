@@ -1,9 +1,11 @@
 #pragma once
+
 #include <functional>
-#include <iosfwd>
-#include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace xbase { class DbArea; }
 
@@ -13,21 +15,24 @@ using Handler = std::function<void(xbase::DbArea&, std::istringstream&)>;
 
 class CommandRegistry {
 public:
+  // Register or replace a command handler by name (case-insensitive).
   void add(const std::string& name, Handler h);
 
-  // Parse a whole input line: splits out the command and passes the rest as args
-  bool run(xbase::DbArea& area, const std::string& line);
+  // Look up and run a command. Returns false if not found.
+  bool run(xbase::DbArea& area, const std::string& name, std::istringstream& args) const;
 
-  // Direct command + already-prepared args stream
-  bool run(xbase::DbArea& area, const std::string& cmd, std::istringstream& args);
-
-  void help(std::ostream& os) const;
-
-private:
-  std::map<std::string, Handler> map_;
+  // Returns the list of registered (uppercased) command names.
+  const std::vector<std::string>& list() const;
 };
 
-// Global registry used by the CLI
-extern CommandRegistry reg;
+// Global access point (function-local static, safe in MSVC/C++11+).
+CommandRegistry& registry();
 
 } // namespace cli
+
+// ------- Backward-compatibility shims (if older code still calls these) -----
+namespace command_registry {
+  void register_command(const std::string& name, cli::Handler h);
+  const std::unordered_map<std::string, cli::Handler>& map();
+  const std::vector<std::string>& list_names();
+} // namespace command_registry

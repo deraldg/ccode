@@ -1,8 +1,13 @@
-// src/cli/cmd_index.cpp
+﻿// src/cli/cmd_index.cpp
 #include "xbase.hpp"
 #include "textio.hpp"
 #include "xindex/simple_index.hpp"
 #include "order_state.hpp"
+#include "order_hooks.hpp"
+
+// NEW: wire in-memory manager so STATUS can show expressions
+#include "xindex/attach.hpp"
+#include "xindex/index_spec.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -162,7 +167,7 @@ void cmd_INDEX(DbArea& A, std::istringstream& iss) {
     } else {
         collectFieldIndicesFromExpr(A, meta.expression, meta.field_indices);
         if (meta.field_indices.empty()) {
-            std::cout << "INDEX ON EXPR: expression doesn’t reference any table fields; "
+            std::cout << "INDEX ON EXPR: expression doesn't reference any table fields; "
                          "this would create a constant index. Aborting.\n";
             return;
         }
@@ -202,4 +207,29 @@ void cmd_INDEX(DbArea& A, std::istringstream& iss) {
 
     // Make it the active order for this area
     orderstate::setOrder(A, out.string());
+
+    // ==================== NEW: sync in-memory IndexManager ====================
+    // So STATUS can display:   * TAG  -> FIELD[+FIELD2]
+    try {
+        xindex::IndexSpec spec;
+        spec.tag       = up(out.stem().string());
+        spec.ascending = meta.ascending;
+        spec.unique    = false;
+        spec.fields.clear();
+        const auto& F = A.fields();
+        for (int fi : meta.field_indices) {
+            if (fi >= 0 && (size_t)fi < F.size()) {
+                spec.fields.push_back(up(trim(F[fi].name)));
+            }
+        }
+        if (spec.fields.empty()) {
+            // Fallback: single token from expression (uppercased)
+            spec.fields.push_back(up(trim(meta.expression)));
+        }
+        auto& mgr = xindex::ensure_manager(A);
+        mgr.ensure_tag(spec);
+        mgr.set_active(spec.tag);
+    } catch (...) {
+        // If attach layer not available, silently continue.
+    }
 }

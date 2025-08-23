@@ -1,5 +1,5 @@
 {
-  "cmake.sourceDirectory": "${workspaceFolder}",
+  "cmake.sourceDirectory": "C:/Users/deral/code/ccode",
   "cmake.buildDirectory": "${workspaceFolder}/build",
   "files.associations": {
     "DOTTALK.C": "cpp"

@@ -1,0 +1,11 @@
+hought for 7s
+
+Ready for restart. 👍
+
+Chat name: DotTalk++ / ccode — parser debug & HELP sync
+
+Project: DotTalk++ (repo: ccode)
+
+After you’re back, just say: “make the parser debug zip” and I’ll regenerate dottalkpp_parser_debug_v1.zip (adds -d/--debug logging to parser.dbg, instruments SEEK/FIND, and ships an apply script).
+
+See you on the other side.

@@ -1,4 +1,3 @@
-// src/cli/cmd_setindex.cpp
 #include "xbase.hpp"
 #include "textio.hpp"
 #include "order_state.hpp"
@@ -44,6 +43,9 @@ void cmd_SETINDEX(DbArea& a, std::istringstream& iss) {
         // If your orderstate has a tag-aware overload, you can pass up(tag) too.
         // Using the path-only overload here for broad compatibility.
         orderstate::setOrder(a, idx.string());
+
+	
+
         std::cout << "Index set: " << idx.filename().string()
                   << " (tag requested: " << up(tag) << ")\n";
     } catch (const std::exception& e) {

@@ -1,0 +1,96 @@
+*** Begin Patch
+*** Update File: src/cli/cmd_status.cpp
+@@
+-#include <iostream>
+-#include <sstream>
+-#include <fstream>
+-#include <string>
+-#include <vector>
+-#include "xbase.hpp"
+-#include "order_state.hpp"
+-#include "xindex/attach.hpp"
+-#include "xindex/index_manager.hpp"
++#include <iostream>
++#include <sstream>
++#include <fstream>
++#include <string>
++#include <vector>
++#include <filesystem>
++#include "xbase.hpp"
++#include "order_state.hpp"
++#include "xindex/attach.hpp"
++#include "xindex/index_manager.hpp"
++#include "textio.hpp"
+@@
+-    std::cout << "\nOrder / Index\n";
+-    bool asc = true;
+-    std::string tag = "(none)";
+-
+-    std::cout << "  Order direction: " << (asc ? "ASCEND" : "DESCEND") << "\n";
+-    std::cout << "  Active tag: " << tag << "\n";
++    std::cout << "\nOrder / Index\n";
++    const bool asc = orderstate::isAscending(a);
++    std::string tag = "(none)";
++    // Derive active tag from order state (path or tag); show stem as TAG
++    {
++        std::string name = orderstate::orderName(a);
++        if (!name.empty()) {
++            std::filesystem::path p{name};
++            auto stem = p.stem().string();
++            if (!stem.empty()) tag = textio::up(stem);
++        }
++    }
++    std::cout << "  Order direction: " << (asc ? "ASCEND" : "DESCEND") << "\n";
++    std::cout << "  Active tag: " << tag << "\n";
+@@
+-    try {
+-        auto& mgr = xindex::ensure_manager(a);
+-        auto tags = mgr.listTags();
+-        std::cout << "  Index tags loaded: " << tags.size() << "\n";
+-        for (auto const& t : tags) {
+-            std::cout << "    " << (t == tag ? "* " : "  ") << t << "  -> " << mgr.exprFor(t) << "\n";
+-        }
+-    } catch (...) { /* manager not available; ignore */ }
+-    try {
+-        auto& mgr = xindex::ensure_manager(a);
+-        std::vector<std::string> tags = mgr.list_tags(); // if available
+-        std::cout << "  Index tags loaded: " << tags.size() << "\n";
+-        for (auto const& t : tags) {
+-            std::cout << "    " << (t == tag ? "* " : "  ") << t << "  -> " << mgr.tag_expr(t) << "\n";
+-        }
+-    } catch (...) {
+-        // If index manager not initialized or APIs not available, skip gracefully.
+-    }
++    // Try memory manager first; if empty, fall back to scanning .inx files on disk
++    std::vector<std::string> tags;
++    try {
++        auto& mgr = xindex::ensure_manager(a);
++        tags = mgr.listTags();
++        if (!tags.empty()) {
++            std::cout << "  Index tags loaded: " << tags.size() << "\n";
++            for (auto const& t : tags) {
++                const bool isActive = (t == tag);
++                std::cout << (isActive ? "    * " : "      ")
++                          << t << "  -> " << mgr.exprFor(t) << "\n";
++            }
++            return;
++        }
++    } catch (...) { /* ignore, fall through to disk scan */ }
++
++    // Fallback: scan current directory for .inx files and show them as tags
++    try {
++        namespace fs = std::filesystem;
++        const fs::path dir = fs::path(a.name()).parent_path();
++        for (auto const& de : fs::directory_iterator(dir)) {
++            if (de.is_regular_file() && de.path().extension() == ".inx") {
++                tags.push_back(textio::up(de.path().stem().string()));
++            }
++        }
++    } catch (...) { /* disk not accessible; leave empty */ }
++
++    std::cout << "  Index tags loaded: " << tags.size() << "\n";
++    for (auto const& t : tags) {
++        const bool isActive = (t == tag);
++        std::cout << (isActive ? "    * " : "      ") << t << "\n";
++    }
+*** End Patch

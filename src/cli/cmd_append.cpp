@@ -1,73 +1,113 @@
+// src/cli/cmd_append.cpp  (drop-in replacement, hardened)
+// Consolidates APPEND and APPEND_BLANK behavior and guards bad input.
+//
+// Supports:
+//   APPEND                         -> append 1 blank record
+//   APPEND BLANK                   -> append 1 blank record
+//   APPEND -B                      -> append 1 blank record
+//   APPEND N                       -> append N blank records
+//   APPEND BLANK N | APPEND -B N   -> append N blank records
+//
+// Errors out (no crash) on garbage like: APPEND FROG, APPEND -B X, APPEND -7
+// Uses DbArea::appendBlank(). Calls order_notify_mutation(db) after success.
+
 #include "xbase.hpp"
-#include <iostream>
+#include "textio.hpp"
+#include "order_hooks.hpp"
 #include <sstream>
-#include <fstream>
-#include <vector>
-#include <cstdint>
+#include <string>
+#include <cctype>
+#include <iostream>
 
 using namespace xbase;
 
-static uint16_t rd_le16(const unsigned char* p){ return uint16_t(p[0] | (p[1]<<8)); }
-static uint32_t rd_le32(const unsigned char* p){ return uint32_t(p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24)); }
-static void wr_le32(unsigned char* p, uint32_t v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; p[2]=(v>>16)&0xFF; p[3]=(v>>24)&0xFF; }
+namespace {
 
-void cmd_APPEND(xbase::DbArea& a, std::istringstream& iss)
-{
-    if (!a.isOpen()) { std::cout << "No table open.\n"; return; }
+inline std::string uptrim(std::string s) {
+    return textio::up(textio::trim(s));
+}
 
-    long n = 1;
-    if (!(iss >> n)) n = 1;
-    if (n <= 0) { std::cout << "Usage: APPEND_BLANK [n]\n"; return; }
-
-    std::fstream io(a.name(), std::ios::in | std::ios::out | std::ios::binary);
-    if (!io) { std::cout << "Open failed: cannot write file\n"; return; }
-
-    unsigned char hdr[32] = {0};
-    io.read(reinterpret_cast<char*>(hdr), 32);
-    if (!io) { std::cout << "Failed to read header\n"; return; }
-
-    const uint16_t header_len = rd_le16(&hdr[8]);   // == data_start
-    const uint16_t rec_len    = rd_le16(&hdr[10]);  // == cpr
-    uint32_t old_count        = rd_le32(&hdr[4]);
-    uint32_t new_count        = old_count;
-
-    std::vector<char> rec(rec_len, ' ');
-    rec[0] = ' '; // not deleted
-
-    for (long i = 0; i < n; ++i) {
-        std::streampos pos = std::streampos(header_len) + std::streamoff((new_count + i) * rec_len);
-        io.seekp(pos, std::ios::beg);
-        io.write(rec.data(), static_cast<std::streamsize>(rec.size()));
-        if (!io) { std::cout << "Write failed\n"; return; }
-    }
-
-    // bump count in header
-    new_count += static_cast<uint32_t>(n);
-    io.seekp(4, std::ios::beg);
-    unsigned char tmp[4]; wr_le32(tmp, new_count);
-    io.write(reinterpret_cast<const char*>(tmp), 4);
-
-    // EOF marker after last record
-    std::streampos eof_pos = std::streampos(header_len) + std::streamoff(new_count * rec_len);
-    io.seekp(eof_pos, std::ios::beg);
-    const unsigned char eof = 0x1A;
-    io.write(reinterpret_cast<const char*>(&eof), 1);
-    io.flush();
-    if (!io) { std::cout << "Append failed (flush)\n"; return; }
-
-    std::cout << "Appended " << n << " blank record(s). New count: " << new_count << ".\n";
-
-    // 🔁 Refresh the engine’s view and move to the first newly-added record
+inline bool try_parse_int_strict(const std::string& s, int& out) {
+    if (s.empty()) return false;
+    // Only digits, positive
+    for (char c : s) if (c < '0' || c > '9') return false;
     try {
-        const std::string fname = a.name();
-        a.open(fname);  // re-open to reload header/recCount/cpr
-        long firstNew = static_cast<long>(old_count) + 1;
-        if (new_count >= static_cast<uint32_t>(firstNew)) {
-            a.gotoRec(firstNew);   // position so REPLACE/EDIT works immediately
-        } else if (new_count > 0) {
-            a.gotoRec(1);
-        }
-    } catch (const std::exception& e) {
-        std::cout << "Note: refresh failed: " << e.what() << "\n";
+        out = std::stoi(s);
+        return out > 0;
+    } catch (...) { return false; }
+}
+
+// Append N blank records; return false if any append fails
+static bool append_n_blank(DbArea& db, int n) {
+    if (n <= 0) return true;
+    for (int i = 0; i < n; ++i) {
+        if (!db.appendBlank()) return false;
     }
+    return true;
+}
+
+} // namespace
+
+// APPEND [BLANK|-B] [n]
+void cmd_APPEND(DbArea& db, std::istringstream& iss) {
+    std::string t1; // first token after APPEND
+    std::string t2; // optional second token (n)
+
+    // read tokens loosely
+    iss >> t1;
+    iss >> t2;
+
+    const std::string a1 = uptrim(t1);
+    const std::string a2 = uptrim(t2);
+
+    int  count   = 1;     // default number of records
+    bool doBlank = true;  // classic drop-through
+
+    // Validate / interpret args
+    if (a1.empty()) {
+        // APPEND -> BLANK 1
+        doBlank = true;
+        count   = 1;
+    } else if (a1 == "BLANK" || a1 == "-B") {
+        // APPEND BLANK [n]  or  APPEND -B [n]
+        if (!a2.empty()) {
+            int n{};
+            if (!try_parse_int_strict(a2, n)) {
+                std::cout << "Usage: APPEND [BLANK|-B] [n]\n";
+                return;
+            }
+            count = n;
+        }
+        doBlank = true;
+    } else {
+        // APPEND N  (N must be positive integer)
+        int n{};
+        if (!try_parse_int_strict(a1, n)) {
+            std::cout << "Usage: APPEND [BLANK|-B] [n]\n";
+            return;
+        }
+        count   = n;
+        doBlank = true;
+    }
+
+    // Execute
+    try {
+        if (doBlank) {
+            if (!append_n_blank(db, count)) {
+                std::cout << "APPEND failed.\n";
+                return;
+            }
+            // Safe no-op by default; plug in real notifier later.
+            order_notify_mutation(db);
+            std::cout << "Appended " << count
+                      << " blank record" << (count == 1 ? "" : "s")
+                      << ".\n";
+            return;
+        }
+    } catch (...) {
+        std::cout << "APPEND failed (exception).\n";
+        return;
+    }
+
+    std::cout << "APPEND: interactive mode not yet implemented.\n";
 }

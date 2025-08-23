@@ -1,0 +1,57 @@
+bool CommandRegistry::run(xbase::DbArea& area,
+                          const std::string& name,
+                          std::istringstream& args) const
+{
+    const auto key = upcopy(name);
+    std::lock_guard<Mtx> lock(mutex_());
+
+    auto it = commands().find(key);
+    if (it == commands().end())
+        return false;
+
+    // ---- Parse trace: echo raw input and parsed view (non-destructive) ----
+    try {
+        // Remaining arg string from current stream position (don’t consume)
+        std::streampos pos = args.tellg();
+        const std::string full = args.str();
+        std::string rem = (pos != std::streampos(-1) && static_cast<size_t>(pos) < full.size())
+                            ? full.substr(static_cast<size_t>(pos))
+                            : full;
+
+        // trim leading spaces
+        if (!rem.empty()) {
+            const auto first = rem.find_first_not_of(" \t");
+            if (first != std::string::npos) rem.erase(0, first);
+        }
+
+        // Line 1: RAW as typed (reconstructed from verb + remaining args)
+        std::string raw = name;
+        if (!rem.empty()) { raw.push_back(' '); raw += rem; }
+        std::cout << raw << "\n";
+
+        // Line 2: parser output (normalized command + remaining args)
+        std::cout << "[parse] CMD=" << key;
+        if (!rem.empty()) std::cout << " ARGS=\"" << rem << "\"";
+        std::cout << "\n";
+
+        // Optional token view (uncomment if you want to see tokens too)
+        // auto toks = textio::tokenize(raw);
+        // std::cout << "[parse] TOKENS=[";
+        // for (size_t i = 0; i < toks.size(); ++i) {
+        //     if (i) std::cout << ",";
+        //     std::cout << "\"" << toks[i] << "\"";
+        // }
+        // std::cout << "]\n";
+
+    } catch (...) {
+        // best-effort tracing only
+    }
+
+    // Execute the command handler
+    it->second(area, args);
+    return true;
+}
+
+const std::vector<std::string>& CommandRegistry::list() const {
+  return names();
+}

@@ -1,0 +1,3 @@
+USE students
+LIST 5
+QUIT

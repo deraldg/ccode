@@ -1,0 +1,96 @@
+# DotTalk++ Baseline (ccode alpha.3)
+**Project:** ccode  
+**Topic:** DotTalk++  
+**Version:** alpha.3  
+**Date:** 2025-08-24  
+
+---
+
+## 📦 Bundle Information
+- **Bundle File:** `ccode-alpha.3-20250824-121859.zip`
+- **Manifest File:** `ccode-alpha.3-20250824-121859.manifest.txt`
+- **Files Included:** 356
+- **Size:** 14.99 MB (unzipped), 3.01 MB (zip)
+- **SHA256:** CC3F008D85BDDF1E95E9257047B7BAEB3F9AFB0BFFAB47A8056A9F7BF64768FA
+
+---
+
+## 🗂 Source Structure
+
+### CLI (src/cli/)
+Implements DotTalk++ commands:
+- `cmd_append.cpp`, `cmd_append_blank.cpp`
+- `cmd_ascend.cpp`, `cmd_descend.cpp`
+- `cmd_bang.cpp` (`!` command)
+- `cmd_bottom.cpp`, `cmd_top.cpp`, `cmd_skip.cpp`
+- `cmd_clear.cpp`, `cmd_color.cpp`, `cmd_close.cpp`
+- `cmd_copy.cpp`, `cmd_export.cpp`, `cmd_import.cpp`
+- `cmd_count.cpp`, `cmd_list.cpp`, `cmd_fields.cpp`
+- `cmd_find.cpp`, `cmd_seek.cpp`, `cmd_locate.cpp`
+- `cmd_goto.cpp`, `cmd_recno.cpp`
+- `cmd_help.cpp`, `cmd_version.cpp`
+- `cmd_delete.cpp`, `cmd_recall.cpp`, `cmd_pack.cpp`, `cmd_zap.cpp`
+- `cmd_replace.cpp`, `cmd_edit.cpp`
+- `cmd_index.cpp`, `cmd_setindex.cpp`, `cmd_setorder.cpp`, `cmd_order.cpp`
+- `cmd_status.cpp`, `cmd_struct.cpp`
+- Utilities: `colors.cpp`, `console_utils.cpp`, `parse.cpp`, `predicates.cpp`, `shell.cpp`, `textio.cpp`
+
+### XBase (src/xbase/)
+Core DBF handling:
+- `dbarea.cpp`, `dbf_file.cpp`, `fields.cpp`, `record_view.cpp`
+- `dbarea_introspection.cpp`
+
+### XIndex (src/xindex/)
+Index subsystem:
+- `attach.cpp`, `bpt_backend.cpp`, `bptree_backend.cpp`
+- `common.cpp`, `index_manager.cpp`, `index_tag.cpp`
+- `key_codec.cpp`, `simple_index.cpp`, `simple_index_build_and_save.cpp`
+- Adapter: `dbarea_adapt.cpp`
+- Headers: `index_backend.hpp`, `index_key.hpp`, `index_spec.hpp`, `index_tag.hpp`
+
+### Include
+- `cli/` headers (command prototypes, settings)
+- `xbase.hpp`, `record_view.hpp`, `fields.hpp`
+- `xindex/` headers (index manager, btree, adapters)
+
+### Data (data/)
+- Sample/test DBFs: `book.dbf`, `classes.dbf`, `courses.dbf`, `students.dbf`, `teachers.dbf`, `sample.dbf`, `join_table.dbf`, etc.
+- Index sidecars: `IDTAG.inx`, `L.inx`, `N.inx`
+- Test data: `SHAKEDOWN.dbf`, `SHK2.dbf` + CSVs
+
+### Tools & Tests
+- `bundle_code.ps1`, `rebuild_ccode.ps1`, `run_phase1a_tests.ps1`, `smoke_ccode.ps1`
+- Shakedown scripts: `dot_talk_shakedown_script_paste_into_cli.txt`, `shakedown_ccode.ps1`, etc.
+- Docs: `DotTalk_Index_Plans.docx`, `DotTalk_Phase1A_Status_Introspection.docx`, architecture diagrams
+
+---
+
+## ✅ Implemented Features (alpha.3)
+- Command parsing and registry system (`command_registry.cpp`)
+- CLI verbs implemented (see list above)
+- DBF open/close, header/fields read, record read/write
+- Basic record lifecycle: `APPEND`, `DELETE`, `RECALL`, `PACK`, `ZAP`
+- Navigation: `TOP`, `BOTTOM`, `SKIP`, `GOTO`, `RECNO`
+- Display: `LIST`, `FIELDS`, `DISPLAY`, `DUMP`, `STATUS`, `STRUCT`
+- Search: `FIND`, `SEEK`, `LOCATE`
+- Index commands: `INDEX`, `SET INDEX`, `SET ORDER`, `ASCEND`, `DESCEND`
+- Color themes, HELP system, version info
+
+---
+
+## ⚠️ Pending / In-Progress
+- `dbarea_adapt.cpp` — adapter wiring to `xbase::DbArea` (currently incomplete)
+- Index lifecycle: ensuring auto-close on `CLOSE`, `PACK`, `ZAP`, `EXPORT`
+- Predicate evaluation refinements
+- Consistent `Recno` reporting in `STATUS`
+- Help system sync with all current commands
+- CSV import/export enhancements
+
+---
+
+## 📌 Next Steps (towards alpha.4)
+1. Finish `dbarea_adapt.cpp` and remove legacy shims
+2. Fix `cmd_status` to show correct Recno
+3. Define behavior of indexes during `PACK`/`ZAP`/`COPY`/`EXPORT`
+4. Harden command parser (edge cases, error messages)
+5. Expand smoke tests and shakedown scripts

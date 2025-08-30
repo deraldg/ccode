@@ -1,0 +1,66 @@
+// APPEND [BLANK|-B] [n]
+void cmd_APPEND(xbase::DbArea& db, std::istringstream& iss)
+{
+    // 0) Hard guard: no table open → message and return (no parsing, no side effects)
+    if (!db.isOpen()) {
+        std::cout << "No table open.\n";
+        return;
+    }
+
+    // 1) Parse (kept minimal; doesn’t throw)
+    std::string t1, t2;
+    iss >> t1;  // may fail; leaves t1 empty
+    iss >> t2;  // may fail; leaves t2 empty
+
+    auto uptrim = [](std::string s) {
+        return textio::up(textio::trim(s));
+    };
+    const std::string a1 = uptrim(t1);
+    const std::string a2 = uptrim(t2);
+
+    auto parse_pos_int = [](const std::string& s, int& out) -> bool {
+        if (s.empty()) return false;
+        for (unsigned char c : s) if (c < '0' || c > '9') return false;
+        try { out = std::stoi(s); return out > 0; } catch (...) { return false; }
+    };
+
+    int  count   = 1;   // default: 1 blank
+    bool doBlank = true;
+
+    // 2) Interpret args
+    if (a1.empty()) {
+        // APPEND
+        count = 1;
+    } else if (a1 == "BLANK" || a1 == "-B") {
+        // APPEND BLANK [n]
+        if (!a2.empty()) {
+            int n{};
+            if (!parse_pos_int(a2, n)) {
+                std::cout << "Usage: APPEND [BLANK|-B] [n]\n";
+                return;
+            }
+            count = n;
+        }
+    } else {
+        // APPEND n
+        int n{};
+        if (!parse_pos_int(a1, n)) {
+            std::cout << "Usage: APPEND [BLANK|-B] [n]\n";
+            return;
+        }
+        count = n;
+    }
+
+    // 3) Execute
+    for (int i = 0; i < count; ++i) {
+        if (!db.appendBlank()) {
+            std::cout << "APPEND failed.\n";
+            return;
+        }
+    }
+
+    // 4) Notify order/index (safe no-op if not wired)
+    order_notify_mutation(db);
+
+    std::cout << "Appended " << count << " blank record" << (count == 1 ? "" : "s") << ".\n";
+}

@@ -1,16 +1,16 @@
+﻿// src/cli/colors.hpp
 #pragma once
 #include <string>
 
-namespace cli { namespace colors {
+namespace dli {
+namespace colors {
 
 enum class Theme { Default, Green, Amber };
 
-bool enableAnsi();
-std::string seqTheme(Theme t, bool use256);
-std::string seqReset();
-void applyTheme(Theme t);
-void reset();
-Theme parseTheme(const std::string& s, bool& ok);
-bool has256();
+Theme       parseTheme(const std::string& s);
+std::string themeName(Theme t);
+void        applyTheme(Theme t);
+Theme       currentTheme();
 
-}} // namespace cli::colors
+} // namespace colors
+} // namespace dli

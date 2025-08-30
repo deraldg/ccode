@@ -1,0 +1,61 @@
+FoxPro Search Commands: FIND vs SEEK vs LOCATE
+==============================================
+
+Overview of Each Command
+------------------------
+
+Command  | Requires Index? | Search Type       | Optimized? | Moves Record Pointer?
+-------- | ---------------- | ----------------- | ---------- | ---------------------
+FIND     | Yes              | Index-based       | No         | Yes
+SEEK     | Yes              | Index-based       | Yes        | Yes
+LOCATE   | No               | Sequential scan   | Yes (if indexed field used) | Yes
+
+FIND
+----
+- Searches using the current index.
+- Requires SET ORDER TO <tag>.
+- Only works with character keys.
+- No FOR clause or complex conditions.
+- No Rushmore optimization.
+
+Example:
+  FIND "Smith"
+
+SEEK
+----
+- Searches using a specified key in an index.
+- Supports numeric, date, and character keys.
+- Rushmore optimization applies.
+- Can use SET NEAR ON for closest match.
+
+Example:
+  SEEK "Smith"
+  SEEK "Smith" IN indexTag
+
+LOCATE
+------
+- Searches for the first record matching a logical condition.
+- Works with or without an index.
+- Supports complex conditions (FOR, WHILE, SCOPE).
+- Rushmore optimization applies if indexed fields are used.
+
+Example:
+  LOCATE FOR UPPER(name) = "SMITH"
+  CONTINUE
+
+Indexed vs Non-Indexed Behavior
+-------------------------------
+
+Scenario                          | FIND | SEEK | LOCATE
+----------------------------------|------|------|--------
+No index                         | Fails | Fails | Works (slow)
+Index on searched field          | Works | Works | Works (fast via Rushmore)
+Complex condition (e.g. FOR)     | No    | No    | Yes
+Closest match if not found       | No    | Yes (with SET NEAR ON) | No
+
+Use Cases
+---------
+- Use SEEK for fast, exact lookups with indexed fields.
+- Use LOCATE for flexible searches with complex conditions.
+- Use FIND only in legacy code — SEEK is preferred.
+

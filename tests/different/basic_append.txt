@@ -1,0 +1,6 @@
+# Open students, append 1 blank, verify count
+USE students
+COUNT
+APPEND
+COUNT
+QUIT

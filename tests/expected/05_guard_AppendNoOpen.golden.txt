@@ -1,0 +1,8 @@
+DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.
+> AREA
+Current area: 0
+  File:   Recs: 0  Recno: 0
+  Order: ASCEND  Active tag: (none)
+> APPEND
+No table open.
+> QUIT

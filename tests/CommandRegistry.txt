@@ -1,0 +1,86 @@
+bool cli::CommandRegistry::run(xbase::DbArea& area,
+                               const std::string& name,
+                               std::istringstream& args) const
+{
+  // Capture the remaining argument text so we can rebuild streams as needed.
+  const std::string full = args.str();
+  std::streampos pos = args.tellg();
+  if (pos == std::streampos(-1)) pos = 0;
+  const std::string rest = full.substr(static_cast<size_t>(pos));
+
+  // Uppercased command name
+  const std::string key = upcopy(name);
+
+  // Copy out handlers while holding the mutex, then release it.
+  Handler mainH;
+  Handler findH;
+  Handler indexH;
+  bool    haveMain = false;
+
+  {
+    std::lock_guard<Mtx> lock(mutex_());
+
+    auto it = commands().find(key);
+    if (it != commands().end()) {
+      mainH = it->second;
+      haveMain = true;
+    }
+
+    // For the LOCATE rewrite path we may need FIND/INDEX handlers too.
+    auto fnd = commands().find("FIND");
+    if (fnd != commands().end()) findH = fnd->second;
+
+    auto idx = commands().find("INDEX");
+    if (idx != commands().end()) indexH = idx->second;
+  } // <- mutex released here; all callbacks happen after this point.
+
+  if (!haveMain) return false;
+
+  // Optional rewrite: LOCATE FOR <field> ... => ensure INDEX then call FIND.
+  if (key == "LOCATE" && findH) {
+    // Rebuild a stream from the raw args and parse like your existing code.
+    std::istringstream a(rest);
+
+    // Strip optional leading "FOR " and split tokens (helpers live in this file).
+    std::string expr = trim_left(rest);
+    if (expr.size() >= 3 && upcopy(expr.substr(0,3)) == "FOR") {
+      size_t off = expr.find_first_not_of(" \t", 3);
+      expr = (off == std::string::npos) ? std::string() : expr.substr(off);
+    }
+
+    auto toks = split_tokens(expr);
+    if (toks.size() >= 2) {
+      std::string field = toks[0];
+      std::string value;
+      size_t start = 1;
+      if (toks.size() >= 3 && (toks[1] == "=" || toks[1] == "==")) start = 2;
+      for (size_t i = start; i < toks.size(); ++i) {
+        if (i > start) value.push_back(' ');
+        value += toks[i];
+      }
+      bool quoted = (!value.empty() && ((value.front()=='"' && value.back()=='"') ||
+                                        (value.front()=='\'' && value.back()=='\'')));
+      if (!quoted && !is_numeric_like(value)) value = "\"" + value + "\"";
+
+      // Best-effort: build an index if possible (outside the mutex).
+      if (indexH) {
+        std::string tag = "__AUTO_" + upcopy(field);
+        std::string indexArgs = "ON " + field + " TAG " + tag;
+        std::istringstream si(indexArgs);
+        try { indexH(area, si); } catch (...) { /* ignore failures */ }
+      }
+
+      // Call native FIND so it benefits from index semantics.
+      std::string findArgs = field + " " + value;
+      std::istringstream sf(findArgs);
+      findH(area, sf);
+      return true;
+    }
+    // If rewrite failed to parse, fall through to native LOCATE.
+  }
+
+  // Normal dispatch of the copied-out handler (no mutex held).
+  std::istringstream callArgs(rest);
+  mainH(area, callArgs);
+  return true;
+}

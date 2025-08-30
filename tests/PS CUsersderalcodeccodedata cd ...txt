@@ -1,0 +1,56 @@
+PS C:\Users\deral\code\ccode\data> cd ..
+PS C:\Users\deral\code\ccode> ./datarun.ps1
+[wire] FIND -> 00007FF764691180
+[wire] SEEK -> 00007FF7646A1CD0
+DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.
+> USE students
+[input] USE students
+[parse] CMD=USE ARGS="students"
+Opened students.dbf with 105 records.
+> INDEX ON LAST_NAME TAG N1
+[input] INDEX ON LAST_NAME TAG N1
+[parse] CMD=INDEX ARGS="ON LAST_NAME TAG N1"
+Index written: N1.inx  (expr: LAST_NAME, ASC)
+> SETINDEX N1
+[input] SETINDEX N1
+[parse] CMD=SETINDEX ARGS="N1"
+Index set: N1.inx
+> LIST 10
+[input] LIST 10
+[parse] CMD=LIST ARGS="10"
+      STUDENT_ID  FIRST_NAME           LAST_NAME            DOB         GPA         IS_ACTIVE
+  101
+  102
+  103
+  104
+  105
+    1     1 "ALICE"              "ZEKE"               19970302 3.14 T
+    3     3 Jane                 Brown                19970608 3.70 F
+   26    26 Fiona                Brown                19960121 3.63 F
+   29    29 Ethan                Brown                20050609 3.31 F
+   35    35 Charlie              Brown                19961113 2.60 F
+10 record(s) listed (limit 10). Use LIST ALL to show more.
+> FIND "DOE"
+[input] FIND "DOE"
+[parse] CMD=FIND ARGS=""DOE""
+Unknown field: "DOE"
+Available:
+  STUDENT_ID
+  FIRST_NAME
+  LAST_NAME
+  DOB
+  GPA
+  IS_ACTIVE
+> SEEK "MILLER"
+[input] SEEK "MILLER"
+[parse] CMD=SEEK ARGS=""MILLER""
+Unknown field: "MILLER"
+Available:
+  STUDENT_ID
+  FIRST_NAME
+  LAST_NAME
+  DOB
+  GPA
+  IS_ACTIVE
+> QUIT
+PS C:\Users\deral\co

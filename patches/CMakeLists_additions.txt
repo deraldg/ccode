@@ -1,0 +1,13 @@
+// Append these lines to your root CMakeLists.txt after dottalkpp target exists.
+
+# ---- DotTalk++ Expr (M1) ------------------------------------------------
+target_include_directories(dottalkpp PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+set(DOTTALK_EXPR_SOURCES
+  src/cli/expr/lexer.cpp
+  src/cli/expr/parser.cpp
+  src/cli/expr/eval.cpp
+  src/cli/expr/api.cpp
+  src/cli/expr/for_parser.cpp
+)
+target_sources(dottalkpp PRIVATE ${DOTTALK_EXPR_SOURCES})

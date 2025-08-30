@@ -1,0 +1,5 @@
+USE students
+REPLACE notes WITH "First memo line.\nSecond line."
+TYPE notes
+LIST TOP 3
+QUIT

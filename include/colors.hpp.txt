@@ -1,0 +1,22 @@
+// src/cli/colors.hpp
+#pragma once
+#include <string>
+
+namespace dli { namespace colors {
+
+// Simple color theme used by the COLOR command
+enum class Theme {
+    Default,
+    Green,
+    Amber
+};
+
+// Parse "DEFAULT" | "GREEN" | "AMBER" (case-insensitive).
+// Unknown values map to Theme::Default.
+Theme parseTheme(const std::string& s);
+
+// Apply theme to the current console (best-effort).
+// On Windows uses SetConsoleTextAttribute; on ANSI consoles prints an escape.
+void applyTheme(Theme t);
+
+}} // namespace dli::colors

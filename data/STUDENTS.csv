@@ -1,0 +1,119 @@
+STUDENT_ID ,FIRST_NAME ,LAST_NAME  ,DOB        ,GPA        ,IS_ACTIVE  
+    1,"""ALICE""","""ZEKE""",19970302,3.14,T
+    2,George,Doe,20000919,3.43,T
+    3,Jane,Brown,19970608,3.70,F
+    4,Diana,Miller,19950505,2.94,T
+    5,John,Doe,20040623,2.68,T
+    6,George,Rodriguez,19960117,2.50,F
+    7,John,Jones,19990825,2.31,T
+    8,Hannah,Davis,19960814,3.25,T
+    9,Charlie,Martinez,19950419,3.08,F
+   10,Diana,Williams,19980918,3.77,F
+   11,Jane,Rodriguez,20020226,2.70,T
+   12,George,Williams,20050821,3.92,F
+   13,Ethan,Garcia,20020405,2.37,T
+   14,Bob,Garcia,20041217,3.95,F
+   15,Charlie,Jones,20020727,2.43,F
+   16,Fiona,Martinez,19950208,2.02,T
+   17,Charlie,Martinez,19961219,2.20,T
+   18,Hannah,Miller,20040323,3.21,F
+   19,Bob,Miller,20011224,2.20,F
+   20,Jane,Davis,19970205,3.78,F
+   21,Diana,Davis,20050311,3.59,F
+   22,Fiona,Martinez,19970227,2.59,F
+   23,John,Rodriguez,19970825,2.57,F
+   24,Alice,Doe,19971124,2.84,T
+   25,Diana,Martinez,20001213,3.50,F
+   26,Fiona,Brown,19960121,3.63,F
+   27,Fiona,Garcia,19960413,3.62,F
+   28,Ethan,Doe,20000813,3.39,F
+   29,Ethan,Brown,20050609,3.31,F
+   30,Hannah,Rodriguez,20050202,3.43,T
+   31,Diana,Doe,20001102,3.11,T
+   32,Ethan,Williams,19980822,3.16,F
+   33,Bob,Rodriguez,19971115,3.21,F
+   34,Jane,Smith,20000810,2.57,T
+   35,Charlie,Brown,19961113,2.60,F
+   36,Bob,Brown,19990916,3.54,T
+   37,Alice,Martinez,19951016,2.78,F
+   38,Fiona,Garcia,19990520,3.27,F
+   39,Jane,Williams,20000816,2.89,F
+   40,Jane,Rodriguez,20051007,2.52,F
+   41,Fiona,Williams,20020607,2.42,F
+   42,Jane,Smith,19950922,2.98,F
+   43,Charlie,Doe,19950220,2.74,F
+   44,George,Williams,19950614,2.00,F
+   45,Diana,Williams,20011013,3.21,T
+   46,John,Garcia,20030923,2.06,T
+   47,Fiona,Smith,19991005,2.42,F
+   48,Alice,Martinez,20010608,2.72,T
+   49,John,Garcia,20020110,2.11,T
+   50,Alice,Williams,20030419,2.35,F
+   51,Hannah,Doe,19961003,2.87,F
+   52,John,Brown,19980627,3.54,F
+   53,Diana,Jones,19991215,2.81,F
+   54,George,Doe,19950220,3.07,T
+   55,Alice,Smith,20020720,2.80,T
+   56,Diana,Williams,19991020,3.34,T
+   57,Hannah,Davis,20020813,2.40,F
+   58,Jane,Martinez,20011209,3.19,F
+   59,Fiona,Garcia,19980819,3.65,T
+   60,Ethan,Doe,19960703,2.34,T
+   61,John,Smith,20040907,2.67,F
+   62,George,Smith,20050606,2.79,T
+   63,Alice,Martinez,19960419,2.24,T
+   64,Diana,Rodriguez,19971011,3.37,T
+   65,George,Miller,19991126,2.44,F
+   66,George,Martinez,19990728,3.83,F
+   67,Diana,Rodriguez,20031217,3.23,T
+   68,Diana,Brown,20051203,3.61,F
+   69,Diana,Garcia,19980225,2.39,T
+   70,Jane,Davis,20050301,2.44,T
+   71,John,Davis,20020903,2.52,T
+   72,Bob,Doe,20030323,2.09,F
+   73,Charlie,Williams,19990508,3.63,F
+   74,Diana,Smith,20000908,3.74,F
+   75,John,Miller,20010624,2.57,F
+   76,Ethan,Williams,20010118,2.92,T
+   77,Ethan,Doe,20010125,2.41,T
+   78,Alice,Garcia,20040321,2.64,T
+   79,Hannah,Garcia,20020126,3.27,F
+   80,Jane,Garcia,19990420,2.19,T
+   81,Charlie,Williams,20021124,3.16,F
+   82,Bob,Doe,19970106,2.54,T
+   83,Hannah,Jones,20020328,2.33,F
+   84,Bob,Davis,19950526,3.27,T
+   85,Fiona,Davis,19990408,3.14,T
+   86,Charlie,Martinez,19980417,3.51,F
+   87,Charlie,Jones,19951211,2.94,F
+   88,Jane,Miller,19951219,3.28,T
+   89,Jane,Rodriguez,19951212,2.80,F
+   90,Diana,Doe,20001108,3.57,F
+   91,Bob,Miller,20030116,3.13,F
+   92,Diana,Smith,20010823,2.58,T
+   93,Charlie,Williams,19980103,3.46,F
+   94,Alice,Jones,20000812,2.24,F
+   95,Charlie,Jones,20040115,3.38,F
+   96,John,Williams,19961203,2.08,T
+   97,Charlie,Doe,20030819,3.06,F
+   98,Ethan,Miller,19991109,2.42,T
+   99,George,Williams,20000810,3.86,T
+  100,Fiona,Grimwood,20010910,3.19,F
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,TESTER,SMOKE,,,
+,TESTER,SMOKE,,,
+,,,,,
+,,,,,
+,TESTER,SMOKE,,,
+,,,,,
+,TESTER,SMOKE,,,
+,,,,,
+,TESTER,SMOKE,,,
+,,,,,
+,TESTER,SMOKE,,,
+,,,,,
+,TESTER,SMOKE,,,

@@ -1,38 +1,50 @@
-#pragma once
+﻿#pragma once
 
 #include <functional>
-#include <mutex>
-#include <sstream>
 #include <string>
 #include <unordered_map>
-#include <vector>
+#include <sstream>
 
-namespace xbase { class DbArea; }
+#include "xbase.hpp"   // for xbase::DbArea
 
-namespace cli {
+// ===== DotTalk Line Interface (dli) =========================================
+//  - Public API is unchanged except the namespace is now dli:: instead of the old namespace
+//  - A temporary alias `namespace cli = dli;` is provided at the bottom so
+//    existing call sites continue to compile during the rename sweep.
 
+namespace dli {
+
+// Handlers take (DbArea&, args-stream)
 using Handler = std::function<void(xbase::DbArea&, std::istringstream&)>;
 
-class CommandRegistry {
-public:
-  // Register or replace a command handler by name (case-insensitive).
+struct CommandRegistry {
+  // Register or replace a command handler by exact, already-normalized name.
   void add(const std::string& name, Handler h);
 
-  // Look up and run a command. Returns false if not found.
-  bool run(xbase::DbArea& area, const std::string& name, std::istringstream& args) const;
+  // Dispatch a command; returns true to keep shell alive (normal case).
+  bool run(xbase::DbArea& area,
+           const std::string& normalized_key,
+           std::istringstream& args);
 
-  // Returns the list of registered (uppercased) command names.
-  const std::vector<std::string>& list() const;
+  // Access the internal map (read-only)
+  const std::unordered_map<std::string, Handler>& map() const { return map_; }
+
+private:
+  std::unordered_map<std::string, Handler> map_;
 };
 
-// Global access point (function-local static, safe in MSVC/C++11+).
+// Global singleton accessor (defined in the .cpp)
 CommandRegistry& registry();
 
-} // namespace cli
+// Convenience helpers that some code references directly.
+void register_command(const std::string& name, dli::Handler h);
+const std::unordered_map<std::string, dli::Handler>& map();
 
-// ------- Backward-compatibility shims (if older code still calls these) -----
-namespace command_registry {
-  void register_command(const std::string& name, cli::Handler h);
-  const std::unordered_map<std::string, cli::Handler>& map();
-  const std::vector<std::string>& list_names();
-} // namespace command_registry
+} // namespace dli
+
+// ---------------------------------------------------------------------------
+// TEMPORARY BACK-COMPAT ALIAS:
+//   Keep this until you finish sweeping \bcli:: -> dli:: across the repo.
+//   Afterwards, remove these two lines and rebuild to catch any stragglers.
+
+

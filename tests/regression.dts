@@ -1,0 +1,44 @@
+; === DotTalk++ regression smoke ===
+; Run with:  DOTSCRIPT regression ECHO
+; or from anywhere if scripts/ is on the auto search path
+
+VERSION
+DIR
+
+; --- Color theming ------------------------------------
+COLOR GREEN          && should switch to green
+COLOR DEFAULT        && restore default
+
+; --- Open sample data ---------------------------------
+USE students
+
+; --- Simple preds (predx fast-path) -------------------
+COUNT FOR LAST_NAME = "SMITH"
+COUNT FOR GPA >= 3.0
+COUNT FOR DOB >= 20000101
+COUNT ALL
+COUNT DELETED
+
+; --- Complex boolean / parens (DotTalk expr) ----------
+COUNT FOR (GPA >= 3.0) AND NOT (LAST_NAME = "SMITH")
+COUNT FOR (GPA >= 3.5 AND IS_ACTIVE = .T.) OR (LAST_NAME = "SMITH")
+LOCATE FOR (LAST_NAME $ "MIT") OR (LAST_NAME = "SMITH")
+DISPLAY                 && should show located record if found
+
+; --- Case sensitivity toggle checks --------------------
+; Expect string ops to change behavior when sensitivity flips
+SET CASE SENSITIVE OFF
+COUNT FOR LOWER(LAST_NAME) = "smith"
+SET CASE SENSITIVE ON
+COUNT FOR LOWER(LAST_NAME) = "smith"
+
+; --- NOT / nested parens sanity ------------------------
+COUNT FOR NOT (NOT (GPA >= 3.2))
+COUNT FOR (STATE="CA") AND ((GPA)>=3.2)
+
+; --- Edgey-but-safe (won't error if 0 matches) --------
+; Our current policy: quotes optional; single apostrophes OK in data value
+COUNT FOR LAST_NAME = "O'NEIL"     && ok even if none exist
+
+; --- Done ----------------------------------------------
+COLOR DEFAULT

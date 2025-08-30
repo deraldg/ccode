@@ -1,0 +1,119 @@
+// ===============================
+// File: src/cli/cmd_setorder.cpp  (DROP-IN)
+// ===============================
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "xindex/index_manager.hpp"
+#include "xindex/attach.hpp"
+
+static bool is_number(const std::string& s) {
+    if (s.empty()) return false;
+    for (unsigned char c : s) if (!std::isdigit(c)) return false;
+    return true;
+}
+
+void cmd_SETORDER(xbase::DbArea& a, std::istringstream& args) {
+    using std::cout; using std::endl; using std::string; using std::vector;
+
+    if (!a.isOpen()) { cout << "SET ORDER: no file open." << endl; return; }
+
+    string tok;
+    if (!(args >> tok)) { cout << "Usage: SETORDER <n|tag>" << endl; return; }
+
+    auto& mgr = xindex::ensure_manager(a);
+    vector<string> tags = mgr.listTags();
+    if (tags.empty()) { cout << "SET ORDER: no indexes loaded." << endl; return; }
+
+    string chosen;
+    if (is_number(tok)) {
+        std::sort(tags.begin(), tags.end());
+        int n = std::stoi(tok);
+        if (n < 1 || n > (int)tags.size()) {
+            cout << "SET ORDER: index not found: " << tok << endl; return;
+        }
+        chosen = tags[n-1];
+    } else {
+        // direct tag name
+        auto it = std::find(tags.begin(), tags.end(), tok);
+        if (it == tags.end()) { cout << "SET ORDER: index not found: " << tok << endl; return; }
+        chosen = tok;
+    }
+
+    if (!mgr.set_active(chosen)) {
+        cout << "SET ORDER: failed to activate tag: " << chosen << endl; return;
+    }
+
+    cout << "Order set: tag '" << chosen << "'" << endl;
+}
+
+
+// ===============================
+// File: src/cli/cmd_status.cpp  (DROP-IN)
+// ===============================
+#include <algorithm>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "order_state.hpp"
+#include "xindex/index_manager.hpp"
+#include "xindex/attach.hpp"
+#include "xindex/dbarea_adapt.hpp"  // db_record_count, db_recno
+
+namespace { static std::string asc_desc(bool asc) { return asc ? "ASCEND" : "DESCEND"; } }
+
+void cmd_STATUS(xbase::DbArea& a, std::istringstream& /*args*/) {
+    using std::cout; using std::endl; using std::string; using std::vector;
+
+    // --- Workspace / Table ---
+    cout << "Workspace\n";
+    cout << "  File: " << (a.isOpen() ? a.name() : string()) << "\n\n";
+
+    cout << "Table\n";
+    int recs = 0; int recno = 0;
+    if (a.isOpen()) {
+        recs  = db_record_count(a);
+        recno = db_recno(a);
+    }
+    cout << "  Records: "   << recs   << "\n";
+    cout << "  Recno:   "   << recno  << "\n\n";
+
+    // --- Order / Index (in-memory only)
+    cout << "Order / Index\n";
+    bool asc = true;
+    try { asc = orderstate::isAscending(a); } catch (...) {}
+    cout << "  Order direction: " << asc_desc(asc) << "\n";
+
+    if (!a.isOpen()) {
+        cout << "  Active tag: (none)\n";
+        cout << "  Index tags loaded: 0\n";
+        return;
+    }
+
+    auto& mgr = xindex::ensure_manager(a);
+    string active = mgr.has_active() ? mgr.active()->spec().tag : string();
+
+    cout << "  Active tag: " << (active.empty() ? "(none)" : active) << "\n";
+
+    vector<string> tags = mgr.listTags();
+    std::sort(tags.begin(), tags.end());
+
+    cout << "  Index tags loaded: " << tags.size() << "\n";
+    for (auto const& t : tags) {
+        string star = (t == active) ? "* " : "  ";
+        string expr = mgr.exprFor(t);
+        cout << "    " << star << t;
+        if (!expr.empty()) cout << "  -> " << expr;
+        cout << "\n";
+    }
+}

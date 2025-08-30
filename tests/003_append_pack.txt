@@ -1,0 +1,8 @@
+# append 1 blank, replace a couple fields, then pack (note: pack rebuild tip)
+USE students
+APPEND
+REPLACE FIRST_NAME WITH "TESTER"
+REPLACE LAST_NAME WITH "SMOKE"
+LIST 1
+PACK
+QUIT

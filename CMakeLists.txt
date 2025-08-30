@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.16)
 project(dottalkpp VERSION 0.3.0 LANGUAGES CXX)
 
 # ---- Options ---------------------------------------------------------------
-# Keep indexing enabled by default for dev/test; pass -DDOTTALK_WITH_INDEX=OFF to trim.
 option(DOTTALK_WITH_INDEX "Build CLI with indexing features and verbs" ON)
 
 # ---- Toolchain / Defaults --------------------------------------------------
@@ -22,75 +21,119 @@ set(CCODE_INC  "${CCODE_ROOT}/include")
 set(CCODE_SRC  "${CCODE_ROOT}/src")
 set(CCODE_XI   "${CCODE_SRC}/xindex")
 set(CCODE_CLI  "${CCODE_SRC}/cli")
+set(CCODE_XB   "${CCODE_SRC}/xbase")
 
-# ---- xindex core -----------------------------------------------------------
+# =========================
+#  Libraries (xindex/xbase)
+# =========================
+
+# ---- xindex library --------------------------------------------------------
 file(GLOB XI_SOURCES "${CCODE_XI}/*.cpp")
-if(NOT XI_SOURCES)
-  message(FATAL_ERROR "No xindex sources found in ${CCODE_XI}")
-endif()
+# Exclude legacy implementation that targets the old DbArea API
+list(FILTER XI_SOURCES EXCLUDE REGEX ".*/simple_index\\.cpp$")
 
 add_library(xindex STATIC ${XI_SOURCES})
 target_include_directories(xindex PUBLIC "${CCODE_INC}")
 
-# Explicitly add adapters if not covered by the glob (harmless if duplicated)
-target_sources(xindex PRIVATE
-  ${CCODE_XI}/dbarea_adapt.cpp
-  ${CCODE_XI}/attach.cpp
-)
-
-# ---- xbase core ------------------------------------------------------------
-# Prefer src/xbase/*.cpp. If missing, fall back to src/*.cpp excluding cli/ and xindex/.
-file(GLOB_RECURSE XBASE_SRC_FROM_DIR "${CCODE_SRC}/xbase/*.cpp")
-set(XBASE_SOURCES "${XBASE_SRC_FROM_DIR}")
-
+# ---- xbase library ---------------------------------------------------------
+# Prefer files under src/xbase; if none, take non-CLI/non-xindex sources under src/
+file(GLOB_RECURSE XBASE_SOURCES "${CCODE_XB}/*.cpp")
 if(NOT XBASE_SOURCES)
-  file(GLOB XBASE_SRC_FALLBACK "${CCODE_SRC}/*.cpp")
-  if(XBASE_SRC_FALLBACK)
-    list(FILTER XBASE_SRC_FALLBACK EXCLUDE REGEX "/(cli|xindex)/")
-    set(XBASE_SOURCES "${XBASE_SRC_FALLBACK}")
+  file(GLOB XBASE_FALLBACK "${CCODE_SRC}/*.cpp")
+  if(XBASE_FALLBACK)
+    list(FILTER XBASE_FALLBACK EXCLUDE REGEX "/(cli|xindex)/")
+    set(XBASE_SOURCES "${XBASE_FALLBACK}")
   endif()
 endif()
 
 if(NOT XBASE_SOURCES)
-  message(FATAL_ERROR
-    "No xbase sources found. Expected either ${CCODE_SRC}/xbase/*.cpp or non-cli/non-xindex files under ${CCODE_SRC}.")
+  message(FATAL_ERROR "No xbase sources found under ${CCODE_XB} or fallback in ${CCODE_SRC}.")
 endif()
+
+# Explicitly exclude dbarea_introspection.cpp (was experimenting with new API)
+list(FILTER XBASE_SOURCES EXCLUDE REGEX ".*/dbarea_introspection\\.cpp$")
 
 add_library(xbase STATIC ${XBASE_SOURCES})
 target_include_directories(xbase PUBLIC "${CCODE_INC}")
-target_link_libraries(xbase PUBLIC xindex)
 
-# ---- CLI -------------------------------------------------------------------
+if(TARGET memo)
+  target_compile_definitions(memo PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
+
+# ==========================================================
+#  Memo sidecar library (.dtx)  << NEW: isolated integration
+# ==========================================================
+# Design: keep memo code in its own tiny static lib to avoid new deps between xbase/xindex.
+# Public headers live under include/memo (already covered by CCODE_INC).
+set(CCODE_MEMO "${CCODE_SRC}/memo")
+file(GLOB MEMO_SOURCES "${CCODE_MEMO}/*.cpp")
+
+if(MEMO_SOURCES)
+  add_library(memo STATIC ${MEMO_SOURCES})
+  target_include_directories(memo PUBLIC "${CCODE_INC}")
+  set(MEMO_ENABLED TRUE)
+else()
+  message(STATUS "No memo sources found under ${CCODE_MEMO} (memo sidecar disabled).")
+  set(MEMO_ENABLED FALSE)
+endif()
+
+# ===================
+#  Executable (CLI)
+# ===================
 file(GLOB CLI_SOURCES "${CCODE_CLI}/*.cpp")
 if(NOT CLI_SOURCES)
   message(FATAL_ERROR "No CLI sources found in ${CCODE_CLI}")
 endif()
 
-add_executable(dottalkpp ${CLI_SOURCES})
-target_include_directories(dottalkpp PRIVATE "${CCODE_INC}")
-target_link_libraries(dottalkpp PRIVATE xbase xindex)
+# Belt-and-suspenders: exclude any accidental file named src_cli_cmd_status.cpp
+list(FILTER CLI_SOURCES EXCLUDE REGEX ".*/src_cli_cmd_status\\.cpp$")
 
-# Make the flag visible to the code for #if DOTTALK_WITH_INDEX blocks
+add_executable(dottalkpp ${CLI_SOURCES})
+
+# Make headers available to the CLI
+target_include_directories(dottalkpp PRIVATE "${CCODE_INC}")
+
+# Link only at the executable level to avoid circular deps.
+# Include memo lib if present.
+if(MEMO_ENABLED)
+  target_link_libraries(dottalkpp PRIVATE xbase xindex memo)
+else()
+  target_link_libraries(dottalkpp PRIVATE xbase xindex)
+endif()
+
+# ---- DotTalk++ Expr sources (keep as-is) -----------------------------------
+target_include_directories(dottalkpp PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+set(DOTTALK_EXPR_SOURCES
+  src/cli/expr/lexer.cpp
+  src/cli/expr/parser.cpp
+  src/cli/expr/eval.cpp
+  src/cli/expr/api.cpp
+  src/cli/expr/for_parser.cpp
+)
+target_sources(dottalkpp PRIVATE ${DOTTALK_EXPR_SOURCES})
+
+# ---- Compile-time feature flags --------------------------------------------
 if(DOTTALK_WITH_INDEX)
   target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=1)
 else()
   target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=0)
 endif()
 
-# If index verbs live in separate files and you want them excluded when OFF, add them conditionally:
-# if(DOTTALK_WITH_INDEX)
-#   target_sources(dottalkpp PRIVATE
-#     ${CCODE_CLI}/cmd_index.cpp
-#     ${CCODE_CLI}/cmd_setindex.cpp
-#     ${CCODE_CLI}/cmd_order.cpp
-#   )
-# endif()
+target_compile_definitions(dottalkpp PRIVATE
+  XINDEX_ADAPT_HAS_RECLEN
+  XINDEX_ADAPT_HAS_FILENAME
+)
 
-# ---- Status banner (keep this simple to avoid quote/paren mistakes) --------
-message(STATUS "================================")
+# ---- Status banner ---------------------------------------------------------
+message(STATUS "================ CMake Config ================")
 message(STATUS "Source dir : ${CCODE_ROOT}")
 message(STATUS "Build dir  : ${CMAKE_BINARY_DIR}")
-message(STATUS "Layout     : INTEGRATED (no externals/)")
 message(STATUS "CLI dir    : ${CCODE_CLI}")
 message(STATUS "Indexing   : ${DOTTALK_WITH_INDEX}")
-message(STATUS "================================")
+message(STATUS "xindex src : ${CCODE_XI}")
+message(STATUS "xbase  src : ${CCODE_XB}")
+message(STATUS "Memo src   : ${CCODE_MEMO}")
+message(STATUS "Memo sidecar enabled: ${MEMO_ENABLED}")
+message(STATUS "=============================================")

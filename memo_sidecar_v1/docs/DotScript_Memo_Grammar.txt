@@ -1,0 +1,21 @@
+DotScript Memo Extensions (EBNF-ish)
+
+TypeCmd      := "TYPE" Field [ "TO" Path ]
+ReplaceCmd   := "REPLACE" Field "WITH" ( QuotedText | "FILE" QuotedPath )
+SetMemoCmd   := "SET" "MEMO" ( "WIDTH" Integer | "EDITOR" QuotedPath | "TRUNCATE" ("ON"|"OFF") )
+MemoCheckCmd := "MEMOCHECK" [ "REPAIR" ]
+MemoStatCmd  := "MEMOSTATS"
+
+Field        := Identifier
+Path         := QuotedPath | BarePath
+QuotedText   := '"' { any-char-except-quote | '\"' } '"'
+QuotedPath   := '"' { path-char } '"'
+BarePath     := { path-char }
+Identifier   := Letter { Letter | Digit | '_' }
+Integer      := Digit { Digit }
+
+Notes:
+- Multi-line inline memo edit is via: EDIT <field> then entering lines, end with a single '.'
+  on its own line (FoxPro-style). That flow is a separate verb already present; if not, add:
+  EditMemoCmd := "EDIT" Field
+  (implementation opens external editor or inline capture per settings)

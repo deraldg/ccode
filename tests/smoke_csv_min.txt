@@ -1,0 +1,4 @@
+USE students
+EXPORT students_out.csv
+CLOSE
+QUIT

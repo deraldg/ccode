@@ -1,0 +1,2 @@
+TEST tests\count_delete_roundtrip.txt VERBOSE
+TEST tests\parser_core.txt VERBOSE

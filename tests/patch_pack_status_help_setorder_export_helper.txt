@@ -1,0 +1,205 @@
+// ===============================
+// File: src/cli/cmd_status.cpp
+// Replaces the STATUS command to:
+//  - show 0 tags when no file is open
+//  - list only in-memory tags from IndexManager (no disk scan)
+//  - show active tag with asterisk and "-> <expr>"
+// ===============================
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "order_state.hpp"
+#include "xindex/index_manager.hpp"
+#include "xindex/attach.hpp"
+
+namespace {
+static std::string asc_desc(bool asc) { return asc ? "ASCEND" : "DESCEND"; }
+}
+
+void cmd_STATUS(xbase::DbArea& a, std::istringstream& /*args*/) {
+    using std::cout; using std::endl; using std::string; using std::vector;
+
+    // --- Workspace / Table ---
+    cout << "Workspace\n";
+    cout << "  File: " << (a.isOpen() ? a.name() : string()) << "\n\n";
+
+    cout << "Table\n";
+    int recs = 0; int recno = 0; int reclen = 0;
+    if (a.isOpen()) {
+        // These helpers are stable in ccode
+        recs   = a.recordCount();
+        recno  = a.recno();
+        reclen = a.recordLength();
+    }
+    cout << "  Records: "   << recs   << "\n";
+    cout << "  Recno:   "   << recno  << "\n";
+    cout << "  Bytes/rec: " << reclen << "\n\n";
+
+    // --- Order / Index (in-memory only) ---
+    cout << "Order / Index\n";
+    bool asc = true;
+    try { asc = orderstate::isAscending(a); } catch (...) {}
+    cout << "  Order direction: " << asc_desc(asc) << "\n";
+
+    if (!a.isOpen()) {
+        cout << "  Active tag: (none)\n";
+        cout << "  Index tags loaded: 0\n";
+        return;
+    }
+
+    auto& mgr = xindex::ensure_manager(a);
+    string active = mgr.has_active() ? mgr.active()->spec().tag : string();
+
+    cout << "  Active tag: " << (active.empty() ? "(none)" : active) << "\n";
+
+    vector<string> tags = mgr.listTags();
+    std::sort(tags.begin(), tags.end());
+
+    cout << "  Index tags loaded: " << tags.size() << "\n";
+    for (auto const& t : tags) {
+        string star = (t == active) ? "* " : "  ";
+        string expr = mgr.exprFor(t);
+        cout << "    " << star << t;
+        if (!expr.empty()) cout << "  -> " << expr;
+        cout << "\n";
+    }
+}
+
+
+// ===============================
+// File: src/cli/cmd_help.cpp
+// Removes ZAP from the help list, clarifies SETORDER usage.
+// ===============================
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+
+void cmd_HELP(xbase::DbArea& /*a*/, std::istringstream& /*args*/) {
+    using std::cout; using std::endl;
+
+    cout << "CREATE <name> (<field specs>)     # make a new DBF (C/N/D/L)\n";
+    cout << "APPEND [BLANK|-B] [n]              # append n blank records (default 1)\n";
+    cout << "REPLACE <field> WITH <value>       # edit current record (C/N/D/L)\n";
+    cout << "EDIT <field> WITH <value>          # alias of REPLACE\n";
+    cout << "DUMP [TOP n] [fields...]           # vertical record dump\n";
+    cout << "DISPLAY                            # show current record (field=value)\n";
+    cout << "STATUS | STRUCT | RECNO | TOP | BOTTOM | GOTO <n>\n";
+    cout << "CLEAR | CLS                        # clear the screen\n";
+    cout << "COLOR <GREEN|AMBER|DEFAULT>\n";
+    cout << "DIR                                 # list DBF files\n";
+    cout << "USE <dbf> [NOINDEX]                 # open a DBF\n";
+    cout << "LIST [n|ALL] | FIELDS | COUNT\n";
+    cout << "INDEX ON <field> TAG <name> [ASC|DESC]\n";
+    cout << "SEEK <field> <value>             # exact match in current order/index; '=' optional\n";
+    cout << "FIND <field> <needle>            # case-insensitive substring search (e.g., FIND FIRST_NAME \"Diana\")\n";
+    cout << "ASCEND | DESCEND | SETINDEX <tag> | SETORDER <n|tag>\n";
+    cout << "REFRESH                              # refresh current view/index\n";
+    cout << "COPY | EXPORT <table> TO <file> | IMPORT <table> FROM <file> [FIELDS (...)] [LIMIT n]\n";
+    cout << "DELETE | RECALL | PACK\n";
+    cout << "VERSION | BANG\n";
+    cout << "QUIT | EXIT\n\n";
+
+    cout << "Commands:\n";
+    cout << "  HELP              USE               QUIT\n";
+    cout << "  EXIT              LIST              FIELDS\n";
+    cout << "  COUNT             TOP               BOTTOM\n";
+    cout << "  GOTO              RECNO             APPEND\n";
+    cout << "  DELETE            DISPLAY           RECALL\n";
+    cout << "  PACK              COPY              EXPORT\n";
+    cout << "  IMPORT            COLOR             REPLACE\n";
+    cout << "  EDIT              CREATE            STATUS\n";
+    cout << "  STRUCT            INDEX             SEEK\n";
+    cout << "  FIND              LOCATE            ASCEND\n";
+    cout << "  DESCEND           SETINDEX          SETORDER\n";
+    cout << "  DIR               REFRESH           VERSION\n";
+    cout << "  BANG\n";
+}
+
+
+// ===============================
+// File: src/cli/cmd_setorder.cpp
+// Implements SETORDER <n|tag> with ordinal mapping (alphabetical by tag).
+// ===============================
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "xindex/index_manager.hpp"
+#include "xindex/attach.hpp"
+
+static bool is_number(const std::string& s) {
+    if (s.empty()) return false;
+    for (unsigned char c : s) if (!std::isdigit(c)) return false;
+    return true;
+}
+
+void cmd_SETORDER(xbase::DbArea& a, std::istringstream& args) {
+    using std::cout; using std::endl; using std::string; using std::vector;
+
+    if (!a.isOpen()) { cout << "SET ORDER: no file open." << endl; return; }
+
+    string tok;
+    if (!(args >> tok)) { cout << "Usage: SETORDER <n|tag>" << endl; return; }
+
+    auto& mgr = xindex::ensure_manager(a);
+    vector<string> tags = mgr.listTags();
+    if (tags.empty()) { cout << "SET ORDER: no indexes loaded." << endl; return; }
+
+    string chosen;
+    if (is_number(tok)) {
+        std::sort(tags.begin(), tags.end());
+        int n = std::stoi(tok);
+        if (n < 1 || n > (int)tags.size()) {
+            cout << "SET ORDER: index not found: " << tok << endl; return;
+        }
+        chosen = tags[n-1];
+    } else {
+        // direct tag name
+        auto it = std::find(tags.begin(), tags.end(), tok);
+        if (it == tags.end()) { cout << "SET ORDER: index not found: " << tok << endl; return; }
+        chosen = tok;
+    }
+
+    if (!mgr.set_active(chosen)) {
+        cout << "SET ORDER: failed to activate tag: " << chosen << endl; return;
+    }
+
+    cout << "Order set: tag '" << chosen << "'" << endl;
+}
+
+
+// ===============================
+// File: tools/Export-ToFile-Helper.ps1
+// Workaround to rename exported CSV to the requested target until the
+// internal EXPORT honors the TO <file> argument.
+// Usage:
+//   In DotTalk++:   EXPORT SHK2 TO SHK2_OUT.csv
+//   In PowerShell:  tools/Export-ToFile-Helper.ps1 -Table SHK2 -To "data/SHK2_OUT.csv"
+// ===============================
+Param(
+  [Parameter(Mandatory=$true)][string]$Table,
+  [Parameter(Mandatory=$true)][string]$To
+)
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$root = Resolve-Path (Join-Path $here "..")
+$src  = Join-Path $root "data/$Table.csv"
+$dst  = if ([System.IO.Path]::IsPathRooted($To)) { $To } else { Join-Path (Join-Path $root "data") $To }
+if (-not (Test-Path $src)) { Write-Error "Source not found: $src"; exit 1 }
+$dstDir = Split-Path -Parent $dst
+if (-not (Test-Path $dstDir)) { New-Item -Force -ItemType Directory -Path $dstDir | Out-Null }
+Copy-Item -Force $src $dst
+Write-Host "Renamed export: '$src' -> '$dst'"

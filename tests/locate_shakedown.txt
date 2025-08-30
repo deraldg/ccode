@@ -1,0 +1,5 @@
+USE C:\Users\deral\code\ccode\data\STUDENTS.DBF
+LOCATE LAST_NAME = "Smith"
+LOCATE LAST_NAME $ "mit"
+LOCATE FOR AGE >= 21
+QUIT

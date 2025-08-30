@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 #include <sstream>
 #include <string>
 #include "textio.hpp"
@@ -6,8 +6,8 @@
 #include "xbase.hpp"
 #include "command_registry.hpp"
 
-// optional if you use bare 'reg' instead of cli::registry():
-// using cli::registry();
+// optional if you use bare 'reg' instead of dli::registry():
+// using dli::registry();
 
 using namespace std;
 
@@ -113,7 +113,9 @@ void cmd_DELETE(xbase::DbArea& area, std::istringstream& iss)
 
 // Self-register with the command registry (kept for CLI support path)
 static bool s_registered = [](){
-    static cli::CommandRegistry reg;
-    cli::registry().add("DELETE", &cmd_DELETE);
+    static dli::CommandRegistry reg;
+    dli::registry().add("DELETE", &cmd_DELETE);
     return true;
 }();
+
+

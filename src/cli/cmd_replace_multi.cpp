@@ -142,12 +142,7 @@ bool cmd_REPLACE_MULTI(xbase::DbArea& area,
             }
         }
 
-        // 2) Dry-run validation against engine (1-based index for API)
-        if (!area.trySet(idx0 + 1, norm)) {
-            if (error) *error = "Value rejected by engine for " + fd.name + ".";
-            return false;
-        }
-
+       
         items.push_back({idx0, fd.name, fd.type, (int)fd.length, (int)fd.decimals, std::move(norm)});
     }
 

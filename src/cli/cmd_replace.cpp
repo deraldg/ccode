@@ -11,14 +11,14 @@
 #include <cstring>
 #include <iomanip>
 #include <cmath>
+#include <filesystem>
 
 using namespace xbase;
 
 namespace {
     struct FieldMeta { std::string name; char type{}; int length{0}; int decimal{0}; size_t offset{0}; };
 
-    static std::string up(std::string s){ std::transform(s.begin(), s.end(), s.begin(),
-        [](unsigned char c){ return (char)std::toupper(c); }); return s; }
+    static std::string up(std::string s){ std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return (char)std::toupper(c); }); return s; }
     static std::string trim(std::string s){
         auto issp=[](unsigned char c){return c==' '||c=='\t'||c=='\r'||c=='\n';};
         while(!s.empty()&&issp((unsigned char)s.front())) s.erase(s.begin());
@@ -32,7 +32,18 @@ namespace {
         if(s.size()>=2 && ((s.front()=='"'&&s.back()=='"')||(s.front()=='\''&&s.back()=='\''))) s=s.substr(1,s.size()-2);
         return s;
     }
-
+    // strip trailing inline FoxPro-style comments (&& ...) outside quotes
+    static std::string strip_inline_comments_value(std::string s) {
+        bool inq=false; char q=0;
+        for (size_t i=0;i<s.size();++i) {
+            if (!inq && i+1<s.size() && s[i]=='&' && s[i+1]=='&') { s.resize(i); break; }
+            if (s[i]=='"' || s[i]=='\'') {
+                if (inq && s[i]==q) inq=false;
+                else if (!inq) { inq=true; q=s[i]; }
+            }
+        }
+        return s;
+    }
     static bool parse_logical(std::string s, char& outTF){
         s=strip_quotes(s); s=up(trim(s));
         if(s.empty()||s=="BLANK"||s=="NULL"){ outTF=' '; return true; }
@@ -98,6 +109,54 @@ namespace {
         }
         return out;
     }
+
+    static std::string dbt_path_from_dbf(const std::string& dbf) {
+        std::filesystem::path p(dbf); p.replace_extension(".dbt"); return p.string();
+    }
+    static void write_le32(char* dst, uint32_t v) {
+        dst[0] = (char)(v & 0xFF);
+        dst[1] = (char)((v >> 8) & 0xFF);
+        dst[2] = (char)((v >> 16) & 0xFF);
+        dst[3] = (char)((v >> 24) & 0xFF);
+    }
+
+    // Append text to .DBT (dBASE III/IV), return starting block; 0 on failure.
+    static uint32_t dbt_append_text(const std::string& dbtPath, const std::string& text) {
+        const size_t BlockSize = 512;
+        // ensure file & 1 block header
+        {
+            std::fstream init(dbtPath, std::ios::in|std::ios::out|std::ios::binary);
+            if (!init) {
+                std::ofstream create(dbtPath, std::ios::binary);
+                std::string hdr(BlockSize, '\0');
+                create.write(hdr.data(), hdr.size());
+            } else {
+                init.seekp(0, std::ios::end);
+                auto sz = (size_t)init.tellp();
+                if (sz < BlockSize) {
+                    std::string pad(BlockSize - sz, '\0');
+                    init.write(pad.data(), pad.size());
+                }
+            }
+        }
+        std::fstream io(dbtPath, std::ios::in|std::ios::out|std::ios::binary);
+        if (!io) return 0;
+        io.seekp(0, std::ios::end);
+        auto fileSize = (uint64_t)io.tellp();
+        uint32_t startBlock = (uint32_t)(fileSize / BlockSize);
+        if (startBlock == 0) startBlock = 1; // data starts at block 1
+
+        std::string payload = text;
+        payload.push_back(0x1A); // terminator
+        size_t rem = payload.size() % BlockSize;
+        if (rem) payload.append(BlockSize - rem, '\0');
+
+        io.seekp((std::streamoff)startBlock * (std::streamoff)BlockSize, std::ios::beg);
+        io.write(payload.data(), (std::streamsize)payload.size());
+        io.flush();
+        if (!io) return 0;
+        return startBlock;
+    }
 } // namespace
 
 void cmd_REPLACE(DbArea& a, std::istringstream& iss)
@@ -111,6 +170,7 @@ void cmd_REPLACE(DbArea& a, std::istringstream& iss)
     if(iss>>maybeWith){ if(up(maybeWith)!="WITH"){ iss.clear(); iss.seekg(afterFieldPos); } }
 
     std::string rest; std::getline(iss, rest);
+    rest = strip_inline_comments_value(rest);
     std::string value=trim(rest);
     if(value.empty()){ std::cout<<"Usage: REPLACE <field> WITH <value>\n"; return; }
 
@@ -121,9 +181,39 @@ void cmd_REPLACE(DbArea& a, std::istringstream& iss)
     if(fi<0){ std::cout<<"Unknown field: "<<field<<"\n"; return; }
     const auto& m = metas[fi];
 
-    // Guard: MEMO not supported
-    if(m.type=='M'){ std::cout<<"Cannot REPLACE MEMO field: "<<m.name<<"\n"; return; }
+    const long rec = a.recno();
+    std::streampos pos = (std::streampos)hdr.data_start
+                       + (std::streamoff)((rec-1)*hdr.cpr)
+                       + std::streamoff(1)
+                       + (std::streamoff)m.offset;
 
+    // MEMO path
+    if (m.type=='M') {
+        std::string vup = up(strip_quotes(value));
+        bool clear = vup.empty() || vup=="BLANK" || vup=="NULL";
+
+        std::fstream io(a.name(), std::ios::in|std::ios::out|std::ios::binary);
+        if(!io){ std::cout<<"Open failed: cannot write file\n"; return; }
+
+        char memoPtr[10]{}; // first 4 bytes little-endian start block, rest zero
+        uint32_t block = 0;
+        if (!clear) {
+            std::string memoText = strip_quotes(value);
+            block = dbt_append_text(dbt_path_from_dbf(a.name()), memoText);
+            if (block == 0) { std::cout<<"Memo write failed.\n"; return; }
+            write_le32(memoPtr, block);
+        }
+        io.seekp(pos, std::ios::beg);
+        io.write(memoPtr, sizeof memoPtr);
+        io.flush();
+        if(!io){ std::cout<<"Write failed.\n"; return; }
+
+        std::cout<<"Replaced MEMO "<<m.name<<" at recno "<<rec<<" (block "<<block<<").\n";
+        try{ a.gotoRec(rec); }catch(...) {}
+        return;
+    }
+
+    // non-MEMO path
     bool ok=false; std::string cell = format_value(m, value, ok);
     if(!ok){
         std::cout<<"Value not valid for field "<<m.name
@@ -132,16 +222,8 @@ void cmd_REPLACE(DbArea& a, std::istringstream& iss)
                  <<")\n";
         return;
     }
-
     std::fstream io(a.name(), std::ios::in|std::ios::out|std::ios::binary);
     if(!io){ std::cout<<"Open failed: cannot write file\n"; return; }
-
-    const long rec = a.recno();
-    std::streampos pos = (std::streampos)hdr.data_start
-                       + (std::streamoff)((rec-1)*hdr.cpr)
-                       + std::streamoff(1) // delete flag
-                       + (std::streamoff)m.offset;
-
     io.seekp(pos, std::ios::beg);
     io.write(cell.data(), (std::streamsize)cell.size());
     io.flush();

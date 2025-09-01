@@ -1,0 +1,35 @@
+// For MEMO fields:
+    if (cli_memo::field_is_memo(area, field)) {
+        std::string err;
+        auto* store = cli_memo::require_memo_store(area, &err);
+        if (!store) { std::cout << "REPLACE: " << err << "\n"; return; }
+
+        // CLEAR path (NULL or empty literal)
+        if (clear_request) {
+            // If your codec tracks existing id, erase it here (optional).
+            if (!cli_memo::clear_current_record_memo(area, field, &err)) {
+                std::cout << "REPLACE: " << err << "\n"; return;
+            }
+            std::cout << "Replaced memo " << field << " with empty/NULL.\n";
+            return;
+        }
+
+        // BYTES = from FILE or literal
+        std::vector<uint8_t> bytes = /* ... load bytes ... */;
+        uint64_t id = 0;
+        try {
+            // If you keep/know an existing id, call update(id, bytes); else put.
+            id = store->put(bytes);
+        } catch (const std::exception& ex) {
+            std::cout << "REPLACE: memo put/update failed: " << ex.what() << "\n"; return;
+        }
+
+        if (!cli_memo::set_current_record_memo(area, field, id,
+                                               static_cast<uint32_t>(bytes.size()), &err)) {
+            std::cout << "REPLACE: " << err << "\n"; return;
+        }
+        std::cout << "Replaced memo " << field << " (" << bytes.size() << " bytes).\n";
+        return;
+    }
+
+    // Non-memo path → your legacy replace implementation

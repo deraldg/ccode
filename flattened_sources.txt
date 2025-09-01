@@ -719,7 +719,879 @@ int run_shell()
     return 0;
 }
 
-// --- File: C:\Users\deral\code\ccode\build\CMakeFiles\4.1.0-rc4\CompilerIdCXX\CMakeCXXCompilerId.cpp ---
+// --- File: C:\Users\deral\code\ccode\build\CMakeFiles\3.28.3\CompilerIdCXX\CMakeCXXCompilerId.cpp ---
+
+/* This source file must have a .cpp extension so that all C++ compilers
+   recognize the extension without flags.  Borland does not know .cxx for
+   example.  */
+#ifndef __cplusplus
+# error "A C compiler has been selected for C++."
+#endif
+
+#if !defined(__has_include)
+/* If the compiler does not have __has_include, pretend the answer is
+   always no.  */
+#  define __has_include(x) 0
+#endif
+
+
+/* Version number components: V=Version, R=Revision, P=Patch
+   Version date components:   YYYY=Year, MM=Month,   DD=Day  */
+
+#if defined(__COMO__)
+# define COMPILER_ID "Comeau"
+  /* __COMO_VERSION__ = VRR */
+# define COMPILER_VERSION_MAJOR DEC(__COMO_VERSION__ / 100)
+# define COMPILER_VERSION_MINOR DEC(__COMO_VERSION__ % 100)
+
+#elif defined(__INTEL_COMPILER) || defined(__ICC)
+# define COMPILER_ID "Intel"
+# if defined(_MSC_VER)
+#  define SIMULATE_ID "MSVC"
+# endif
+# if defined(__GNUC__)
+#  define SIMULATE_ID "GNU"
+# endif
+  /* __INTEL_COMPILER = VRP prior to 2021, and then VVVV for 2021 and later,
+     except that a few beta releases use the old format with V=2021.  */
+# if __INTEL_COMPILER < 2021 || __INTEL_COMPILER == 202110 || __INTEL_COMPILER == 202111
+#  define COMPILER_VERSION_MAJOR DEC(__INTEL_COMPILER/100)
+#  define COMPILER_VERSION_MINOR DEC(__INTEL_COMPILER/10 % 10)
+#  if defined(__INTEL_COMPILER_UPDATE)
+#   define COMPILER_VERSION_PATCH DEC(__INTEL_COMPILER_UPDATE)
+#  else
+#   define COMPILER_VERSION_PATCH DEC(__INTEL_COMPILER   % 10)
+#  endif
+# else
+#  define COMPILER_VERSION_MAJOR DEC(__INTEL_COMPILER)
+#  define COMPILER_VERSION_MINOR DEC(__INTEL_COMPILER_UPDATE)
+   /* The third version component from --version is an update index,
+      but no macro is provided for it.  */
+#  define COMPILER_VERSION_PATCH DEC(0)
+# endif
+# if defined(__INTEL_COMPILER_BUILD_DATE)
+   /* __INTEL_COMPILER_BUILD_DATE = YYYYMMDD */
+#  define COMPILER_VERSION_TWEAK DEC(__INTEL_COMPILER_BUILD_DATE)
+# endif
+# if defined(_MSC_VER)
+   /* _MSC_VER = VVRR */
+#  define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+#  define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+# endif
+# if defined(__GNUC__)
+#  define SIMULATE_VERSION_MAJOR DEC(__GNUC__)
+# elif defined(__GNUG__)
+#  define SIMULATE_VERSION_MAJOR DEC(__GNUG__)
+# endif
+# if defined(__GNUC_MINOR__)
+#  define SIMULATE_VERSION_MINOR DEC(__GNUC_MINOR__)
+# endif
+# if defined(__GNUC_PATCHLEVEL__)
+#  define SIMULATE_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+# endif
+
+#elif (defined(__clang__) && defined(__INTEL_CLANG_COMPILER)) || defined(__INTEL_LLVM_COMPILER)
+# define COMPILER_ID "IntelLLVM"
+#if defined(_MSC_VER)
+# define SIMULATE_ID "MSVC"
+#endif
+#if defined(__GNUC__)
+# define SIMULATE_ID "GNU"
+#endif
+/* __INTEL_LLVM_COMPILER = VVVVRP prior to 2021.2.0, VVVVRRPP for 2021.2.0 and
+ * later.  Look for 6 digit vs. 8 digit version number to decide encoding.
+ * VVVV is no smaller than the current year when a version is released.
+ */
+#if __INTEL_LLVM_COMPILER < 1000000L
+# define COMPILER_VERSION_MAJOR DEC(__INTEL_LLVM_COMPILER/100)
+# define COMPILER_VERSION_MINOR DEC(__INTEL_LLVM_COMPILER/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__INTEL_LLVM_COMPILER    % 10)
+#else
+# define COMPILER_VERSION_MAJOR DEC(__INTEL_LLVM_COMPILER/10000)
+# define COMPILER_VERSION_MINOR DEC(__INTEL_LLVM_COMPILER/100 % 100)
+# define COMPILER_VERSION_PATCH DEC(__INTEL_LLVM_COMPILER     % 100)
+#endif
+#if defined(_MSC_VER)
+  /* _MSC_VER = VVRR */
+# define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+# define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+#endif
+#if defined(__GNUC__)
+# define SIMULATE_VERSION_MAJOR DEC(__GNUC__)
+#elif defined(__GNUG__)
+# define SIMULATE_VERSION_MAJOR DEC(__GNUG__)
+#endif
+#if defined(__GNUC_MINOR__)
+# define SIMULATE_VERSION_MINOR DEC(__GNUC_MINOR__)
+#endif
+#if defined(__GNUC_PATCHLEVEL__)
+# define SIMULATE_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+#endif
+
+#elif defined(__PATHCC__)
+# define COMPILER_ID "PathScale"
+# define COMPILER_VERSION_MAJOR DEC(__PATHCC__)
+# define COMPILER_VERSION_MINOR DEC(__PATHCC_MINOR__)
+# if defined(__PATHCC_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__PATHCC_PATCHLEVEL__)
+# endif
+
+#elif defined(__BORLANDC__) && defined(__CODEGEARC_VERSION__)
+# define COMPILER_ID "Embarcadero"
+# define COMPILER_VERSION_MAJOR HEX(__CODEGEARC_VERSION__>>24 & 0x00FF)
+# define COMPILER_VERSION_MINOR HEX(__CODEGEARC_VERSION__>>16 & 0x00FF)
+# define COMPILER_VERSION_PATCH DEC(__CODEGEARC_VERSION__     & 0xFFFF)
+
+#elif defined(__BORLANDC__)
+# define COMPILER_ID "Borland"
+  /* __BORLANDC__ = 0xVRR */
+# define COMPILER_VERSION_MAJOR HEX(__BORLANDC__>>8)
+# define COMPILER_VERSION_MINOR HEX(__BORLANDC__ & 0xFF)
+
+#elif defined(__WATCOMC__) && __WATCOMC__ < 1200
+# define COMPILER_ID "Watcom"
+   /* __WATCOMC__ = VVRR */
+# define COMPILER_VERSION_MAJOR DEC(__WATCOMC__ / 100)
+# define COMPILER_VERSION_MINOR DEC((__WATCOMC__ / 10) % 10)
+# if (__WATCOMC__ % 10) > 0
+#  define COMPILER_VERSION_PATCH DEC(__WATCOMC__ % 10)
+# endif
+
+#elif defined(__WATCOMC__)
+# define COMPILER_ID "OpenWatcom"
+   /* __WATCOMC__ = VVRP + 1100 */
+# define COMPILER_VERSION_MAJOR DEC((__WATCOMC__ - 1100) / 100)
+# define COMPILER_VERSION_MINOR DEC((__WATCOMC__ / 10) % 10)
+# if (__WATCOMC__ % 10) > 0
+#  define COMPILER_VERSION_PATCH DEC(__WATCOMC__ % 10)
+# endif
+
+#elif defined(__SUNPRO_CC)
+# define COMPILER_ID "SunPro"
+# if __SUNPRO_CC >= 0x5100
+   /* __SUNPRO_CC = 0xVRRP */
+#  define COMPILER_VERSION_MAJOR HEX(__SUNPRO_CC>>12)
+#  define COMPILER_VERSION_MINOR HEX(__SUNPRO_CC>>4 & 0xFF)
+#  define COMPILER_VERSION_PATCH HEX(__SUNPRO_CC    & 0xF)
+# else
+   /* __SUNPRO_CC = 0xVRP */
+#  define COMPILER_VERSION_MAJOR HEX(__SUNPRO_CC>>8)
+#  define COMPILER_VERSION_MINOR HEX(__SUNPRO_CC>>4 & 0xF)
+#  define COMPILER_VERSION_PATCH HEX(__SUNPRO_CC    & 0xF)
+# endif
+
+#elif defined(__HP_aCC)
+# define COMPILER_ID "HP"
+  /* __HP_aCC = VVRRPP */
+# define COMPILER_VERSION_MAJOR DEC(__HP_aCC/10000)
+# define COMPILER_VERSION_MINOR DEC(__HP_aCC/100 % 100)
+# define COMPILER_VERSION_PATCH DEC(__HP_aCC     % 100)
+
+#elif defined(__DECCXX)
+# define COMPILER_ID "Compaq"
+  /* __DECCXX_VER = VVRRTPPPP */
+# define COMPILER_VERSION_MAJOR DEC(__DECCXX_VER/10000000)
+# define COMPILER_VERSION_MINOR DEC(__DECCXX_VER/100000  % 100)
+# define COMPILER_VERSION_PATCH DEC(__DECCXX_VER         % 10000)
+
+#elif defined(__IBMCPP__) && defined(__COMPILER_VER__)
+# define COMPILER_ID "zOS"
+  /* __IBMCPP__ = VRP */
+# define COMPILER_VERSION_MAJOR DEC(__IBMCPP__/100)
+# define COMPILER_VERSION_MINOR DEC(__IBMCPP__/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__IBMCPP__    % 10)
+
+#elif defined(__open_xl__) && defined(__clang__)
+# define COMPILER_ID "IBMClang"
+# define COMPILER_VERSION_MAJOR DEC(__open_xl_version__)
+# define COMPILER_VERSION_MINOR DEC(__open_xl_release__)
+# define COMPILER_VERSION_PATCH DEC(__open_xl_modification__)
+# define COMPILER_VERSION_TWEAK DEC(__open_xl_ptf_fix_level__)
+
+
+#elif defined(__ibmxl__) && defined(__clang__)
+# define COMPILER_ID "XLClang"
+# define COMPILER_VERSION_MAJOR DEC(__ibmxl_version__)
+# define COMPILER_VERSION_MINOR DEC(__ibmxl_release__)
+# define COMPILER_VERSION_PATCH DEC(__ibmxl_modification__)
+# define COMPILER_VERSION_TWEAK DEC(__ibmxl_ptf_fix_level__)
+
+
+#elif defined(__IBMCPP__) && !defined(__COMPILER_VER__) && __IBMCPP__ >= 800
+# define COMPILER_ID "XL"
+  /* __IBMCPP__ = VRP */
+# define COMPILER_VERSION_MAJOR DEC(__IBMCPP__/100)
+# define COMPILER_VERSION_MINOR DEC(__IBMCPP__/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__IBMCPP__    % 10)
+
+#elif defined(__IBMCPP__) && !defined(__COMPILER_VER__) && __IBMCPP__ < 800
+# define COMPILER_ID "VisualAge"
+  /* __IBMCPP__ = VRP */
+# define COMPILER_VERSION_MAJOR DEC(__IBMCPP__/100)
+# define COMPILER_VERSION_MINOR DEC(__IBMCPP__/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__IBMCPP__    % 10)
+
+#elif defined(__NVCOMPILER)
+# define COMPILER_ID "NVHPC"
+# define COMPILER_VERSION_MAJOR DEC(__NVCOMPILER_MAJOR__)
+# define COMPILER_VERSION_MINOR DEC(__NVCOMPILER_MINOR__)
+# if defined(__NVCOMPILER_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__NVCOMPILER_PATCHLEVEL__)
+# endif
+
+#elif defined(__PGI)
+# define COMPILER_ID "PGI"
+# define COMPILER_VERSION_MAJOR DEC(__PGIC__)
+# define COMPILER_VERSION_MINOR DEC(__PGIC_MINOR__)
+# if defined(__PGIC_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__PGIC_PATCHLEVEL__)
+# endif
+
+#elif defined(__clang__) && defined(__cray__)
+# define COMPILER_ID "CrayClang"
+# define COMPILER_VERSION_MAJOR DEC(__cray_major__)
+# define COMPILER_VERSION_MINOR DEC(__cray_minor__)
+# define COMPILER_VERSION_PATCH DEC(__cray_patchlevel__)
+# define COMPILER_VERSION_INTERNAL_STR __clang_version__
+
+
+#elif defined(_CRAYC)
+# define COMPILER_ID "Cray"
+# define COMPILER_VERSION_MAJOR DEC(_RELEASE_MAJOR)
+# define COMPILER_VERSION_MINOR DEC(_RELEASE_MINOR)
+
+#elif defined(__TI_COMPILER_VERSION__)
+# define COMPILER_ID "TI"
+  /* __TI_COMPILER_VERSION__ = VVVRRRPPP */
+# define COMPILER_VERSION_MAJOR DEC(__TI_COMPILER_VERSION__/1000000)
+# define COMPILER_VERSION_MINOR DEC(__TI_COMPILER_VERSION__/1000   % 1000)
+# define COMPILER_VERSION_PATCH DEC(__TI_COMPILER_VERSION__        % 1000)
+
+#elif defined(__CLANG_FUJITSU)
+# define COMPILER_ID "FujitsuClang"
+# define COMPILER_VERSION_MAJOR DEC(__FCC_major__)
+# define COMPILER_VERSION_MINOR DEC(__FCC_minor__)
+# define COMPILER_VERSION_PATCH DEC(__FCC_patchlevel__)
+# define COMPILER_VERSION_INTERNAL_STR __clang_version__
+
+
+#elif defined(__FUJITSU)
+# define COMPILER_ID "Fujitsu"
+# if defined(__FCC_version__)
+#   define COMPILER_VERSION __FCC_version__
+# elif defined(__FCC_major__)
+#   define COMPILER_VERSION_MAJOR DEC(__FCC_major__)
+#   define COMPILER_VERSION_MINOR DEC(__FCC_minor__)
+#   define COMPILER_VERSION_PATCH DEC(__FCC_patchlevel__)
+# endif
+# if defined(__fcc_version)
+#   define COMPILER_VERSION_INTERNAL DEC(__fcc_version)
+# elif defined(__FCC_VERSION)
+#   define COMPILER_VERSION_INTERNAL DEC(__FCC_VERSION)
+# endif
+
+
+#elif defined(__ghs__)
+# define COMPILER_ID "GHS"
+/* __GHS_VERSION_NUMBER = VVVVRP */
+# ifdef __GHS_VERSION_NUMBER
+# define COMPILER_VERSION_MAJOR DEC(__GHS_VERSION_NUMBER / 100)
+# define COMPILER_VERSION_MINOR DEC(__GHS_VERSION_NUMBER / 10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__GHS_VERSION_NUMBER      % 10)
+# endif
+
+#elif defined(__TASKING__)
+# define COMPILER_ID "Tasking"
+  # define COMPILER_VERSION_MAJOR DEC(__VERSION__/1000)
+  # define COMPILER_VERSION_MINOR DEC(__VERSION__ % 100)
+# define COMPILER_VERSION_INTERNAL DEC(__VERSION__)
+
+#elif defined(__ORANGEC__)
+# define COMPILER_ID "OrangeC"
+# define COMPILER_VERSION_MAJOR DEC(__ORANGEC_MAJOR__)
+# define COMPILER_VERSION_MINOR DEC(__ORANGEC_MINOR__)
+# define COMPILER_VERSION_PATCH DEC(__ORANGEC_PATCHLEVEL__)
+
+#elif defined(__SCO_VERSION__)
+# define COMPILER_ID "SCO"
+
+#elif defined(__ARMCC_VERSION) && !defined(__clang__)
+# define COMPILER_ID "ARMCC"
+#if __ARMCC_VERSION >= 1000000
+  /* __ARMCC_VERSION = VRRPPPP */
+  # define COMPILER_VERSION_MAJOR DEC(__ARMCC_VERSION/1000000)
+  # define COMPILER_VERSION_MINOR DEC(__ARMCC_VERSION/10000 % 100)
+  # define COMPILER_VERSION_PATCH DEC(__ARMCC_VERSION     % 10000)
+#else
+  /* __ARMCC_VERSION = VRPPPP */
+  # define COMPILER_VERSION_MAJOR DEC(__ARMCC_VERSION/100000)
+  # define COMPILER_VERSION_MINOR DEC(__ARMCC_VERSION/10000 % 10)
+  # define COMPILER_VERSION_PATCH DEC(__ARMCC_VERSION    % 10000)
+#endif
+
+
+#elif defined(__clang__) && defined(__apple_build_version__)
+# define COMPILER_ID "AppleClang"
+# if defined(_MSC_VER)
+#  define SIMULATE_ID "MSVC"
+# endif
+# define COMPILER_VERSION_MAJOR DEC(__clang_major__)
+# define COMPILER_VERSION_MINOR DEC(__clang_minor__)
+# define COMPILER_VERSION_PATCH DEC(__clang_patchlevel__)
+# if defined(_MSC_VER)
+   /* _MSC_VER = VVRR */
+#  define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+#  define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+# endif
+# define COMPILER_VERSION_TWEAK DEC(__apple_build_version__)
+
+#elif defined(__clang__) && defined(__ARMCOMPILER_VERSION)
+# define COMPILER_ID "ARMClang"
+  # define COMPILER_VERSION_MAJOR DEC(__ARMCOMPILER_VERSION/1000000)
+  # define COMPILER_VERSION_MINOR DEC(__ARMCOMPILER_VERSION/10000 % 100)
+  # define COMPILER_VERSION_PATCH DEC(__ARMCOMPILER_VERSION/100   % 100)
+# define COMPILER_VERSION_INTERNAL DEC(__ARMCOMPILER_VERSION)
+
+#elif defined(__clang__)
+# define COMPILER_ID "Clang"
+# if defined(_MSC_VER)
+#  define SIMULATE_ID "MSVC"
+# endif
+# define COMPILER_VERSION_MAJOR DEC(__clang_major__)
+# define COMPILER_VERSION_MINOR DEC(__clang_minor__)
+# define COMPILER_VERSION_PATCH DEC(__clang_patchlevel__)
+# if defined(_MSC_VER)
+   /* _MSC_VER = VVRR */
+#  define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+#  define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+# endif
+
+#elif defined(__LCC__) && (defined(__GNUC__) || defined(__GNUG__) || defined(__MCST__))
+# define COMPILER_ID "LCC"
+# define COMPILER_VERSION_MAJOR DEC(__LCC__ / 100)
+# define COMPILER_VERSION_MINOR DEC(__LCC__ % 100)
+# if defined(__LCC_MINOR__)
+#  define COMPILER_VERSION_PATCH DEC(__LCC_MINOR__)
+# endif
+# if defined(__GNUC__) && defined(__GNUC_MINOR__)
+#  define SIMULATE_ID "GNU"
+#  define SIMULATE_VERSION_MAJOR DEC(__GNUC__)
+#  define SIMULATE_VERSION_MINOR DEC(__GNUC_MINOR__)
+#  if defined(__GNUC_PATCHLEVEL__)
+#   define SIMULATE_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+#  endif
+# endif
+
+#elif defined(__GNUC__) || defined(__GNUG__)
+# define COMPILER_ID "GNU"
+# if defined(__GNUC__)
+#  define COMPILER_VERSION_MAJOR DEC(__GNUC__)
+# else
+#  define COMPILER_VERSION_MAJOR DEC(__GNUG__)
+# endif
+# if defined(__GNUC_MINOR__)
+#  define COMPILER_VERSION_MINOR DEC(__GNUC_MINOR__)
+# endif
+# if defined(__GNUC_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+# endif
+
+#elif defined(_MSC_VER)
+# define COMPILER_ID "MSVC"
+  /* _MSC_VER = VVRR */
+# define COMPILER_VERSION_MAJOR DEC(_MSC_VER / 100)
+# define COMPILER_VERSION_MINOR DEC(_MSC_VER % 100)
+# if defined(_MSC_FULL_VER)
+#  if _MSC_VER >= 1400
+    /* _MSC_FULL_VER = VVRRPPPPP */
+#   define COMPILER_VERSION_PATCH DEC(_MSC_FULL_VER % 100000)
+#  else
+    /* _MSC_FULL_VER = VVRRPPPP */
+#   define COMPILER_VERSION_PATCH DEC(_MSC_FULL_VER % 10000)
+#  endif
+# endif
+# if defined(_MSC_BUILD)
+#  define COMPILER_VERSION_TWEAK DEC(_MSC_BUILD)
+# endif
+
+#elif defined(_ADI_COMPILER)
+# define COMPILER_ID "ADSP"
+#if defined(__VERSIONNUM__)
+  /* __VERSIONNUM__ = 0xVVRRPPTT */
+#  define COMPILER_VERSION_MAJOR DEC(__VERSIONNUM__ >> 24 & 0xFF)
+#  define COMPILER_VERSION_MINOR DEC(__VERSIONNUM__ >> 16 & 0xFF)
+#  define COMPILER_VERSION_PATCH DEC(__VERSIONNUM__ >> 8 & 0xFF)
+#  define COMPILER_VERSION_TWEAK DEC(__VERSIONNUM__ & 0xFF)
+#endif
+
+#elif defined(__IAR_SYSTEMS_ICC__) || defined(__IAR_SYSTEMS_ICC)
+# define COMPILER_ID "IAR"
+# if defined(__VER__) && defined(__ICCARM__)
+#  define COMPILER_VERSION_MAJOR DEC((__VER__) / 1000000)
+#  define COMPILER_VERSION_MINOR DEC(((__VER__) / 1000) % 1000)
+#  define COMPILER_VERSION_PATCH DEC((__VER__) % 1000)
+#  define COMPILER_VERSION_INTERNAL DEC(__IAR_SYSTEMS_ICC__)
+# elif defined(__VER__) && (defined(__ICCAVR__) || defined(__ICCRX__) || defined(__ICCRH850__) || defined(__ICCRL78__) || defined(__ICC430__) || defined(__ICCRISCV__) || defined(__ICCV850__) || defined(__ICC8051__) || defined(__ICCSTM8__))
+#  define COMPILER_VERSION_MAJOR DEC((__VER__) / 100)
+#  define COMPILER_VERSION_MINOR DEC((__VER__) - (((__VER__) / 100)*100))
+#  define COMPILER_VERSION_PATCH DEC(__SUBVERSION__)
+#  define COMPILER_VERSION_INTERNAL DEC(__IAR_SYSTEMS_ICC__)
+# endif
+
+
+/* These compilers are either not known or too old to define an
+  identification macro.  Try to identify the platform and guess that
+  it is the native compiler.  */
+#elif defined(__hpux) || defined(__hpua)
+# define COMPILER_ID "HP"
+
+#else /* unknown compiler */
+# define COMPILER_ID ""
+#endif
+
+/* Construct the string literal in pieces to prevent the source from
+   getting matched.  Store it in a pointer rather than an array
+   because some compilers will just produce instructions to fill the
+   array rather than assigning a pointer to a static array.  */
+char const* info_compiler = "INFO" ":" "compiler[" COMPILER_ID "]";
+#ifdef SIMULATE_ID
+char const* info_simulate = "INFO" ":" "simulate[" SIMULATE_ID "]";
+#endif
+
+#ifdef __QNXNTO__
+char const* qnxnto = "INFO" ":" "qnxnto[]";
+#endif
+
+#if defined(__CRAYXT_COMPUTE_LINUX_TARGET)
+char const *info_cray = "INFO" ":" "compiler_wrapper[CrayPrgEnv]";
+#endif
+
+#define STRINGIFY_HELPER(X) #X
+#define STRINGIFY(X) STRINGIFY_HELPER(X)
+
+/* Identify known platforms by name.  */
+#if defined(__linux) || defined(__linux__) || defined(linux)
+# define PLATFORM_ID "Linux"
+
+#elif defined(__MSYS__)
+# define PLATFORM_ID "MSYS"
+
+#elif defined(__CYGWIN__)
+# define PLATFORM_ID "Cygwin"
+
+#elif defined(__MINGW32__)
+# define PLATFORM_ID "MinGW"
+
+#elif defined(__APPLE__)
+# define PLATFORM_ID "Darwin"
+
+#elif defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
+# define PLATFORM_ID "Windows"
+
+#elif defined(__FreeBSD__) || defined(__FreeBSD)
+# define PLATFORM_ID "FreeBSD"
+
+#elif defined(__NetBSD__) || defined(__NetBSD)
+# define PLATFORM_ID "NetBSD"
+
+#elif defined(__OpenBSD__) || defined(__OPENBSD)
+# define PLATFORM_ID "OpenBSD"
+
+#elif defined(__sun) || defined(sun)
+# define PLATFORM_ID "SunOS"
+
+#elif defined(_AIX) || defined(__AIX) || defined(__AIX__) || defined(__aix) || defined(__aix__)
+# define PLATFORM_ID "AIX"
+
+#elif defined(__hpux) || defined(__hpux__)
+# define PLATFORM_ID "HP-UX"
+
+#elif defined(__HAIKU__)
+# define PLATFORM_ID "Haiku"
+
+#elif defined(__BeOS) || defined(__BEOS__) || defined(_BEOS)
+# define PLATFORM_ID "BeOS"
+
+#elif defined(__QNX__) || defined(__QNXNTO__)
+# define PLATFORM_ID "QNX"
+
+#elif defined(__tru64) || defined(_tru64) || defined(__TRU64__)
+# define PLATFORM_ID "Tru64"
+
+#elif defined(__riscos) || defined(__riscos__)
+# define PLATFORM_ID "RISCos"
+
+#elif defined(__sinix) || defined(__sinix__) || defined(__SINIX__)
+# define PLATFORM_ID "SINIX"
+
+#elif defined(__UNIX_SV__)
+# define PLATFORM_ID "UNIX_SV"
+
+#elif defined(__bsdos__)
+# define PLATFORM_ID "BSDOS"
+
+#elif defined(_MPRAS) || defined(MPRAS)
+# define PLATFORM_ID "MP-RAS"
+
+#elif defined(__osf) || defined(__osf__)
+# define PLATFORM_ID "OSF1"
+
+#elif defined(_SCO_SV) || defined(SCO_SV) || defined(sco_sv)
+# define PLATFORM_ID "SCO_SV"
+
+#elif defined(__ultrix) || defined(__ultrix__) || defined(_ULTRIX)
+# define PLATFORM_ID "ULTRIX"
+
+#elif defined(__XENIX__) || defined(_XENIX) || defined(XENIX)
+# define PLATFORM_ID "Xenix"
+
+#elif defined(__WATCOMC__)
+# if defined(__LINUX__)
+#  define PLATFORM_ID "Linux"
+
+# elif defined(__DOS__)
+#  define PLATFORM_ID "DOS"
+
+# elif defined(__OS2__)
+#  define PLATFORM_ID "OS2"
+
+# elif defined(__WINDOWS__)
+#  define PLATFORM_ID "Windows3x"
+
+# elif defined(__VXWORKS__)
+#  define PLATFORM_ID "VxWorks"
+
+# else /* unknown platform */
+#  define PLATFORM_ID
+# endif
+
+#elif defined(__INTEGRITY)
+# if defined(INT_178B)
+#  define PLATFORM_ID "Integrity178"
+
+# else /* regular Integrity */
+#  define PLATFORM_ID "Integrity"
+# endif
+
+# elif defined(_ADI_COMPILER)
+#  define PLATFORM_ID "ADSP"
+
+#else /* unknown platform */
+# define PLATFORM_ID
+
+#endif
+
+/* For windows compilers MSVC and Intel we can determine
+   the architecture of the compiler being used.  This is because
+   the compilers do not have flags that can change the architecture,
+   but rather depend on which compiler is being used
+*/
+#if defined(_WIN32) && defined(_MSC_VER)
+# if defined(_M_IA64)
+#  define ARCHITECTURE_ID "IA64"
+
+# elif defined(_M_ARM64EC)
+#  define ARCHITECTURE_ID "ARM64EC"
+
+# elif defined(_M_X64) || defined(_M_AMD64)
+#  define ARCHITECTURE_ID "x64"
+
+# elif defined(_M_IX86)
+#  define ARCHITECTURE_ID "X86"
+
+# elif defined(_M_ARM64)
+#  define ARCHITECTURE_ID "ARM64"
+
+# elif defined(_M_ARM)
+#  if _M_ARM == 4
+#   define ARCHITECTURE_ID "ARMV4I"
+#  elif _M_ARM == 5
+#   define ARCHITECTURE_ID "ARMV5I"
+#  else
+#   define ARCHITECTURE_ID "ARMV" STRINGIFY(_M_ARM)
+#  endif
+
+# elif defined(_M_MIPS)
+#  define ARCHITECTURE_ID "MIPS"
+
+# elif defined(_M_SH)
+#  define ARCHITECTURE_ID "SHx"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__WATCOMC__)
+# if defined(_M_I86)
+#  define ARCHITECTURE_ID "I86"
+
+# elif defined(_M_IX86)
+#  define ARCHITECTURE_ID "X86"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__IAR_SYSTEMS_ICC__) || defined(__IAR_SYSTEMS_ICC)
+# if defined(__ICCARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__ICCRX__)
+#  define ARCHITECTURE_ID "RX"
+
+# elif defined(__ICCRH850__)
+#  define ARCHITECTURE_ID "RH850"
+
+# elif defined(__ICCRL78__)
+#  define ARCHITECTURE_ID "RL78"
+
+# elif defined(__ICCRISCV__)
+#  define ARCHITECTURE_ID "RISCV"
+
+# elif defined(__ICCAVR__)
+#  define ARCHITECTURE_ID "AVR"
+
+# elif defined(__ICC430__)
+#  define ARCHITECTURE_ID "MSP430"
+
+# elif defined(__ICCV850__)
+#  define ARCHITECTURE_ID "V850"
+
+# elif defined(__ICC8051__)
+#  define ARCHITECTURE_ID "8051"
+
+# elif defined(__ICCSTM8__)
+#  define ARCHITECTURE_ID "STM8"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__ghs__)
+# if defined(__PPC64__)
+#  define ARCHITECTURE_ID "PPC64"
+
+# elif defined(__ppc__)
+#  define ARCHITECTURE_ID "PPC"
+
+# elif defined(__ARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__x86_64__)
+#  define ARCHITECTURE_ID "x64"
+
+# elif defined(__i386__)
+#  define ARCHITECTURE_ID "X86"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__TI_COMPILER_VERSION__)
+# if defined(__TI_ARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__MSP430__)
+#  define ARCHITECTURE_ID "MSP430"
+
+# elif defined(__TMS320C28XX__)
+#  define ARCHITECTURE_ID "TMS320C28x"
+
+# elif defined(__TMS320C6X__) || defined(_TMS320C6X)
+#  define ARCHITECTURE_ID "TMS320C6x"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+# elif defined(__ADSPSHARC__)
+#  define ARCHITECTURE_ID "SHARC"
+
+# elif defined(__ADSPBLACKFIN__)
+#  define ARCHITECTURE_ID "Blackfin"
+
+#elif defined(__TASKING__)
+
+# if defined(__CTC__) || defined(__CPTC__)
+#  define ARCHITECTURE_ID "TriCore"
+
+# elif defined(__CMCS__)
+#  define ARCHITECTURE_ID "MCS"
+
+# elif defined(__CARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__CARC__)
+#  define ARCHITECTURE_ID "ARC"
+
+# elif defined(__C51__)
+#  define ARCHITECTURE_ID "8051"
+
+# elif defined(__CPCP__)
+#  define ARCHITECTURE_ID "PCP"
+
+# else
+#  define ARCHITECTURE_ID ""
+# endif
+
+#else
+#  define ARCHITECTURE_ID
+#endif
+
+/* Convert integer to decimal digit literals.  */
+#define DEC(n)                   \
+  ('0' + (((n) / 10000000)%10)), \
+  ('0' + (((n) / 1000000)%10)),  \
+  ('0' + (((n) / 100000)%10)),   \
+  ('0' + (((n) / 10000)%10)),    \
+  ('0' + (((n) / 1000)%10)),     \
+  ('0' + (((n) / 100)%10)),      \
+  ('0' + (((n) / 10)%10)),       \
+  ('0' +  ((n) % 10))
+
+/* Convert integer to hex digit literals.  */
+#define HEX(n)             \
+  ('0' + ((n)>>28 & 0xF)), \
+  ('0' + ((n)>>24 & 0xF)), \
+  ('0' + ((n)>>20 & 0xF)), \
+  ('0' + ((n)>>16 & 0xF)), \
+  ('0' + ((n)>>12 & 0xF)), \
+  ('0' + ((n)>>8  & 0xF)), \
+  ('0' + ((n)>>4  & 0xF)), \
+  ('0' + ((n)     & 0xF))
+
+/* Construct a string literal encoding the version number. */
+#ifdef COMPILER_VERSION
+char const* info_version = "INFO" ":" "compiler_version[" COMPILER_VERSION "]";
+
+/* Construct a string literal encoding the version number components. */
+#elif defined(COMPILER_VERSION_MAJOR)
+char const info_version[] = {
+  'I', 'N', 'F', 'O', ':',
+  'c','o','m','p','i','l','e','r','_','v','e','r','s','i','o','n','[',
+  COMPILER_VERSION_MAJOR,
+# ifdef COMPILER_VERSION_MINOR
+  '.', COMPILER_VERSION_MINOR,
+#  ifdef COMPILER_VERSION_PATCH
+   '.', COMPILER_VERSION_PATCH,
+#   ifdef COMPILER_VERSION_TWEAK
+    '.', COMPILER_VERSION_TWEAK,
+#   endif
+#  endif
+# endif
+  ']','\0'};
+#endif
+
+/* Construct a string literal encoding the internal version number. */
+#ifdef COMPILER_VERSION_INTERNAL
+char const info_version_internal[] = {
+  'I', 'N', 'F', 'O', ':',
+  'c','o','m','p','i','l','e','r','_','v','e','r','s','i','o','n','_',
+  'i','n','t','e','r','n','a','l','[',
+  COMPILER_VERSION_INTERNAL,']','\0'};
+#elif defined(COMPILER_VERSION_INTERNAL_STR)
+char const* info_version_internal = "INFO" ":" "compiler_version_internal[" COMPILER_VERSION_INTERNAL_STR "]";
+#endif
+
+/* Construct a string literal encoding the version number components. */
+#ifdef SIMULATE_VERSION_MAJOR
+char const info_simulate_version[] = {
+  'I', 'N', 'F', 'O', ':',
+  's','i','m','u','l','a','t','e','_','v','e','r','s','i','o','n','[',
+  SIMULATE_VERSION_MAJOR,
+# ifdef SIMULATE_VERSION_MINOR
+  '.', SIMULATE_VERSION_MINOR,
+#  ifdef SIMULATE_VERSION_PATCH
+   '.', SIMULATE_VERSION_PATCH,
+#   ifdef SIMULATE_VERSION_TWEAK
+    '.', SIMULATE_VERSION_TWEAK,
+#   endif
+#  endif
+# endif
+  ']','\0'};
+#endif
+
+/* Construct the string literal in pieces to prevent the source from
+   getting matched.  Store it in a pointer rather than an array
+   because some compilers will just produce instructions to fill the
+   array rather than assigning a pointer to a static array.  */
+char const* info_platform = "INFO" ":" "platform[" PLATFORM_ID "]";
+char const* info_arch = "INFO" ":" "arch[" ARCHITECTURE_ID "]";
+
+
+
+#if defined(__INTEL_COMPILER) && defined(_MSVC_LANG) && _MSVC_LANG < 201403L
+#  if defined(__INTEL_CXX11_MODE__)
+#    if defined(__cpp_aggregate_nsdmi)
+#      define CXX_STD 201402L
+#    else
+#      define CXX_STD 201103L
+#    endif
+#  else
+#    define CXX_STD 199711L
+#  endif
+#elif defined(_MSC_VER) && defined(_MSVC_LANG)
+#  define CXX_STD _MSVC_LANG
+#else
+#  define CXX_STD __cplusplus
+#endif
+
+const char* info_language_standard_default = "INFO" ":" "standard_default["
+#if CXX_STD > 202002L
+  "23"
+#elif CXX_STD > 201703L
+  "20"
+#elif CXX_STD >= 201703L
+  "17"
+#elif CXX_STD >= 201402L
+  "14"
+#elif CXX_STD >= 201103L
+  "11"
+#else
+  "98"
+#endif
+"]";
+
+const char* info_language_extensions_default = "INFO" ":" "extensions_default["
+#if (defined(__clang__) || defined(__GNUC__) || defined(__xlC__) ||           \
+     defined(__TI_COMPILER_VERSION__)) &&                                     \
+  !defined(__STRICT_ANSI__)
+  "ON"
+#else
+  "OFF"
+#endif
+"]";
+
+/*--------------------------------------------------------------------------*/
+
+int main(int argc, char* argv[])
+{
+  int require = 0;
+  require += info_compiler[argc];
+  require += info_platform[argc];
+  require += info_arch[argc];
+#ifdef COMPILER_VERSION_MAJOR
+  require += info_version[argc];
+#endif
+#ifdef COMPILER_VERSION_INTERNAL
+  require += info_version_internal[argc];
+#endif
+#ifdef SIMULATE_ID
+  require += info_simulate[argc];
+#endif
+#ifdef SIMULATE_VERSION_MAJOR
+  require += info_simulate_version[argc];
+#endif
+#if defined(__CRAYXT_COMPUTE_LINUX_TARGET)
+  require += info_cray[argc];
+#endif
+  require += info_language_standard_default[argc];
+  require += info_language_extensions_default[argc];
+  (void)argv;
+  return require;
+}
+
+// --- File: C:\Users\deral\code\ccode\build-msvc\CMakeFiles\4.1.0-rc4\CompilerIdCXX\CMakeCXXCompilerId.cpp ---
 
 /* This source file must have a .cpp extension so that all C++ compilers
    recognize the extension without flags.  Borland does not know .cxx for
@@ -1671,6 +2543,106 @@ int main(int argc, char* argv[])
   return require;
 }
 
+// --- File: C:\Users\deral\code\ccode\memo_sidecar_v1\src\memo\memostore.cpp ---
+
+// memo_sidecar_v1/src/memo/memostore.cpp
+//
+// Skeleton implementation. Wire to your platform file I/O layer in the project.
+// This file is intentionally minimal (no real I/O) to serve as a starting point.
+
+#include "memo/memostore.hpp"
+#include "memo/dtx_format.hpp"
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+namespace xbase::memo {
+
+struct MemoStore::Impl {
+    std::string basepath;   // without extension
+    fs::path    dtx_path;   // "<basepath>.dtx"
+    StoreStat   sstat{};
+
+    Impl(std::string bp) : basepath(std::move(bp)) {
+        dtx_path = fs::path(basepath).replace_extension(".dtx");
+    }
+};
+
+MemoStore MemoStore::open(const std::string& basepath) {
+    MemoStore m;
+    m.impl_ = new Impl(basepath);
+    // TODO: open file, read header, validate CRC/magic/version
+    // For now, just check existence
+    if (!fs::exists(m.impl_->dtx_path)) {
+        throw io_error("Memo sidecar does not exist: " + m.impl_->dtx_path.string());
+    }
+    return std::move(m);
+}
+
+MemoStore MemoStore::create(const std::string& basepath, uint32_t block_size) {
+    (void)block_size; // TODO: use for header init
+    MemoStore m;
+    m.impl_ = new Impl(basepath);
+    // TODO: create/truncate file, write fresh header
+    // Here we just touch the file.
+    std::FILE* f = std::fopen(m.impl_->dtx_path.string().c_str(), "wb");
+    if (!f) throw io_error("Failed to create: " + m.impl_->dtx_path.string());
+    // Minimal header placeholder; a real impl must write DtxHeader fully.
+    std::array<char, 4096> zero{};
+    std::fwrite(zero.data(), 1, zero.size(), f);
+    std::fclose(f);
+    return std::move(m);
+}
+
+MemoStore::MemoStore() : impl_(nullptr) {}
+MemoStore::MemoStore(MemoStore&& o) noexcept : impl_(o.impl_) { o.impl_ = nullptr; }
+MemoStore& MemoStore::operator=(MemoStore&& o) noexcept { 
+    if (this != &o) { delete impl_; impl_ = o.impl_; o.impl_ = nullptr; }
+    return *this; 
+}
+MemoStore::~MemoStore() { delete impl_; }
+
+uint64_t MemoStore::put(const std::vector<uint8_t>& data) {
+    // TODO: append object, update id-map, stats; return id
+    (void)data;
+    throw memo_error("MemoStore::put not implemented");
+}
+
+std::vector<uint8_t> MemoStore::get(uint64_t object_id) const {
+    (void)object_id;
+    throw not_found("MemoStore::get not implemented");
+}
+
+void MemoStore::update(uint64_t object_id, const std::vector<uint8_t>& data) {
+    (void)object_id; (void)data;
+    throw memo_error("MemoStore::update not implemented");
+}
+
+void MemoStore::erase(uint64_t object_id) {
+    (void)object_id;
+    throw memo_error("MemoStore::erase not implemented");
+}
+
+MemoStat MemoStore::stat(uint64_t object_id) const {
+    (void)object_id;
+    MemoStat s; s.exists = false; return s;
+}
+
+void MemoStore::flush() { /* TODO: fsync */ }
+
+StoreStat MemoStore::store_stats() const { return impl_ ? impl_->sstat : StoreStat{}; }
+
+void MemoStore::memocheck(bool repair) { (void)repair; /* TODO: verify CRCs, rebuild id map */ }
+
+std::string MemoStore::sidecar_path() const {
+    return impl_ ? impl_->dtx_path.string() : std::string();
+}
+
+} // namespace xbase::memo
+
 // --- File: C:\Users\deral\code\ccode\patches\cmd_count_add_for_example.cpp ---
 
 // Example COUNT handler wiring FOR <expr> using the DotTalk++ expr engine.
@@ -2110,6 +3082,81 @@ std::unique_ptr<Expr> Parser::expression(int min_bp) {
 
 std::unique_ptr<Expr> Parser::parse_expr() { return expression(0); }
 
+// --- File: C:\Users\deral\code\ccode\src\cli\browse_lines.cpp ---
+
+// src/cli/browse_lines.cpp
+#include <algorithm>
+#include <cctype>
+#include <string>
+#include <vector>
+#include "cli/browsetui.hpp"
+
+// Helper to trim trailing spaces/tabs etc.
+static inline void rtrim_inplace(std::string& s) {
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+        s.pop_back();
+}
+
+static inline std::string pad_right(const std::string& s, int n) {
+    if (n <= 0) return std::string();
+    if (static_cast<int>(s.size()) >= n) return s.substr(0, static_cast<size_t>(n));
+    std::string t = s;
+    t.append(static_cast<size_t>(n - static_cast<int>(s.size())), ' ');
+    return t;
+}
+
+// Definition to satisfy the call sites in cmd_browsetui.cpp
+std::vector<std::string>
+build_browse_lines(int inner_w, int inner_h, int recno,
+                   const std::vector<FieldView>& fields)
+{
+    std::vector<std::string> out;
+    if (inner_w <= 0 || inner_h <= 0) return out;
+    out.reserve(static_cast<size_t>(inner_h));
+
+    // Header line: " REC <n>"
+    if (inner_h > 0) {
+        std::string head = "REC " + std::to_string(recno);
+        if (static_cast<int>(head.size()) > inner_w) head.resize(static_cast<size_t>(inner_w));
+        out.push_back(" " + std::move(head));
+    }
+
+    // Figure label width: cap at 1/3 of the inner width, max 32, min 6
+    int max_name = 0;
+    for (const auto& fv : fields)
+        max_name = std::max(max_name, static_cast<int>(fv.name.size()));
+    const int label_w = std::max(6, std::min({ max_name, inner_w / 3, 32 }));
+
+    // Lines: " <name-padded> <value>"
+    for (size_t i = 0; i < fields.size() && static_cast<int>(out.size()) < inner_h; ++i) {
+        std::string name = fields[i].name;
+        std::string val  = fields[i].value;
+        rtrim_inplace(val);
+
+        std::string line;
+        line.reserve(static_cast<size_t>(inner_w));
+        line.push_back(' ');
+        line += pad_right(name, label_w);
+        if (static_cast<int>(line.size()) < inner_w) line.push_back(' ');
+
+        int avail = inner_w - static_cast<int>(line.size());
+        if (avail > 0) {
+            if (static_cast<int>(val.size()) > avail) val.resize(static_cast<size_t>(avail));
+            line += val;
+        }
+        if (static_cast<int>(line.size()) < inner_w)
+            line.append(static_cast<size_t>(inner_w - static_cast<int>(line.size())), ' ');
+
+        out.push_back(std::move(line));
+    }
+
+    // Pad out remaining lines with spaces
+    while (static_cast<int>(out.size()) < inner_h)
+        out.emplace_back(static_cast<size_t>(inner_w), ' ');
+
+    return out;
+}
+
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_append.cpp ---
 
 // src/cli/cmd_append.cpp  (drop-in replacement, hardened)
@@ -2337,6 +3384,1035 @@ void cmd_BOTTOM(xbase::DbArea& a, std::istringstream& iss) {
     std::cout << "Recno: " << a.recno() << "\n";
 }
 
+// --- File: C:\Users\deral\code\ccode\src\cli\cmd_browse.cpp ---
+
+// cmd_browse.cpp
+// DotTalk++ — Minimal interactive BROWSE with editing, no DbArea internals.
+// Uses existing handlers: LIST, DISPLAY, GOTO, REPLACE.
+
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <algorithm>
+#include <cctype>
+
+#include "xbase.hpp"  // xbase::DbArea
+
+// ---- Forward declarations of existing command handlers ---------------------
+void cmd_LIST   (xbase::DbArea&, std::istringstream&);
+void cmd_DISPLAY(xbase::DbArea&, std::istringstream&);
+void cmd_GOTO   (xbase::DbArea&, std::istringstream&);
+void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
+
+// ---- Helpers ---------------------------------------------------------------
+static inline std::string trim(const std::string& s) {
+  size_t b = 0, e = s.size();
+  while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
+  while (e > b && std::isspace(static_cast<unsigned char>(s[e-1]))) --e;
+  return s.substr(b, e - b);
+}
+
+static inline std::string upper(std::string s) {
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
+  return s;
+}
+
+static inline bool needs_quotes(const std::string& v) {
+  for (unsigned char c : v) {
+    if (std::isspace(c) || !std::isalnum(c)) return true;
+  }
+  return v.empty();
+}
+
+static void show_menu(bool editEnabled) {
+  std::cout
+    << "\n=== BROWSE " << (editEnabled ? "EDIT " : "") << "===\n"
+    << "Commands:\n"
+    << "  L            - List (uses LIST)\n"
+    << "  D            - Display current record (uses DISPLAY)\n"
+    << "  G <n>        - Go to record n (uses GOTO)\n"
+    << "  E            - Edit a field in current record (uses REPLACE)\n"
+    << "  H or ?       - Help (this menu)\n"
+    << "  Q            - Quit browse\n";
+}
+
+// ---- Command implementation ------------------------------------------------
+void cmd_BROWSE(xbase::DbArea& area, std::istringstream& iss)
+{
+  // Parse optional "EDIT" token, but we allow E command regardless.
+  bool editMode = false;
+  {
+    std::string rest; std::getline(iss, rest);
+    rest = upper(trim(rest));
+    if (rest.find("EDIT") != std::string::npos) editMode = true;
+  }
+
+  std::cout << "Entered BROWSE" << (editMode ? " EDIT" : "") << " mode.\n";
+  show_menu(editMode);
+
+  for (;;) {
+    std::cout << "\nBROWSE> ";
+    std::string line;
+    if (!std::getline(std::cin, line)) break;
+    line = trim(line);
+    if (line.empty()) continue;
+
+    // Split first token
+    std::istringstream ls(line);
+    std::string cmd; ls >> cmd;
+    std::string arg; std::getline(ls, arg); arg = trim(arg);
+
+    std::string ucmd = upper(cmd);
+
+    // Quit
+    if (ucmd == "Q" || ucmd == "QUIT" || ucmd == "EXIT") {
+      std::cout << "Leaving BROWSE.\n";
+      break;
+    }
+
+    // Help
+    if (ucmd == "H" || ucmd == "?") {
+      show_menu(editMode);
+      continue;
+    }
+
+    // List (delegate to LIST)
+    if (ucmd == "L" || ucmd == "LIST") {
+      std::istringstream empty;
+      cmd_LIST(area, empty);
+      continue;
+    }
+
+    // Display current record (delegate to DISPLAY)
+    if (ucmd == "D" || ucmd == "DISPLAY") {
+      std::istringstream empty;
+      cmd_DISPLAY(area, empty);
+      continue;
+    }
+
+    // GOTO <n>
+    if (ucmd == "G" || ucmd == "GOTO") {
+      if (arg.empty()) {
+        std::cout << "Usage: G <recno>\n";
+        continue;
+      }
+      std::istringstream go(arg);
+      cmd_GOTO(area, go);
+      // show the record after moving
+      std::istringstream empty;
+      cmd_DISPLAY(area, empty);
+      continue;
+    }
+
+    // Edit current record: prompt for field and value, call REPLACE
+    if (ucmd == "E" || ucmd == "EDIT") {
+      // We allow edit regardless of initial EDIT token (keeps it simple)
+      std::string field;
+      std::cout << "Field name: ";
+      if (!std::getline(std::cin, field)) break;
+      field = trim(field);
+      if (field.empty()) {
+        std::cout << "Canceled (empty field).\n";
+        continue;
+      }
+
+      std::string newv;
+      std::cout << "New value: ";
+      if (!std::getline(std::cin, newv)) break;
+      newv = trim(newv);
+
+      // Build REPLACE <FIELD> WITH <value>
+      std::ostringstream ro;
+      ro << field << " WITH ";
+      if (needs_quotes(newv)) ro << '"' << newv << '"';
+      else                     ro << newv;
+
+      std::istringstream riss(ro.str());
+      cmd_REPLACE(area, riss);
+
+      // Show the updated record
+      std::istringstream empty;
+      cmd_DISPLAY(area, empty);
+      continue;
+    }
+
+    std::cout << "Unknown command. Type H for help.\n";
+  }
+}
+
+// --- File: C:\Users\deral\code\ccode\src\cli\cmd_browsetui.cpp ---
+
+// src/cli/cmd_browsetui.cpp
+//
+// Cross-platform BROWSETUI with header/footer bars, frame,
+// navigation, modals (LIST/DISPLAY), and type-aware editing with staging.
+//
+// - Windowed mode shows a smaller, centered form (~75% of terminal).
+//   Press F6 to toggle Fullscreen <-> Windowed.
+// - Edits are STAGED (not written immediately)
+// - Ctrl+S saves all staged changes via transactional REPLACE_MULTI
+// - On exit / record change, prompts to save if there are staged changes
+//
+// Assumes (from xbase.hpp):
+//   FieldDef: .name, .type, .length, .decimals
+//   DbArea  : fields(), get(1-based), recno(), recCount(), readCurrent(), isOpen()
+//
+// External commands provided elsewhere:
+//   cmd_LIST, cmd_DISPLAY, cmd_GOTO, cmd_TOP, cmd_BOTTOM, cmd_CREATE, cmd_APPEND, cmd_DELETE
+//
+// Screen builder provided elsewhere:
+//   build_browse_lines(int inner_w, int inner_h, int recno, const std::vector<FieldView>&)
+//   (implemented in browse_lines.cpp)
+
+#include <string>
+#include <vector>
+#include <sstream>
+#include <iostream>
+#include <algorithm>
+#include <cctype>
+#include <memory>
+#include <unordered_map>
+#include <cstdlib>
+#include <cstdio>
+
+#include "xbase.hpp"
+#include "cli/console.hpp"
+#include "cli/browsetui.hpp"     // FieldView, Console, Size, etc.
+#include "cli/memo_display.hpp"
+#include "cli/replace_multi.hpp"
+
+// externs for other command handlers
+extern void cmd_LIST    (xbase::DbArea&, std::istringstream&);
+extern void cmd_DISPLAY (xbase::DbArea&, std::istringstream&);
+extern void cmd_GOTO    (xbase::DbArea&, std::istringstream&);
+extern void cmd_TOP     (xbase::DbArea&, std::istringstream&);
+extern void cmd_BOTTOM  (xbase::DbArea&, std::istringstream&);
+extern void cmd_CREATE  (xbase::DbArea&, std::istringstream&);
+extern void cmd_APPEND  (xbase::DbArea&, std::istringstream&);
+extern void cmd_DELETE  (xbase::DbArea&, std::istringstream&);
+
+// built in browse_lines.cpp (do NOT reimplement here)
+extern std::vector<std::string>
+build_browse_lines(int inner_w, int inner_h, int recno, const std::vector<FieldView>& fields);
+
+// optional: index/order hooks
+void order_notify_mutation(xbase::DbArea&) noexcept;
+
+// -----------------------------
+// small helpers
+// -----------------------------
+static inline void rtrim_inplace(std::string& s) {
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+        s.pop_back();
+}
+static inline int get_current_recno_safe(xbase::DbArea& area) {
+    return static_cast<int>(area.recno());
+}
+
+// Snapshot current record values (index-aligned to fields())
+static std::vector<std::string> snapshot_record(xbase::DbArea& area) {
+    std::vector<std::string> snap;
+    const auto& F = area.fields();
+    snap.reserve(F.size());
+    (void)area.readCurrent();
+    for (size_t i = 0; i < F.size(); ++i) {
+        std::string v = area.get(static_cast<int>(i) + 1);
+        rtrim_inplace(v);
+        snap.push_back(std::move(v));
+    }
+    return snap;
+}
+
+// -----------------------------
+// Key decoding (Windows + POSIX)
+// -----------------------------
+enum class Key {
+    Other, Esc, Quit, Enter, Up, Down, Home, End, G, L, D, E, Help, CtrlS, PageUp, PageDown, F1, F2, F3, F4, F5, F6
+};
+
+static Key read_key(Console& con) {
+    int c = con.get_key();
+    if (c == 27) { // ESC or CSI sequence
+        int c2 = con.get_key();
+        if (c2 == '[') {
+            int c3 = con.get_key();
+            switch (c3) {
+                case 'A': return Key::Up;
+                case 'B': return Key::Down;
+                case 'H': return Key::Home;
+                case 'F': return Key::End;
+                case '5': con.get_key(); return Key::PageUp;
+                case '6': con.get_key(); return Key::PageDown;
+                case 'P': con.get_key(); con.get_key(); return Key::F1;
+                case 'Q': con.get_key(); con.get_key(); return Key::F2;
+                case 'R': con.get_key(); con.get_key(); return Key::F3;
+                case 'S': con.get_key(); con.get_key(); return Key::F4;
+                default:  return Key::Other;
+            }
+        }
+        if (c2 == 'O') {
+            int c3 = con.get_key();
+            if (c3 == 'P') return Key::F1;
+            if (c3 == 'Q') return Key::F2;
+            if (c3 == 'R') return Key::F3;
+            if (c3 == 'S') return Key::F4;
+        }
+        return Key::Esc; // plain ESC
+    }
+#ifdef _WIN32
+    if (c == 224 || c == 0) {
+        int c2 = con.get_key();
+        switch (c2) {
+            case 72: return Key::Up;
+            case 80: return Key::Down;
+            case 71: return Key::Home;
+            case 79: return Key::End;
+            case 73: return Key::PageUp;
+            case 81: return Key::PageDown;
+            case 59: return Key::F1;
+            case 60: return Key::F2;
+            case 61: return Key::F3;
+            case 62: return Key::F4;
+            case 63: return Key::F5;
+            case 64: return Key::F6;
+            default: return Key::Other;
+        }
+    }
+#endif
+    if (c == '\r' || c == '\n') return Key::Enter;
+    if (c == 19) return Key::CtrlS; // Ctrl+S
+    if (c == 'q' || c == 'Q') return Key::Quit;
+    if (c == 'g' || c == 'G') return Key::G;
+    if (c == 'l' || c == 'L') return Key::L;
+    if (c == 'd' || c == 'D') return Key::D;
+    if (c == 'e' || c == 'E') return Key::E;
+    if (c == '?' || c == 'h' || c == 'H') return Key::Help;
+    return Key::Other;
+}
+
+// -----------------------------
+// UI helpers: header/footer bars
+// -----------------------------
+static const char* SGR_RESET      = "\x1b[0m";
+static const char* SGR_HEADER_BAR = "\x1b[1;37;42m"; // bold white on green
+static const char* SGR_FOOTER_BAR = "\x1b[30;43m";   // black on amber
+static const char* SGR_MENU_BAR   = "\x1b[47;30m";
+
+static void draw_color_bar(Console& con, int y, int width,
+                           const std::string& left, const std::string& right,
+                           const char* style_sgr)
+{
+    std::string line;
+    line.reserve(static_cast<size_t>(width));
+    const int rlen = static_cast<int>(right.size());
+    int space_for_left = std::max(0, width - rlen);
+
+    std::string L = left;
+    if (static_cast<int>(L.size()) > space_for_left) L.resize(static_cast<size_t>(space_for_left));
+    line += L;
+    if (space_for_left > static_cast<int>(L.size()))
+        line.append(static_cast<size_t>(space_for_left - static_cast<int>(L.size())), ' ');
+
+    std::string R = right;
+    if (static_cast<int>(R.size()) > width) R.resize(static_cast<size_t>(width));
+    line += R;
+
+    if (static_cast<int>(line.size()) < width)
+        line.append(static_cast<size_t>(width - static_cast<int>(line.size())), ' ');
+
+    con.draw_text(0, y, std::string(style_sgr) + line + SGR_RESET);
+}
+static void draw_header_menu(Console& con, int y, int width) {
+    std::string menu = " F1:Create | F2:Read | F3:Update | F4:Delete | F5:Append ";
+    std::string line;
+    line.reserve(static_cast<size_t>(width));
+    int padding = std::max(0, width - static_cast<int>(menu.size()));
+    int left_pad = padding / 2;
+    int right_pad = padding - left_pad;
+    line.append(static_cast<size_t>(left_pad), ' ');
+    line += menu;
+    line.append(static_cast<size_t>(right_pad), ' ');
+    con.draw_text(0, y, std::string(SGR_MENU_BAR) + line + SGR_RESET);
+}
+
+// -----------------------------
+// Footer prompts
+// -----------------------------
+static bool prompt_yes_no(Console& con, int footer_y, int term_cols, const std::string& question, bool& out_yes) {
+    std::string s = question + " (Y/N, Esc=cancel)";
+    if (static_cast<int>(s.size()) < term_cols) s.append(static_cast<size_t>(term_cols - static_cast<int>(s.size())), ' ');
+    con.draw_text(0, footer_y, std::string(SGR_FOOTER_BAR) + s + SGR_RESET);
+    std::cout.flush();
+    for (;;) {
+        int ch = con.get_key();
+#ifdef _WIN32
+        if (ch == 224 || ch == 0) { (void)con.get_key(); continue; }
+#endif
+        if (ch == 27) return false;
+        if (ch == 'y' || ch == 'Y') { out_yes = true;  return true; }
+        if (ch == 'n' || ch == 'N') { out_yes = false; return true; }
+    }
+}
+static bool prompt_goto(Console& con, int footer_y, int term_cols, int& out_recno) {
+    std::string buf;
+    auto paint = [&](const std::string& pre){
+        std::string s = pre + buf;
+        if (static_cast<int>(s.size()) < term_cols) s.append(static_cast<size_t>(term_cols - static_cast<int>(s.size())), ' ');
+        con.draw_text(0, footer_y, std::string(SGR_FOOTER_BAR) + s + SGR_RESET);
+        std::cout.flush();
+    };
+    paint("Goto rec: ");
+    for (;;) {
+        int ch = con.get_key();
+#ifdef _WIN32
+        if (ch == 224 || ch == 0) { (void)con.get_key(); continue; }
+#endif
+        if (ch == 27) return false;
+        if (ch == '\r' || ch == '\n') break;
+        if (ch == 8 || ch == 127) { if (!buf.empty()) { buf.pop_back(); paint("Goto rec: "); } continue; }
+        if (std::isdigit(ch)) { buf.push_back(static_cast<char>(ch)); paint("Goto rec: "); continue; }
+    }
+    if (buf.empty()) return false;
+    out_recno = std::max(1, std::stoi(buf));
+    return true;
+}
+static bool prompt_for_create_string(Console& con, int footer_y, int term_cols, const std::string& question, std::string& out) {
+    std::string buf;
+    auto paint = [&](const std::string& pre){
+        std::string s = pre + buf;
+        if (static_cast<int>(s.size()) < term_cols) s.append(static_cast<size_t>(term_cols - static_cast<int>(s.size())), ' ');
+        con.draw_text(0, footer_y, std::string(SGR_FOOTER_BAR) + s + SGR_RESET);
+        std::cout.flush();
+    };
+    paint(question);
+    for (;;) {
+        int ch = con.get_key();
+        if (ch == 27) return false;
+        if (ch == '\r' || ch == '\n') break;
+        if (ch == 8 || ch == 127) { if (!buf.empty()) { buf.pop_back(); paint(question); } continue; }
+        if (ch >= 32 && ch <= 126) { buf.push_back(static_cast<char>(ch)); paint(question); continue; }
+    }
+    out = buf;
+    return true;
+}
+
+// -----------------------------
+// Type-aware editing helpers
+// -----------------------------
+static std::string escape_double_quotes(std::string s) {
+    for (size_t i = 0; i < s.size(); ++i) if (s[i] == '"') s.insert(i++, "\\");
+    return s;
+}
+static std::string normalize_date_YYYYMMDD(const std::string& in_raw) {
+    std::string digits;
+    digits.reserve(in_raw.size());
+    for (char c : in_raw) if (std::isdigit(static_cast<unsigned char>(c))) digits.push_back(c);
+
+    auto ok_md = [](int m, int d){ return m >= 1 && m <= 12 && d >= 1 && d <= 31; };
+
+    if (digits.size() == 8) {
+        // try YYYYMMDD
+        int y = std::atoi(digits.substr(0,4).c_str());
+        int m = std::atoi(digits.substr(4,2).c_str());
+        int d = std::atoi(digits.substr(6,2).c_str());
+        if (y > 0 && ok_md(m,d)) return digits;
+
+        // try MMDDYYYY
+        m = std::atoi(digits.substr(0,2).c_str());
+        d = std::atoi(digits.substr(2,2).c_str());
+        y = std::atoi(digits.substr(4,4).c_str());
+        if (y > 0 && ok_md(m,d)) {
+            char buf[9];
+            std::snprintf(buf, sizeof(buf), "%04d%02d%02d", y, m, d);
+            return std::string(buf, 8);
+        }
+    }
+    return ""; // invalid
+}
+static std::string normalize_numeric(const std::string& in, int length, int decimals) {
+    std::string s; s.reserve(in.size());
+    bool seen_dot = false;
+
+    for (char c : in) {
+        if ((c == '-' && s.empty()) || std::isdigit(static_cast<unsigned char>(c))) {
+            s.push_back(c);
+            continue;
+        }
+        if (decimals > 0 && c == '.' && !seen_dot) {
+            seen_dot = true; s.push_back(c); continue;
+        }
+        if (std::isspace(static_cast<unsigned char>(c))) continue;
+        return ""; // invalid char
+    }
+    if (s.empty() || s == "-" || s == ".") return "";
+
+    if (decimals == 0) {
+        size_t dot = s.find('.');
+        if (dot != std::string::npos) s.erase(dot);
+    } else {
+        size_t dot = s.find('.');
+        if (dot != std::string::npos) {
+            size_t frac = s.size() - dot - 1;
+            if (static_cast<int>(frac) > decimals) s.erase(dot + 1 + static_cast<size_t>(decimals));
+        }
+    }
+    if (static_cast<int>(s.size()) > length) return "";
+    return s;
+}
+static std::string normalize_logical_from_key(int ch, const std::string& currentTF) {
+    auto toTF = [](char c)->std::string{
+        switch (std::toupper(static_cast<unsigned char>(c))) {
+            case 'T': case 'Y': case '1': return "T";
+            case 'F': case 'N': case '0': return "F";
+            default: return "";
+        }
+    };
+    if (ch == ' ') return (currentTF=="T" ? "F" : "T");
+    if (ch == '\r' || ch == '\n') return "";
+    return toTF(static_cast<char>(ch));
+}
+static std::string make_replace_payload(char type, const std::string& valueNormalized) {
+    switch (type) {
+        case 'N': case 'n': return valueNormalized; // unquoted
+        case 'L': case 'l': return valueNormalized; // T/F unquoted
+        case 'D': case 'd':
+        case 'C': case 'c':
+        case 'M': case 'm':
+        default:
+            return std::string("\"") + escape_double_quotes(valueNormalized) + "\"";
+    }
+}
+
+// Prompt for a value; return normalized text (type-aware)
+static bool prompt_value_for_field(Console& con, int footer_y, int term_cols,
+                                   xbase::DbArea& area,
+                                   int fieldIndex, const std::string& fieldName,
+                                   char fieldType, int fieldLen, int fieldDec,
+                                   std::string& outNormalized)
+{
+    (void)area.readCurrent();
+    std::string current = area.get(fieldIndex + 1);
+    rtrim_inplace(current);
+    const char typeCh = static_cast<char>(std::toupper(static_cast<unsigned char>(fieldType)));
+    std::string base = "Set " + fieldName + " (" + std::string(1, typeCh) + "): ";
+
+    if (typeCh == 'L') {
+        std::string curTF = (!current.empty() && (current[0]=='T' || current[0]=='t')) ? "T" : "F";
+        std::string msg   = base + "[ " + curTF + " ]  <Space toggles, Enter accepts, Esc cancels>";
+        std::string s = msg; if (static_cast<int>(s.size()) < term_cols) s.append(static_cast<size_t>(term_cols - static_cast<int>(s.size())), ' ');
+        con.draw_text(0, footer_y, std::string(SGR_FOOTER_BAR) + s + SGR_RESET);
+        std::cout.flush();
+
+        std::string nextTF = curTF;
+        for (;;) {
+            int ch = con.get_key();
+#ifdef _WIN32
+            if (ch == 224 || ch == 0) { (void)con.get_key(); continue; }
+#endif
+            if (ch == 27) return false;
+            if (ch == '\r' || ch == '\n') { outNormalized = nextTF; return true; }
+            std::string set = normalize_logical_from_key(ch, nextTF);
+            if (!set.empty()) {
+                nextTF = set;
+                std::string s2 = base + "[ " + nextTF + " ]  <Space toggles, Enter accepts, Esc cancels>";
+                if (static_cast<int>(s2.size()) < term_cols) s2.append(static_cast<size_t>(term_cols - static_cast<int>(s2.size())), ' ');
+                con.draw_text(0, footer_y, std::string(SGR_FOOTER_BAR) + s2 + SGR_RESET);
+                std::cout.flush();
+            }
+        }
+    } else {
+        std::string buf;
+        auto paint = [&](){
+            std::string example;
+            switch (typeCh) {
+                case 'D': example = " (YYYYMMDD, YYYY-MM-DD, or MM/DD/YYYY)"; break;
+                case 'N': example = (fieldDec>0? " (number " + std::to_string(fieldLen) + "/" + std::to_string(fieldDec) + ")"
+                                               : " (integer, max " + std::to_string(fieldLen) + ")"); break;
+                default: break;
+            }
+            std::string s = base + "[" + current + "] : " + buf + example;
+            if (static_cast<int>(s.size()) < term_cols) s.append(static_cast<size_t>(term_cols - static_cast<int>(s.size())), ' ');
+            con.draw_text(0, footer_y, std::string(SGR_FOOTER_BAR) + s + SGR_RESET);
+            std::cout.flush();
+        };
+        paint();
+        for (;;) {
+            int ch = con.get_key();
+#ifdef _WIN32
+            if (ch == 224 || ch == 0) { (void)con.get_key(); continue; }
+#endif
+            if (ch == 27) return false;
+            if (ch == '\r' || ch == '\n') {
+                std::string entered = buf.empty() ? current : buf;
+                if (typeCh == 'D') {
+                    std::string norm = normalize_date_YYYYMMDD(entered);
+                    if (norm.empty()) { std::cout << '\a'; continue; }
+                    outNormalized = norm;
+                } else if (typeCh == 'N') {
+                    std::string norm = normalize_numeric(entered, fieldLen, fieldDec);
+                    if (norm.empty()) { std::cout << '\a'; continue; }
+                    outNormalized = norm;
+                } else {
+                    outNormalized = entered; // C/M
+                }
+                return true;
+            }
+            if (ch == 8 || ch == 127) { if (!buf.empty()) buf.pop_back(); paint(); continue; }
+            if (ch >= 32 && ch <= 126) { buf.push_back(static_cast<char>(ch)); paint(); continue; }
+        }
+    }
+}
+
+// -----------------------------
+// Staging + editor UI
+// -----------------------------
+struct PendingEdits {
+    std::unordered_map<std::string, std::string> by_name; // field name -> normalized
+    void clear() { by_name.clear(); }
+    bool empty() const { return by_name.empty(); }
+    size_t count() const { return by_name.size(); }
+};
+
+static std::vector<FieldView> collect_field_views_with_staged(xbase::DbArea& area, const PendingEdits& st) {
+    std::vector<FieldView> out;
+    const auto& F = area.fields();
+    out.reserve(F.size());
+    (void)area.readCurrent();
+    for (size_t i = 0; i < F.size(); ++i) {
+        const std::string& name = F[i].name;
+        std::string value;
+        auto it = st.by_name.find(name);
+        if (it != st.by_name.end()) value = it->second;
+        else { value = area.get(static_cast<int>(i) + 1); rtrim_inplace(value); }
+        out.push_back(FieldView{ name, value });
+    }
+    return out;
+}
+
+// Commit staged changes in one transaction-like call
+static bool save_staged_transactional(Console& con, xbase::DbArea& area, const PendingEdits& staged) {
+    if (staged.empty()) return true;
+    std::vector<FieldUpdate> updates;
+    updates.reserve(staged.by_name.size());
+    for (const auto& kv : staged.by_name)
+        updates.push_back(FieldUpdate{ kv.first, kv.second });
+
+    std::string err;
+    const bool ok = cmd_REPLACE_MULTI(area, updates, &err);
+    if (!ok) {
+        const int y = con.size().rows - 1;
+        con.draw_text(0, y, "Error: " + err + " (press any key)", -1);
+        (void)con.get_key();
+    }
+    return ok;
+}
+
+// Simple list editor (one field per line)
+struct EditorState { int selected = 0; int scroll = 0; };
+
+static void render_editor(Console& con,
+                          const Size& term,
+                          int frame_l, int frame_t, int frame_w, int frame_h,
+                          xbase::DbArea& area,
+                          const EditorState& st,
+                          const PendingEdits& staged,
+                          const std::string& status)
+{
+    const int inner_w = frame_w - 2;
+    const int inner_h = frame_h - 2;
+
+    con.clear();
+    draw_color_bar(con, 0, term.cols, "EDIT RECORD",
+                   "ESC: Back  \xE2\x86\x91/\xE2\x86\x93: Move  Enter: Edit  Ctrl+S: Save  Home/End: Jump",
+                   SGR_HEADER_BAR);
+    con.draw_frame(frame_l, frame_t, frame_w, frame_h);
+
+    (void)area.readCurrent();
+    const auto& F = area.fields();
+    int total = static_cast<int>(F.size());
+    int y = frame_t + 1;
+    int visible = inner_h;
+    int start = std::min(st.scroll, std::max(0, total - visible));
+    int end = std::min(total, start + visible);
+
+    for (int i = start; i < end; ++i, ++y) {
+        const std::string& name = F[static_cast<size_t>(i)].name;
+        std::string val;
+        auto it = staged.by_name.find(name);
+        if (it != staged.by_name.end()) val = it->second;
+        else { val = area.get(i + 1); rtrim_inplace(val); }
+        std::string line = name + ": " + val;
+        if (static_cast<int>(line.size()) > inner_w) line.resize(static_cast<size_t>(inner_w));
+        if (i == st.selected) con.draw_text(frame_l + 1, y, std::string("\x1b[7m") + line + SGR_RESET, inner_w);
+        else                  con.draw_text(frame_l + 1, y, line, inner_w);
+    }
+
+    const int footer_y = term.rows - 1;
+    std::string foot = status;
+    if (!staged.empty()) foot += "  [staged: " + std::to_string(staged.count()) + "]";
+    if (static_cast<int>(foot.size()) < term.cols) foot.append(static_cast<size_t>(term.cols - static_cast<int>(foot.size())), ' ');
+    con.draw_text(0, footer_y, std::string(SGR_FOOTER_BAR) + foot + SGR_RESET);
+    std::cout.flush();
+}
+
+static void run_editor(Console& con, xbase::DbArea& area, PendingEdits& staged) {
+    std::string status = "Enter to stage a value, Ctrl+S to save, ESC to return.";
+    EditorState st{0,0};
+
+    for (;;) {
+        const Size term   = con.size();
+        const int  margin = 1;
+        const int  header_h = 2;
+        const int  footer_h = 1;
+        const int  frame_l  = margin;
+        const int  frame_t  = header_h + margin;
+        const int  frame_w  = std::max(40, term.cols - 2*margin);
+        const int  frame_h  = std::max(8,  term.rows - header_h - footer_h - 2*margin);
+
+        const auto& F = area.fields();
+        int total = static_cast<int>(F.size());
+        if (total <= 0) { status = "No fields."; }
+
+        st.selected = std::clamp(st.selected, 0, std::max(0, total - 1));
+        int inner_h = frame_h - 2;
+        if (st.selected < st.scroll) st.scroll = st.selected;
+        if (st.selected >= st.scroll + inner_h) st.scroll = st.selected - inner_h + 1;
+
+        render_editor(con, term, frame_l, frame_t, frame_w, frame_h, area, st, staged, status);
+
+        Key k = read_key(con);
+        if (k == Key::Esc || k == Key::Quit) {
+            if (!staged.empty()) {
+                const Size t = con.size();
+                bool yes = false;
+                if (prompt_yes_no(con, t.rows-1, t.cols, "Save changes?", yes)) {
+                    if (yes) {
+                        bool ok = save_staged_transactional(con, area, staged);
+                        if (!ok) { status = "Save failed."; std::cout << '\a'; }
+                        else { staged.clear(); status = "Saved."; }
+                    } else {
+                        staged.clear();
+                        status = "Changes discarded.";
+                    }
+                } else {
+                    continue; // canceled prompt
+                }
+            }
+            break;
+        }
+        switch (k) {
+            case Key::Up:
+                if (st.selected > 0) { st.selected--; if (st.selected < st.scroll) st.scroll = st.selected; }
+                else std::cout << '\a';
+                break;
+            case Key::Down:
+                if (st.selected + 1 < total) { st.selected++; if (st.selected >= st.scroll + inner_h) st.scroll++; }
+                else std::cout << '\a';
+                break;
+            case Key::Home: st.selected = 0; st.scroll = 0; break;
+            case Key::End:  st.selected = std::max(0, total - 1); st.scroll = std::max(0, total - inner_h); break;
+            case Key::CtrlS: {
+                if (staged.empty()) { status = "Nothing to save."; break; }
+                bool ok = save_staged_transactional(con, area, staged);
+                if (ok) { staged.clear(); status = "Saved."; }
+                else    { status = "Save failed."; std::cout << '\a'; }
+            } break;
+            case Key::Enter: {
+                if (st.selected >= 0 && st.selected < total) {
+                    const auto& fd   = F[static_cast<size_t>(st.selected)];
+                    const std::string fname = fd.name;
+                    const char ftype = fd.type;
+                    const int flen  = static_cast<int>(fd.length);
+                    const int fdec  = static_cast<int>(fd.decimals);
+
+                    std::string normalized;
+                    const Size t = con.size();
+                    if (!prompt_value_for_field(con, t.rows - 1, t.cols, area, st.selected, fname, ftype, flen, fdec, normalized)) {
+                        status = "Edit canceled.";
+                        break;
+                    }
+                    staged.by_name[fname] = normalized;
+                    status = "Staged " + fname + ".";
+                }
+            } break;
+            default: break;
+        }
+    }
+}
+
+// -----------------------------
+// Simple modals (LIST etc.)
+// -----------------------------
+static void show_modal(Console& con, const std::string& title,
+                       xbase::DbArea& area,
+                       void(*handler)(xbase::DbArea&, std::istringstream&),
+                       std::istringstream& args) {
+    con.clear();
+    const Size term = con.size();
+    draw_color_bar(con, 0, term.cols, title, "", SGR_HEADER_BAR);
+    con.draw_text(0, 2, "");
+    handler(area, args);
+    std::string hint = "Press any key to return.";
+    con.draw_text(0, term.rows - 1, std::string(SGR_FOOTER_BAR) + hint + SGR_RESET);
+    std::cout.flush();
+    (void)con.get_key();
+}
+
+// -----------------------------
+// TUI app
+// -----------------------------
+void cmd_BROWSETUI(xbase::DbArea& area, std::istringstream& iss) {
+    (void)iss;
+
+    std::unique_ptr<Console> con(make_console());
+    std::string status = "Ready.";
+    bool isFullScreen = false;
+
+    PendingEdits staged;
+
+    // Smaller centered window in windowed mode; fullscreen unchanged
+    auto render = [&](const std::string& footer_msg){
+        const Size term = con->size();
+
+        const bool isFull  = isFullScreen;
+        const int  header_h = isFull ? 1 : 3;   // 1 header line in fullscreen, 2+menu in windowed
+        const int  footer_h = 1;
+
+        int frame_l = 0, frame_t = 0, frame_w = 0, frame_h = 0;
+
+        if (isFull) {
+            const int margin = 0;
+            frame_l = margin;
+            frame_t = header_h + margin;
+            frame_w = std::max(40, term.cols - 2 * margin);
+            frame_h = std::max(8,  term.rows - header_h - footer_h - 2 * margin);
+        } else {
+            const int min_w = 60;
+            const int min_h = 12;
+
+            const int target_w = std::clamp(static_cast<int>(term.cols * 0.75), min_w, term.cols - 4);
+            const int target_h = std::clamp(static_cast<int>(term.rows * 0.75), min_h,
+                                            term.rows - header_h - footer_h - 2);
+
+            frame_w = target_w;
+            frame_h = target_h;
+
+            // center inside the content area under header / above footer
+            frame_l = std::max(0, (term.cols - frame_w) / 2);
+            const int content_rows = term.rows - header_h - footer_h;
+            frame_t = header_h + std::max(1, (content_rows - frame_h) / 2);
+        }
+
+        const int inner_w = frame_w - 2;
+        const int inner_h = frame_h - 2;
+
+        // ---- chrome ----
+        con->clear();
+        draw_color_bar(*con, 0, term.cols, "DotTalk++", "A TUI Database Shell", SGR_HEADER_BAR);
+        if (!isFull) draw_header_menu(*con, 1, term.cols);
+        con->draw_frame(frame_l, frame_t, frame_w, frame_h);
+
+        // ---- content ----
+        const int recno = area.isOpen() ? static_cast<int>(area.recno()) : 0;
+        auto fields = area.isOpen() ? collect_field_views_with_staged(area, staged)
+                                    : std::vector<FieldView>();
+        auto lines  = build_browse_lines(inner_w, inner_h, recno, fields);
+        for (int i = 0; i < inner_h && i < static_cast<int>(lines.size()); ++i) {
+            con->draw_text(frame_l + 1, frame_t + 1 + i, lines[static_cast<size_t>(i)], inner_w);
+        }
+
+        std::string foot = footer_msg;
+        if (!staged.empty()) foot += "  [modified]";
+        if (static_cast<int>(foot.size()) < term.cols)
+            foot.append(static_cast<size_t>(term.cols - static_cast<int>(foot.size())), ' ');
+        con->draw_text(0, term.rows - 1, std::string(SGR_FOOTER_BAR) + foot + SGR_RESET);
+        std::cout.flush();
+    };
+
+    auto maybe_save_staged = [&](bool navigating)->bool {
+        if (staged.empty()) return true;
+        const Size term = con->size();
+        bool yes = false;
+        std::string q = navigating ? "Save changes to this record before navigating?" : "Save changes before exit?";
+        if (!prompt_yes_no(*con, term.rows - 1, term.cols, q, yes)) return false;
+        if (yes) {
+            bool ok = save_staged_transactional(*con, area, staged);
+            if (!ok) { status = "Save failed."; std::cout << '\a'; return false; }
+            staged.clear();
+            status = "Saved.";
+        } else {
+            staged.clear();
+            status = "Changes discarded.";
+        }
+        return true;
+    };
+
+    render(status);
+
+    for (;;) {
+        Key k = read_key(*con);
+
+        if (k == Key::Esc || k == Key::Quit) {
+            if (!maybe_save_staged(false)) { render(status); continue; }
+            status = "Leaving BROWSE.";
+            render(status);
+            std::cout << "\n";
+            break;
+        }
+
+        const int total = area.isOpen() ? area.recCount() : 0;
+        int cur = get_current_recno_safe(area);
+
+        switch (k) {
+            case Key::F6: isFullScreen = !isFullScreen; break;
+
+            case Key::F1: { // Create
+                if (!maybe_save_staged(true)) { render(status); continue; }
+                const Size term = con->size();
+                std::string tableName, fieldSpec;
+                if (prompt_for_create_string(*con, term.rows - 1, term.cols, "CREATE table name: ", tableName)) {
+                    if (prompt_for_create_string(*con, term.rows - 1, term.cols, "CREATE field spec (e.g. NAME C(20)): ", fieldSpec)) {
+                        std::ostringstream ss_cmd;
+                        ss_cmd << tableName << " (" << fieldSpec << ")";
+                        std::istringstream s(ss_cmd.str());
+                        cmd_CREATE(area, s);
+                        status = "CREATE done.";
+                    } else status = "Create canceled.";
+                } else status = "Create canceled.";
+            } break;
+
+            case Key::F2:
+            case Key::D:
+            case Key::L: { // Display/List
+                if (!maybe_save_staged(true)) { render(status); continue; }
+                std::istringstream noargs;
+                show_modal(*con, "LIST/DISPLAY (Press any key)", area, cmd_LIST, noargs);
+                status = "Returned from LIST.";
+            } break;
+
+            case Key::F3:
+            case Key::E: { // Editor
+                if (!maybe_save_staged(true)) { render(status); continue; }
+                if (!area.isOpen()) { status = "No table open."; break; }
+                run_editor(*con, area, staged);
+                status = "Returned from EDIT.";
+            } break;
+
+            case Key::F4: { // Delete current
+                if (!maybe_save_staged(true)) { render(status); continue; }
+                if (!area.isOpen()) { status = "No table open."; break; }
+                std::istringstream s("DELETE");
+                cmd_DELETE(area, s);
+                status = "Deleted (if possible).";
+            } break;
+
+            case Key::F5: { // Append blank
+                if (!maybe_save_staged(true)) { render(status); continue; }
+                if (!area.isOpen()) { status = "No table open."; break; }
+                std::istringstream s("APPEND BLANK");
+                cmd_APPEND(area, s);
+                status = "Appended blank.";
+            } break;
+
+            case Key::CtrlS: {
+                if (staged.empty()) { status = "Nothing to save."; break; }
+                bool ok = save_staged_transactional(*con, area, staged);
+                if (ok) { staged.clear(); status = "Saved."; }
+                else    { status = "Save failed."; std::cout << '\a'; }
+            } break;
+
+            case Key::Up: {
+                if (total <= 0) { status = "No file open."; break; }
+                if (!maybe_save_staged(true)) { break; }
+                int target = std::max(1, cur - 1);
+                if (target != cur) {
+                    std::istringstream s(std::to_string(target));
+                    cmd_GOTO(area, s);
+                    staged.clear();
+                } else std::cout << '\a';
+                status = "REC " + std::to_string(get_current_recno_safe(area)) + " / " + std::to_string(total);
+            } break;
+
+            case Key::Down: {
+                if (total <= 0) { status = "No file open."; break; }
+                if (!maybe_save_staged(true)) { break; }
+                int target = std::min(total, cur + 1);
+                if (target != cur) {
+                    std::istringstream s(std::to_string(target));
+                    cmd_GOTO(area, s);
+                    staged.clear();
+                } else std::cout << '\a';
+                status = "REC " + std::to_string(get_current_recno_safe(area)) + " / " + std::to_string(total);
+            } break;
+
+            case Key::PageUp: {
+                if (total <= 0) { status = "No file open."; break; }
+                if (!maybe_save_staged(true)) { break; }
+                const int pageSize = (con->size().rows - 4) - 2;
+                int target = std::max(1, cur - pageSize);
+                if (target != cur) {
+                    std::istringstream s(std::to_string(target));
+                    cmd_GOTO(area, s);
+                    staged.clear();
+                } else std::cout << '\a';
+                status = "REC " + std::to_string(get_current_recno_safe(area)) + " / " + std::to_string(total);
+            } break;
+
+            case Key::PageDown: {
+                if (total <= 0) { status = "No file open."; break; }
+                if (!maybe_save_staged(true)) { break; }
+                const int pageSize = (con->size().rows - 4) - 2;
+                int target = std::min(total, cur + pageSize);
+                if (target != cur) {
+                    std::istringstream s(std::to_string(target));
+                    cmd_GOTO(area, s);
+                    staged.clear();
+                } else std::cout << '\a';
+                status = "REC " + std::to_string(get_current_recno_safe(area)) + " / " + std::to_string(total);
+            } break;
+
+            case Key::Home: {
+                if (!maybe_save_staged(true)) { break; }
+                std::istringstream s;
+                cmd_TOP(area, s);
+                staged.clear();
+                status = "Top. REC " + std::to_string(get_current_recno_safe(area)) + " / " + std::to_string(total);
+            } break;
+
+            case Key::End: {
+                if (!maybe_save_staged(true)) { break; }
+                std::istringstream s;
+                cmd_BOTTOM(area, s);
+                staged.clear();
+                status = "Bottom. REC " + std::to_string(get_current_recno_safe(area)) + " / " + std::to_string(total);
+            } break;
+
+            case Key::G: {
+                const Size term = con->size();
+                int target = 0;
+                if (prompt_goto(*con, term.rows - 1, term.cols, target)) {
+                    if (total > 0) {
+                        if (!maybe_save_staged(true)) { break; }
+                        target = std::clamp(target, 1, total);
+                        std::istringstream s(std::to_string(target));
+                        cmd_GOTO(area, s);
+                        staged.clear();
+                        status = "REC " + std::to_string(get_current_recno_safe(area)) + " / " + std::to_string(total);
+                    } else status = "No file open.";
+                } else status = "Goto canceled.";
+            } break;
+
+            case Key::Help:
+                status = "↑/↓ prev/next | PgUp/PgDn | Home/End | G goto | L list | E edit | Ctrl+S save | F6 fullscreen | Esc quit";
+                break;
+
+            default: break;
+        }
+        render(status);
+    }
+}
+
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_clear.cpp ---
 
 // src/cli/cmd_clear.cpp
@@ -2368,11 +4444,15 @@ void cmd_CLEAR(xbase::DbArea& /*a*/, std::istringstream& /*iss*/) {
 #include <iostream>
 #include "xbase.hpp"
 #include "order_state.hpp"   // for orderstate::clearOrder
+#include "cli/memo_auto.hpp" // <-- memo sidecar binder
 
 // NOTE: must be in the global namespace, not static, exact signature:
 void cmd_CLOSE(xbase::DbArea& a, std::istringstream& iss)
 {
     (void)iss; // unused
+    // Detach memo sidecar bound to this work area (mirrors index close-on-close)
+    cli_memo::memo_auto_on_close(a);
+
     try {
         orderstate::clearOrder(a);  // ok if there's no active order
     } catch (...) {
@@ -2629,116 +4709,222 @@ void cmd_COUNT(xbase::DbArea& A, std::istringstream& iss) {
 
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_create.cpp ---
 
+// src/cli/cmd_create.cpp
 #include "xbase.hpp"
+#include "order_state.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <ctime>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
-#include "order_state.hpp"
 
-// very small parser for: CREATE <name> (<fields...>)
-// expects fields already parsed elsewhere in your file; if not, we do a minimal one.
-static bool parse_field_list(std::istringstream& args, std::vector<xbase::FieldDef>& out, std::string& tableName)
-{
-    // Table name
-    if (!(args >> tableName)) return false;
+namespace {
 
-    // Expect '('
-    char ch;
-    if (!(args >> ch) || ch != '(') return false;
+// ---- tiny utils ----
+static std::string trim(std::string s) {
+    auto sp = [](unsigned char c){ return c==' '||c=='\t'||c=='\r'||c=='\n'; };
+    while (!s.empty() && sp((unsigned char)s.front())) s.erase(s.begin());
+    while (!s.empty() && sp((unsigned char)s.back()))  s.pop_back();
+    return s;
+}
+static std::string to_upper(std::string s){
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return (char)std::toupper(c); });
+    return s;
+}
+static inline void put_u16(std::ostream& o, uint16_t v) {
+    o.put((char)(v & 0xFF)); o.put((char)((v >> 8) & 0xFF));
+}
+static inline void put_u32(std::ostream& o, uint32_t v) {
+    o.put((char)(v & 0xFF)); o.put((char)((v >> 8) & 0xFF));
+    o.put((char)((v >> 16) & 0xFF)); o.put((char)((v >> 24) & 0xFF));
+}
+static std::string replace_ext_local(const std::string& p, const char* newext){
+    auto dot = p.find_last_of('.');
+    if (dot == std::string::npos) return p + newext;
+    return p.substr(0, dot) + newext;
+}
 
-    // Parse items like: NAME C(20), AGE N(5[,2]) ...
-    // This is intentionally permissive and minimal.
-    while (true) {
-        // read field name
-        std::string fname;
-        if (!(args >> fname)) return false;
+// ---- in-file field spec we control ----
+struct FieldSpec { std::string name; char type{}; uint8_t len{0}; uint8_t dec{0}; };
 
-        // type letter
-        char type;
-        if (!(args >> type)) return false;
-
-        // '(' len [ , dec ] ')'
-        if (!(args >> ch) || ch != '(') return false;
-
-        int len = 0, dec = 0;
-        args >> len;
-
-        if (args.peek() == ',') {
-            args.get(); // consume ','
-            args >> dec;
+// split top-level by ',' or ';'
+static std::vector<std::string> split_top(const std::string& inside) {
+    std::vector<std::string> out;
+    int depth = 0; size_t start = 0;
+    for (size_t i=0;i<inside.size();++i){
+        char c = inside[i];
+        if (c=='(') ++depth;
+        else if (c==')' && depth>0) --depth;
+        else if ((c==',' || c==';') && depth==0) {
+            out.emplace_back(trim(inside.substr(start, i-start)));
+            start = i+1;
         }
-        if (!(args >> ch) || ch != ')') return false;
-
-        out.push_back(xbase::FieldDef{fname, type, static_cast<uint8_t>(len), static_cast<uint8_t>(dec)});
-
-        // delimiter or end ')'
-        // consume optional comma
-        while (std::isspace(args.peek())) args.get();
-        if (args.peek() == ',') { args.get(); continue; }
-
-        // Look ahead for ')'
-        while (std::isspace(args.peek())) args.get();
-        if (args.peek() == ')') { args.get(); break; }
-
-        // If neither comma nor ')', we assume more fields until ')'
     }
+    if (start < inside.size()) out.emplace_back(trim(inside.substr(start)));
+    return out;
+}
+
+// parse "NAME C(20)" | "GPA N(3,2)" | "BIRTHDATE D" | "ACTIVE L" | "NOTES M"
+static bool parse_one(const std::string& part, FieldSpec& fs){
+    std::istringstream ps(part);
+    std::string fname, typeAndParams;
+    if (!(ps >> fname >> typeAndParams)) return false;
+    if (fname.empty() || typeAndParams.empty()) return false;
+
+    fs.name = fname;
+    char T = (char)std::toupper((unsigned char)typeAndParams[0]);
+
+    // pull "(...)" if present
+    std::string params;
+    auto lp = typeAndParams.find('(');
+    if (lp != std::string::npos) {
+        auto rp = typeAndParams.find_last_of(')');
+        if (rp == std::string::npos || rp < lp) return false;
+        params = typeAndParams.substr(lp+1, rp-lp-1);
+    }
+
+    fs.type = T;
+    fs.dec  = 0;
+
+    if (T=='C') {
+        if (params.empty()) return false;
+        fs.len = (uint8_t)std::stoi(params);
+        if (fs.len == 0) return false;
+    } else if (T=='N') {
+        if (params.empty()) return false;
+        auto comma = params.find(',');
+        if (comma == std::string::npos) {
+            fs.len = (uint8_t)std::stoi(params);
+            fs.dec = 0;
+        } else {
+            fs.len = (uint8_t)std::stoi(params.substr(0, comma));
+            fs.dec = (uint8_t)std::stoi(params.substr(comma+1));
+        }
+        if (fs.len == 0 || fs.dec > fs.len) return false;
+    } else if (T=='D') { fs.len = 8; }
+    else if (T=='L')   { fs.len = 1; }
+    else if (T=='M')   { fs.len = 10; } // memo pointer in DBF
+    else return false;
 
     return true;
 }
 
-// CREATE command
+// parse CREATE args into (tableName, fields)
+static bool parse_field_list(std::istringstream& args, std::vector<FieldSpec>& out, std::string& tableName) {
+    if (!(args >> tableName)) return false;
+
+    char ch;
+    if (!(args >> ch) || ch != '(') return false;
+
+    std::string inside; int depth = 1; char c;
+    while (args.get(c)) {
+        if (c=='(') ++depth;
+        else if (c==')') { if (--depth==0) break; }
+        inside.push_back(c);
+    }
+    if (depth != 0) return false;
+
+    auto parts = split_top(inside);
+    out.clear();
+    for (auto& p : parts) {
+        if (p.empty()) continue;
+        FieldSpec fs;
+        if (!parse_one(p, fs)) return false;
+        out.push_back(fs);
+    }
+    return !out.empty();
+}
+
+// write a minimal dBASE III header; create .dbt if any memo fields
+static bool create_dbf_basic(const std::string& path, const std::vector<FieldSpec>& fields) {
+    bool hasMemo = false;
+    uint16_t recLen = 1; // delete flag
+    for (auto& f : fields) {
+        recLen += f.len;
+        if (f.type == 'M') hasMemo = true;
+    }
+    uint16_t hdrLen = (uint16_t)(32 + fields.size()*32 + 1);
+
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+
+    // --- 32-byte file header ---
+    out.put(hasMemo ? (char)0x83 : (char)0x03); // version
+    std::time_t t = std::time(nullptr); std::tm lt{};
+    #if defined(_WIN32)
+      localtime_s(&lt, &t);
+    #else
+      lt = *std::localtime(&t);
+    #endif
+    out.put((char)lt.tm_year);              // years since 1900
+    out.put((char)(lt.tm_mon + 1));         // month
+    out.put((char)lt.tm_mday);              // day
+    put_u32(out, 0);                        // record count
+    put_u16(out, hdrLen);                   // header length
+    put_u16(out, recLen);                   // record length
+    for (int i=0;i<20;++i) out.put(0);      // reserved
+
+    // --- field descriptors: 32 bytes each ---
+    for (auto& f : fields) {
+        char name11[11] = {0};
+        std::string fn = f.name; if (fn.size() > 11) fn.resize(11);
+        std::memcpy(name11, fn.c_str(), fn.size());
+        out.write(name11, 11);              // name[11]
+        out.put((char)f.type);              // type
+        put_u32(out, 0);                    // data address (unused here)
+        out.put((char)f.len);               // length
+        out.put((char)f.dec);               // decimal count
+        // the next 14 bytes are reserved in many minimal structs; zero them
+        for (int i=0;i<14;++i) out.put(0);
+    }
+    out.put((char)0x0D);                    // header terminator
+    out.close();
+
+    if (hasMemo) {
+        std::string dbt = replace_ext_local(path, ".dbt");
+        std::ofstream m(dbt, std::ios::binary | std::ios::trunc);
+        if (!m) return false;
+        uint32_t next = 1;                  // next free block
+        m.write(reinterpret_cast<const char*>(&next), 4);
+        // pad first block to 512 bytes
+        m.seekp(512 - 1); char z = 0; m.write(&z, 1);
+        m.close();
+    }
+    return true;
+}
+
+} // namespace
+
+// public entry point
 void cmd_CREATE(xbase::DbArea& area, std::istringstream& args)
 {
-    std::vector<xbase::FieldDef> fields;
-    std::string tableName;
-
-//  If a table is open, close it so CREATE can proceed.
-//    if (a.isOpen()) {
-//       orderstate::clearOrder(a); // drop any active index
-//       a.close();
-//    }
-
-// If a table is open, close it so CREATE can proceed.
-    if (area.isOpen()) {                 // <-- or 'a.isOpen()' if your param is 'a'
-       orderstate::clearOrder(area);    // <-- or 'a'
-       area.close();                    // <-- or 'a'
-    }
-
-    if (!parse_field_list(args, fields, tableName)) {
-        std::cout << "CREATE <name> (<FIELD TYPE(len[,dec]) ...>)\n";
+    std::vector<FieldSpec> fields;
+    std::string table;
+    if (!parse_field_list(args, fields, table)) {
+        std::cout << "CREATE <name> (<FIELD TYPE(len[,dec]) ...>)\n"
+                  << "Types: C(n), N(n[,d]), D, L, M\n";
         return;
     }
 
-    // Resolve final on-disk name once; other code in this file may refer to it.
-    const std::string outPathString = xbase::dbNameWithExt(tableName);
+    if (area.isOpen()) { orderstate::clearOrder(area); area.close(); }
 
-    try {
-        // Close any open table, then create a new one.
-        area.close();
+    // Use your helper (present in your tree) to normalize extension.
+    const std::string path = xbase::dbNameWithExt(table);
 
-        // Your project likely has create logic inside DbArea::open when file doesn't exist,
-        // or a separate helper. Use what you already had; otherwise, call a helper here.
-        // Minimal approach: open will create if not exists (adapt to your code).
-        // If you have a dedicated "create DBF" routine, call it before open.
-
-        // --- BEGIN: minimal create path ---
-        // If your code needs a creation API, replace this block with it.
-        // We reuse open() to create new file schema via internal code.
-        // (You already had CREATE working earlier; keep your existing creation code
-        // and just make sure it uses 'outPathString' and the 'fields' vector.)
-        // --- END: minimal create path ---
-
-        // Open newly-created file
-        area.open(outPathString);
-
-        std::cout << "Created " << outPathString
-                  << " with " << fields.size() << " field(s).\n";
-        std::cout << "Opened " << area.filename()
-                  << " with " << area.recCount() << " records.\n";
-    } catch (const std::exception& e) {
-        std::cout << "CREATE failed: " << e.what() << "\n";
+    if (!create_dbf_basic(path, fields)) {
+        std::cout << "CREATE failed: could not write file\n"; return;
     }
+    area.open(path);
+
+    bool hasMemo = std::any_of(fields.begin(), fields.end(), [](const FieldSpec& f){ return f.type=='M'; });
+    std::cout << "Created " << path << (hasMemo ? " (+ .dbt)" : "") << "\n";
+    std::cout << "Opened "  << area.filename() << " with " << area.recCount() << " records.\n";
 }
 
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_delete.cpp ---
@@ -2987,35 +5173,141 @@ void cmd_DIR(xbase::DbArea&, std::istringstream& iss) {
 
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_display.cpp ---
 
-#include <iostream>
-#include <sstream>
-#include <fstream>
+// src/cli/cmd_display.cpp
+// DotTalk++ — DISPLAY [<recno>]  (shows current or specified record; includes MEMO text)
 #include "xbase.hpp"
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <filesystem>
 
-static bool current_is_deleted(const xbase::DbArea& a) {
-    if (!a.recno()) return false;
-    std::ifstream in(a.name(), std::ios::binary);
-    if (!in) return false;
-    xbase::HeaderRec hdr{};
-    in.read(reinterpret_cast<char*>(&hdr), sizeof(hdr));
-    if (!in) return false;
-    std::streampos pos = hdr.data_start + static_cast<std::streamoff>((a.recno()-1) * a.cpr());
-    in.seekg(pos, std::ios::beg);
-    char flag = ' ';
-    in.read(&flag, 1);
-    return in && flag == xbase::IS_DELETED;
+using namespace xbase;
+
+namespace {
+    struct FieldMeta { std::string name; char type{}; int length{0}; int decimal{0}; size_t offset{0}; };
+
+    static std::string trim(std::string s){
+        auto issp=[](unsigned char c){return c==' '||c=='\t'||c=='\r'||c=='\n';};
+        while(!s.empty()&&issp((unsigned char)s.front())) s.erase(s.begin());
+        while(!s.empty()&&issp((unsigned char)s.back()))  s.pop_back();
+        return s;
+    }
+    static std::string up(std::string s){ std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return (char)std::toupper(c); }); return s; }
+
+    static bool read_header_and_fields(const DbArea& a, HeaderRec& hdr, std::vector<FieldMeta>& metas){
+        std::ifstream in(a.name(), std::ios::binary); if(!in) return false;
+        in.read(reinterpret_cast<char*>(&hdr), sizeof(hdr)); if(!in) return false;
+        metas.clear(); size_t offset=0;
+        for(;;){
+            FieldRec fr{}; in.read(reinterpret_cast<char*>(&fr), sizeof(fr)); if(!in) return false;
+            if((unsigned char)fr.field_name[0]==0x0D) break;
+            char namebuf[12]; std::memcpy(namebuf, fr.field_name, 11); namebuf[11]='\0';
+            FieldMeta m; m.name=trim(std::string(namebuf)); m.type=fr.field_type;
+            m.length=(int)fr.field_length; m.decimal=(int)fr.decimal_places; m.offset=offset;
+            metas.push_back(m); offset+= (size_t)m.length; if(metas.size()>1024) break;
+        }
+        return true;
+    }
+
+    static std::string dbt_path_from_dbf(const std::string& dbf) {
+        std::filesystem::path p(dbf); p.replace_extension(".dbt"); return p.string();
+    }
+    static uint32_t le32(const unsigned char* p){
+        return (uint32_t)p[0] | ((uint32_t)p[1]<<8) | ((uint32_t)p[2]<<16) | ((uint32_t)p[3]<<24);
+    }
+
+    // Read memo text from .DBT at starting block. Returns empty string on missing/invalid.
+    static std::string dbt_read_text(const std::string& dbtPath, uint32_t startBlock) {
+        const size_t BlockSize = 512;
+        if (startBlock == 0) return std::string();
+        std::ifstream in(dbtPath, std::ios::binary);
+        if (!in) return std::string();
+        // Seek to beginning of the block
+        in.seekg((std::streamoff)startBlock * (std::streamoff)BlockSize, std::ios::beg);
+        if (!in) return std::string();
+
+        // Read blocks progressively until we see 0x1A terminator or EOF.
+        std::string result;
+        std::vector<char> buf(BlockSize);
+        for (int blocks = 0; blocks < 4096; ++blocks) { // sanity limit
+            in.read(buf.data(), (std::streamsize)buf.size());
+            std::streamsize got = in.gcount();
+            if (got <= 0) break;
+            // Find 0x1A
+            auto it = std::find(buf.begin(), buf.begin()+got, (char)0x1A);
+            if (it != buf.begin()+got) {
+                result.append(buf.begin(), it);
+                break;
+            }
+            result.append(buf.begin(), buf.begin()+got);
+            if (got < (std::streamsize)buf.size()) break; // short read at end-of-file
+        }
+        // trim trailing \r or \n that may precede terminator (cosmetic)
+        while (!result.empty() && (result.back()=='\r' || result.back()=='\n')) result.pop_back();
+        return result;
+    }
 }
 
-void cmd_DISPLAY(xbase::DbArea& a, std::istringstream& iss) {
-    (void)iss;
-    if (!a.isOpen()) { std::cout << "No file open\n"; return; }
-    if (!a.recno())  { std::cout << "No current record\n"; return; }
-    const auto& fds = a.fields();
-    bool del = current_is_deleted(a);
-    std::cout << "Record " << a.recno() << (del ? " [DELETED]" : "") << "\n";
-    for (int i=1; i<=a.fieldCount(); ++i) {
-        const auto& f = fds[static_cast<size_t>(i-1)];
-        std::cout << "  " << f.name << " = " << a.get(i) << "\n";
+void cmd_DISPLAY(DbArea& a, std::istringstream& iss)
+{
+    if(!a.isOpen()){ std::cout<<"No table open.\n"; return; }
+
+    long want = 0;
+    if (iss >> want) {
+        if (want < 1 || want > (long)a.recCount()) { std::cout<<"Invalid record number.\n"; return; }
+        try { a.gotoRec((size_t)want); } catch(...) {}
+    }
+    const long rec = a.recno();
+    if(rec<=0 || rec>(long)a.recCount()){ std::cout<<"Invalid current record.\n"; return; }
+
+    HeaderRec hdr{}; std::vector<FieldMeta> metas;
+    if(!read_header_and_fields(a, hdr, metas)){ std::cout<<"Failed to read header\n"; return; }
+
+    std::ifstream dbf(a.name(), std::ios::binary);
+    if(!dbf){ std::cout<<"Open failed.\n"; return; }
+
+    std::cout<<"Record "<<rec<<"\n";
+
+    // position at start of record data (skip delete flag)
+    std::streampos base = (std::streampos)hdr.data_start
+                        + (std::streamoff)((rec-1)*hdr.cpr)
+                        + std::streamoff(1);
+
+    for (const auto& m : metas) {
+        dbf.seekg(base + (std::streamoff)m.offset, std::ios::beg);
+
+        if (m.type == 'M') {
+            unsigned char ptr[10]{};
+            dbf.read(reinterpret_cast<char*>(ptr), sizeof ptr);
+            uint32_t startBlock = le32(ptr);
+            std::string memo = dbt_read_text(dbt_path_from_dbf(a.name()), startBlock);
+            std::cout<<"  "<<m.name<<" = "<<memo<<"\n";
+            continue;
+        }
+
+        std::string cell((size_t)m.length, ' ');
+        dbf.read(cell.data(), (std::streamsize)cell.size());
+        // pretty-print per type
+        if (m.type=='C') {
+            std::cout<<"  "<<m.name<<" = "<<trim(cell)<<"\n";
+        } else if (m.type=='N') {
+            std::string s = trim(cell);
+            std::cout<<"  "<<m.name<<" = "<<s<<"\n";
+        } else if (m.type=='L') {
+            char c = cell.empty() ? ' ' : cell[0];
+            std::cout<<"  "<<m.name<<" = "<<(c=='T'?'T':(c=='F'?'F':' '))<<"\n";
+        } else if (m.type=='D') {
+            std::string ymd = cell.size()>=8 ? cell.substr(0,8) : std::string();
+            std::cout<<"  "<<m.name<<" = "<<ymd<<"\n";
+        } else {
+            std::cout<<"  "<<m.name<<" = "<<trim(cell)<<"\n";
+        }
     }
 }
 
@@ -3503,6 +5795,22 @@ void cmd_DUMP(DbArea& a, std::istringstream& iss)
         print_record_vertical(in, recPos, cpr, metas, wantIdx, labelW, r, /*showDelFlag=*/true);
         ++shown;
     }
+}
+
+// --- File: C:\Users\deral\code\ccode\src\cli\cmd_echo.cpp ---
+
+// src/cli/cmd_echo.cpp
+#include "xbase.hpp"
+#include <sstream>
+#include <iostream>
+
+// ECHO just prints the rest of the line verbatim.
+void cmd_ECHO(xbase::DbArea&, std::istringstream& iss) {
+    std::string rest;
+    std::getline(iss, rest);
+    if (!rest.empty() && rest.front() == ' ')
+        rest.erase(0, 1);
+    std::cout << rest << std::endl;
 }
 
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_edit.cpp ---
@@ -5048,14 +7356,14 @@ void cmd_REINDEX(xbase::DbArea& a, std::istringstream&) {
 #include <cstring>
 #include <iomanip>
 #include <cmath>
+#include <filesystem>
 
 using namespace xbase;
 
 namespace {
     struct FieldMeta { std::string name; char type{}; int length{0}; int decimal{0}; size_t offset{0}; };
 
-    static std::string up(std::string s){ std::transform(s.begin(), s.end(), s.begin(),
-        [](unsigned char c){ return (char)std::toupper(c); }); return s; }
+    static std::string up(std::string s){ std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return (char)std::toupper(c); }); return s; }
     static std::string trim(std::string s){
         auto issp=[](unsigned char c){return c==' '||c=='\t'||c=='\r'||c=='\n';};
         while(!s.empty()&&issp((unsigned char)s.front())) s.erase(s.begin());
@@ -5069,7 +7377,18 @@ namespace {
         if(s.size()>=2 && ((s.front()=='"'&&s.back()=='"')||(s.front()=='\''&&s.back()=='\''))) s=s.substr(1,s.size()-2);
         return s;
     }
-
+    // strip trailing inline FoxPro-style comments (&& ...) outside quotes
+    static std::string strip_inline_comments_value(std::string s) {
+        bool inq=false; char q=0;
+        for (size_t i=0;i<s.size();++i) {
+            if (!inq && i+1<s.size() && s[i]=='&' && s[i+1]=='&') { s.resize(i); break; }
+            if (s[i]=='"' || s[i]=='\'') {
+                if (inq && s[i]==q) inq=false;
+                else if (!inq) { inq=true; q=s[i]; }
+            }
+        }
+        return s;
+    }
     static bool parse_logical(std::string s, char& outTF){
         s=strip_quotes(s); s=up(trim(s));
         if(s.empty()||s=="BLANK"||s=="NULL"){ outTF=' '; return true; }
@@ -5135,6 +7454,54 @@ namespace {
         }
         return out;
     }
+
+    static std::string dbt_path_from_dbf(const std::string& dbf) {
+        std::filesystem::path p(dbf); p.replace_extension(".dbt"); return p.string();
+    }
+    static void write_le32(char* dst, uint32_t v) {
+        dst[0] = (char)(v & 0xFF);
+        dst[1] = (char)((v >> 8) & 0xFF);
+        dst[2] = (char)((v >> 16) & 0xFF);
+        dst[3] = (char)((v >> 24) & 0xFF);
+    }
+
+    // Append text to .DBT (dBASE III/IV), return starting block; 0 on failure.
+    static uint32_t dbt_append_text(const std::string& dbtPath, const std::string& text) {
+        const size_t BlockSize = 512;
+        // ensure file & 1 block header
+        {
+            std::fstream init(dbtPath, std::ios::in|std::ios::out|std::ios::binary);
+            if (!init) {
+                std::ofstream create(dbtPath, std::ios::binary);
+                std::string hdr(BlockSize, '\0');
+                create.write(hdr.data(), hdr.size());
+            } else {
+                init.seekp(0, std::ios::end);
+                auto sz = (size_t)init.tellp();
+                if (sz < BlockSize) {
+                    std::string pad(BlockSize - sz, '\0');
+                    init.write(pad.data(), pad.size());
+                }
+            }
+        }
+        std::fstream io(dbtPath, std::ios::in|std::ios::out|std::ios::binary);
+        if (!io) return 0;
+        io.seekp(0, std::ios::end);
+        auto fileSize = (uint64_t)io.tellp();
+        uint32_t startBlock = (uint32_t)(fileSize / BlockSize);
+        if (startBlock == 0) startBlock = 1; // data starts at block 1
+
+        std::string payload = text;
+        payload.push_back(0x1A); // terminator
+        size_t rem = payload.size() % BlockSize;
+        if (rem) payload.append(BlockSize - rem, '\0');
+
+        io.seekp((std::streamoff)startBlock * (std::streamoff)BlockSize, std::ios::beg);
+        io.write(payload.data(), (std::streamsize)payload.size());
+        io.flush();
+        if (!io) return 0;
+        return startBlock;
+    }
 } // namespace
 
 void cmd_REPLACE(DbArea& a, std::istringstream& iss)
@@ -5148,6 +7515,7 @@ void cmd_REPLACE(DbArea& a, std::istringstream& iss)
     if(iss>>maybeWith){ if(up(maybeWith)!="WITH"){ iss.clear(); iss.seekg(afterFieldPos); } }
 
     std::string rest; std::getline(iss, rest);
+    rest = strip_inline_comments_value(rest);
     std::string value=trim(rest);
     if(value.empty()){ std::cout<<"Usage: REPLACE <field> WITH <value>\n"; return; }
 
@@ -5158,9 +7526,39 @@ void cmd_REPLACE(DbArea& a, std::istringstream& iss)
     if(fi<0){ std::cout<<"Unknown field: "<<field<<"\n"; return; }
     const auto& m = metas[fi];
 
-    // Guard: MEMO not supported
-    if(m.type=='M'){ std::cout<<"Cannot REPLACE MEMO field: "<<m.name<<"\n"; return; }
+    const long rec = a.recno();
+    std::streampos pos = (std::streampos)hdr.data_start
+                       + (std::streamoff)((rec-1)*hdr.cpr)
+                       + std::streamoff(1)
+                       + (std::streamoff)m.offset;
 
+    // MEMO path
+    if (m.type=='M') {
+        std::string vup = up(strip_quotes(value));
+        bool clear = vup.empty() || vup=="BLANK" || vup=="NULL";
+
+        std::fstream io(a.name(), std::ios::in|std::ios::out|std::ios::binary);
+        if(!io){ std::cout<<"Open failed: cannot write file\n"; return; }
+
+        char memoPtr[10]{}; // first 4 bytes little-endian start block, rest zero
+        uint32_t block = 0;
+        if (!clear) {
+            std::string memoText = strip_quotes(value);
+            block = dbt_append_text(dbt_path_from_dbf(a.name()), memoText);
+            if (block == 0) { std::cout<<"Memo write failed.\n"; return; }
+            write_le32(memoPtr, block);
+        }
+        io.seekp(pos, std::ios::beg);
+        io.write(memoPtr, sizeof memoPtr);
+        io.flush();
+        if(!io){ std::cout<<"Write failed.\n"; return; }
+
+        std::cout<<"Replaced MEMO "<<m.name<<" at recno "<<rec<<" (block "<<block<<").\n";
+        try{ a.gotoRec(rec); }catch(...) {}
+        return;
+    }
+
+    // non-MEMO path
     bool ok=false; std::string cell = format_value(m, value, ok);
     if(!ok){
         std::cout<<"Value not valid for field "<<m.name
@@ -5169,16 +7567,8 @@ void cmd_REPLACE(DbArea& a, std::istringstream& iss)
                  <<")\n";
         return;
     }
-
     std::fstream io(a.name(), std::ios::in|std::ios::out|std::ios::binary);
     if(!io){ std::cout<<"Open failed: cannot write file\n"; return; }
-
-    const long rec = a.recno();
-    std::streampos pos = (std::streampos)hdr.data_start
-                       + (std::streamoff)((rec-1)*hdr.cpr)
-                       + std::streamoff(1) // delete flag
-                       + (std::streamoff)m.offset;
-
     io.seekp(pos, std::ios::beg);
     io.write(cell.data(), (std::streamsize)cell.size());
     io.flush();
@@ -5186,6 +7576,183 @@ void cmd_REPLACE(DbArea& a, std::istringstream& iss)
 
     std::cout<<"Replaced "<<m.name<<" at recno "<<rec<<".\n";
     try{ a.gotoRec(rec); }catch(...) {}
+}
+
+// --- File: C:\Users\deral\code\ccode\src\cli\cmd_replace_multi.cpp ---
+
+// src/cli/cmd_replace_multi.cpp
+//
+// Transactional multi-field REPLACE with centralized validation.
+// - Validates each field against schema and DbArea::trySet (dry-run)
+// - Normalizes/quotes values per FoxPro-ish rules (C/M quoted, N/L/D unquoted where appropriate)
+// - Builds ONE REPLACE statement and invokes existing cmd_REPLACE
+// - On failure, returns false with an explanatory error string
+
+#include <string>
+#include <vector>
+#include <sstream>
+#include <algorithm>
+#include <cctype>
+
+#include "xbase.hpp"
+#include "command_registry.hpp"
+
+// Bring in your single-field CLI handler so we can reuse it:
+extern void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
+
+// Also notify indexes after mutation (wired in your tree):
+void order_notify_mutation(xbase::DbArea&) noexcept;
+
+// --- From your bt code ---
+struct FieldUpdate { std::string name; std::string value; };
+
+// Small helpers
+static inline std::string up(const std::string& s) {
+    std::string t; t.reserve(s.size());
+    for (unsigned char c : s) t.push_back((char)std::toupper(c));
+    return t;
+}
+static inline void rtrim(std::string& s) {
+    while (!s.empty() && std::isspace((unsigned char)s.back())) s.pop_back();
+}
+static inline std::string trimmed(std::string s) { rtrim(s); return s; }
+
+static std::string escape_quotes(const std::string& in) {
+    std::string out; out.reserve(in.size()*2);
+    for (char c : in) {
+        if (c == '"') out.push_back('\\');
+        out.push_back(c);
+    }
+    return out;
+}
+
+// Normalize DATE: accept YYYYMMDD, YYYY-MM-DD, MM/DD/YYYY -> YYYYMMDD (empty on failure)
+static std::string normalize_date(const std::string& in) {
+    std::string digits;
+    for (char c : in) if (std::isdigit((unsigned char)c)) digits.push_back(c);
+    if (digits.size() == 8) {
+        auto y = digits.substr(0,4), m = digits.substr(4,2), d = digits.substr(6,2);
+        int mi = std::atoi(m.c_str()), di = std::atoi(d.c_str());
+        if (mi>=1 && mi<=12 && di>=1 && di<=31) return y+m+d; // YYYYMMDD
+        // try MMDDYYYY
+        auto m2 = digits.substr(0,2), d2 = digits.substr(2,2), y2 = digits.substr(4,4);
+        mi = std::atoi(m2.c_str()); di = std::atoi(d2.c_str());
+        if (mi>=1 && mi<=12 && di>=1 && di<=31) return y2+m2+d2;
+    }
+    return {};
+}
+
+// Normalize numeric with length/decimals constraints (empty on failure)
+static std::string normalize_numeric(const std::string& in, int length, int decimals) {
+    std::string s; s.reserve(in.size());
+    bool seen_dot = false;
+    for (char c : in) {
+        if ((c=='-' && s.empty()) || std::isdigit((unsigned char)c)) { s.push_back(c); continue; }
+        if (decimals > 0 && c == '.' && !seen_dot) { seen_dot = true; s.push_back('.'); continue; }
+        if (std::isspace((unsigned char)c)) continue;
+        return {};
+    }
+    if (s.empty() || s=="-" || s==".") return {};
+    if (decimals == 0) {
+        auto dot = s.find('.');
+        if (dot != std::string::npos) s.erase(dot);
+    } else {
+        auto dot = s.find('.');
+        if (dot != std::string::npos) {
+            size_t frac = s.size() - dot - 1;
+            if ((int)frac > decimals) s.erase(dot + 1 + (size_t)decimals);
+        }
+    }
+    if ((int)s.size() > length) return {};
+    return s;
+}
+
+static std::string normalize_logical(const std::string& in) {
+    if (in.empty()) return {};
+    char c = (char)std::toupper((unsigned char)in[0]);
+    if (c=='T' || c=='Y' || c=='1') return "T";
+    if (c=='F' || c=='N' || c=='0') return "F";
+    return {};
+}
+
+static int field_index_by_name(const std::vector<xbase::FieldDef>& F, const std::string& nameU) {
+    for (size_t i=0;i<F.size();++i) if (up(F[i].name)==nameU) return (int)i;
+    return -1;
+}
+
+// Public entrypoint
+bool cmd_REPLACE_MULTI(xbase::DbArea& area,
+                       const std::vector<FieldUpdate>& updates,
+                       std::string* error)
+{
+    if (error) error->clear();
+    if (!area.isOpen()) { if (error) *error = "No table open."; return false; }
+    if (updates.empty()) return true;
+
+    // Make a copy we can validate/normalize
+    struct Item { int idx0; std::string name; char type; int len; int dec; std::string normalized; };
+    std::vector<Item> items; items.reserve(updates.size());
+
+    const auto& F = area.fields();
+    // 1) map fields + per-type normalize
+    for (const auto& u : updates) {
+        const std::string nameU = up(trimmed(u.name));
+        int idx0 = field_index_by_name(F, nameU);
+        if (idx0 < 0) { if (error) *error = "Unknown field: " + u.name; return false; }
+        const auto& fd = F[(size_t)idx0];
+
+        std::string norm;
+        switch (std::toupper((unsigned char)fd.type)) {
+            case 'C': // char (free text) — trim right only; actual width will be enforced by trySet or engine
+            case 'M': // memo — allow any text; engine handles sidecar
+                norm = u.value; break;
+            case 'D': {
+                norm = normalize_date(u.value);
+                if (norm.empty()) { if (error) *error = "Invalid date for " + fd.name + ": " + u.value; return false; }
+            } break;
+            case 'N': {
+                norm = normalize_numeric(u.value, fd.length, fd.decimals);
+                if (norm.empty()) { if (error) *error = "Invalid number for " + fd.name + ": " + u.value; return false; }
+            } break;
+            case 'L': {
+                norm = normalize_logical(u.value);
+                if (norm.empty()) { if (error) *error = "Invalid logical for " + fd.name + ": " + u.value; return false; }
+            } break;
+            default: {
+                if (error) *error = "Unsupported field type for " + fd.name + ": " + std::string(1,fd.type);
+                return false;
+            }
+        }
+
+       
+        items.push_back({idx0, fd.name, fd.type, (int)fd.length, (int)fd.decimals, std::move(norm)});
+    }
+
+    // 3) Build ONE REPLACE command with proper quoting per type
+    auto payload_for = [](char t, const std::string& v)->std::string {
+        switch (std::toupper((unsigned char)t)) {
+            case 'N': return v;                 // unquoted
+            case 'L': return v;                 // T/F unquoted
+            case 'D': return "\"" + v + "\"";   // store as YYYYMMDD in quotes
+            case 'C':
+            case 'M':
+            default:  return "\"" + escape_quotes(v) + "\"";
+        }
+    };
+
+    std::ostringstream cmd;
+    cmd << "REPLACE ";
+    for (size_t i=0;i<items.size();++i) {
+        if (i) cmd << ", ";
+        cmd << items[i].name << " WITH " << payload_for(items[i].type, items[i].normalized);
+    }
+
+    // 4) Run existing REPLACE handler and refresh indexes
+    std::istringstream iss(cmd.str());
+    cmd_REPLACE(area, iss);
+    order_notify_mutation(area);
+
+    return true;
 }
 
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_scan.cpp ---
@@ -5867,10 +8434,13 @@ void cmd_TOP(xbase::DbArea& a, std::istringstream& iss) {
 #include <sstream>
 #include <string>
 #include <filesystem>
+#include <fstream>
+
 #include "xbase.hpp"
 #include "textio.hpp"
 #include "order_state.hpp"
 #include "order_hooks.hpp"
+#include "cli/memo_auto.hpp"   // <-- memo sidecar binder
 
 namespace fs = std::filesystem;
 
@@ -5878,6 +8448,27 @@ static std::string read_rest_upper_trim(std::istringstream& iss) {
     std::string rest;
     std::getline(iss >> std::ws, rest);
     return textio::up(textio::trim(rest));
+}
+
+// Detect if the DBF on disk uses a memo variant by checking header version byte.
+static bool dbf_header_indicates_memo(const std::string& dbfPath) {
+    std::ifstream f(dbfPath, std::ios::binary);
+    if (!f) return false;
+
+    unsigned char ver = 0;
+    f.read(reinterpret_cast<char*>(&ver), 1);
+    if (!f) return false;
+
+    switch (ver) {
+        case 0x83: // dBASE III + memo
+        case 0x8B: // dBASE IV + memo
+        case 0x8E: // dBASE IV SQL + memo
+        case 0xF5: // FoxPro 2.x + memo
+        case 0xE5: // Clipper + memo
+            return true;
+        default:
+            return (ver & 0x80) != 0; // many memo variants set the high bit
+    }
 }
 
 void cmd_USE(xbase::DbArea& a, std::istringstream& iss) {
@@ -5899,8 +8490,11 @@ void cmd_USE(xbase::DbArea& a, std::istringstream& iss) {
         return;
     }
 
+    // ---- pre-open: detach any prior memo sidecar in this work area ----
+    cli_memo::memo_auto_on_close(a);
+
     // ---- close any existing order for this area ----
-    orderstate::clearOrder(a);
+    try { orderstate::clearOrder(a); } catch (...) { /* ignore */ }
 
     // ---- open table ----
     try {
@@ -5914,6 +8508,18 @@ void cmd_USE(xbase::DbArea& a, std::istringstream& iss) {
     } catch (const std::exception& e) {
         std::cout << "Open failed: " << e.what() << "\n";
         return;
+    }
+
+    // ---- memo sidecar auto-open (bound to this area) ----
+    {
+        const bool hasMemoFields = dbf_header_indicates_memo(path.string());
+        std::string memoErr;
+        // Pass the full DBF path so the sidecar lives alongside the table
+        if (!cli_memo::memo_auto_on_use(a, path.string(), hasMemoFields, memoErr)) {
+            // If STRICT is enabled via set_memo_config, this can be fatal;
+            // default behavior is warn and continue.
+            std::cout << "USE: " << memoErr << "\n";
+        }
     }
 
     // ---- auto-attach <opened>.inx unless NOINDEX ----
@@ -6077,6 +8683,95 @@ const std::unordered_map<std::string, dli::Handler>& map() {
 
 } // namespace dli
 
+// --- File: C:\Users\deral\code\ccode\src\cli\console_posix.cpp ---
+
+#ifndef _WIN32
+#include "cli/console.hpp"
+#include <iostream>
+#include <unistd.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+
+// ====== Global style knobs (POSIX) =========================================
+static constexpr bool kUseAsciiFrame = false;
+
+static const char* kReset        = "\x1b[0m";
+static const char* kFrameStyle   = "\x1b[30;43m";   // black on amber
+static const char* kHeaderStyle  = "\x1b[1;32m";    // bold green (for callers)
+// Frame glyphs
+static const char* kTL = kUseAsciiFrame ? "+" : u8"┌";
+static const char* kTR = kUseAsciiFrame ? "+" : u8"┐";
+static const char* kBL = kUseAsciiFrame ? "+" : u8"└";
+static const char* kBR = kUseAsciiFrame ? "+" : u8"┘";
+static const char* kHZ = kUseAsciiFrame ? "-" : u8"─";
+static const char* kVT = kUseAsciiFrame ? "|" : u8"│";
+// ==========================================================================
+
+struct PosixConsole : Console {
+    termios orig{};
+    PosixConsole() {
+        tcgetattr(STDIN_FILENO, &orig);
+        termios raw = orig;
+        raw.c_lflag &= ~(ICANON | ECHO);   // raw-ish mode: no line buffering, no echo
+        raw.c_cc[VMIN]  = 1;
+        raw.c_cc[VTIME] = 0;
+        tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+        // stdout should already be UTF-8 on most systems; box glyphs print fine.
+    }
+    ~PosixConsole() {
+        tcsetattr(STDIN_FILENO, TCSANOW, &orig);
+    }
+
+    void clear() override { std::cout << "\x1b[2J\x1b[H"; }
+    void move_to(int x,int y) override { std::cout << "\x1b[" << (y+1) << ";" << (x+1) << "H"; }
+
+    void draw_text(int x,int y,const std::string&s,int clip=-1) override {
+        move_to(x,y);
+        if (clip>=0 && (int)s.size()>clip) std::cout << s.substr(0,(size_t)clip);
+        else std::cout << s;
+    }
+
+    void draw_frame(int l,int t,int w,int h) override {
+        if (w<2 || h<2) return;
+
+        // Corners
+        draw_text(l,       t,       std::string(kFrameStyle) + kTL + kReset);
+        draw_text(l+w-1,   t,       std::string(kFrameStyle) + kTR + kReset);
+        draw_text(l,       t+h-1,   std::string(kFrameStyle) + kBL + kReset);
+        draw_text(l+w-1,   t+h-1,   std::string(kFrameStyle) + kBR + kReset);
+
+        // Horizontal edges
+        for (int i=1;i<w-1;i++){
+            draw_text(l+i, t,       std::string(kFrameStyle) + kHZ + kReset);
+            draw_text(l+i, t+h-1,   std::string(kFrameStyle) + kHZ + kReset);
+        }
+        // Vertical edges
+        for (int y=t+1;y<t+h-1;y++){
+            draw_text(l,     y,     std::string(kFrameStyle) + kVT + kReset);
+            draw_text(l+w-1, y,     std::string(kFrameStyle) + kVT + kReset);
+        }
+    }
+
+    int get_key() override {
+        unsigned char c;
+        if (read(STDIN_FILENO, &c, 1) == 1) return (int)c;
+        return -1;
+    }
+
+    Size size() override {
+        Size s{80,25};
+        struct winsize ws{};
+        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) {
+            if (ws.ws_col) s.cols = ws.ws_col;
+            if (ws.ws_row) s.rows = ws.ws_row;
+        }
+        return s;
+    }
+};
+
+Console* make_console() { return new PosixConsole(); }
+#endif // !_WIN32
+
 // --- File: C:\Users\deral\code\ccode\src\cli\console_utils.cpp ---
 
 #include "console_utils.hpp"
@@ -6105,6 +8800,98 @@ void press_any_key_blocking() {
     std::cin.get();
 #endif
 }
+
+// --- File: C:\Users\deral\code\ccode\src\cli\console_win.cpp ---
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include "cli/console.hpp"
+#include <iostream>
+#include <conio.h>
+#include <windows.h>
+
+// ====== Global style knobs (Windows) =======================================
+// Toggle to force ASCII frame if your font or environment has trouble with Unicode.
+static constexpr bool kUseAsciiFrame = false;
+
+// Colors/styles (ANSI SGR)
+static const char* kReset        = "\x1b[0m";
+static const char* kFrameStyle   = "\x1b[30;43m";   // black fg (30) on amber/yellow bg (43)
+static const char* kHeaderStyle  = "\x1b[1;32m";    // bold green (example; header text set by caller)
+
+// Frame glyphs
+static const char* kTL = kUseAsciiFrame ? "+" : u8"┌";
+static const char* kTR = kUseAsciiFrame ? "+" : u8"┐";
+static const char* kBL = kUseAsciiFrame ? "+" : u8"└";
+static const char* kBR = kUseAsciiFrame ? "+" : u8"┘";
+static const char* kHZ = kUseAsciiFrame ? "-" : u8"─";
+static const char* kVT = kUseAsciiFrame ? "|" : u8"│";
+// ==========================================================================
+
+struct WinConsole : Console {
+    WinConsole() {
+        // Enable ANSI VT processing so cursor moves & colors work
+        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (h != INVALID_HANDLE_VALUE) {
+            DWORD mode = 0;
+            if (GetConsoleMode(h, &mode)) {
+                SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+            }
+        }
+        // UTF-8 out (helps with box glyphs)
+        SetConsoleOutputCP(CP_UTF8);
+    }
+
+    void clear() override { std::cout << "\x1b[2J\x1b[H"; }
+
+    void move_to(int x,int y) override {
+        std::cout << "\x1b[" << (y+1) << ";" << (x+1) << "H";
+    }
+
+    void draw_text(int x,int y,const std::string&s,int clip=-1) override {
+        move_to(x,y);
+        if (clip>=0 && (int)s.size()>clip) std::cout << s.substr(0,(size_t)clip);
+        else std::cout << s;
+    }
+
+    void draw_frame(int l,int t,int w,int h) override {
+        if (w<2 || h<2) return;
+
+        // Corners (amber bg)
+        draw_text(l,       t,       std::string(kFrameStyle) + kTL + kReset);
+        draw_text(l+w-1,   t,       std::string(kFrameStyle) + kTR + kReset);
+        draw_text(l,       t+h-1,   std::string(kFrameStyle) + kBL + kReset);
+        draw_text(l+w-1,   t+h-1,   std::string(kFrameStyle) + kBR + kReset);
+
+        // Horizontal edges
+        for (int i=1;i<w-1;i++){
+            draw_text(l+i, t,       std::string(kFrameStyle) + kHZ + kReset);
+            draw_text(l+i, t+h-1,   std::string(kFrameStyle) + kHZ + kReset);
+        }
+        // Vertical edges
+        for (int y=t+1;y<t+h-1;y++){
+            draw_text(l,     y,     std::string(kFrameStyle) + kVT + kReset);
+            draw_text(l+w-1, y,     std::string(kFrameStyle) + kVT + kReset);
+        }
+    }
+
+    int get_key() override { return _getch(); }
+
+    Size size() override {
+        Size s{80,25};
+        CONSOLE_SCREEN_BUFFER_INFO info{};
+        if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)) {
+            s.cols = info.srWindow.Right  - info.srWindow.Left + 1;
+            s.rows = info.srWindow.Bottom - info.srWindow.Top  + 1;
+        }
+        return s;
+    }
+};
+
+Console* make_console() { return new WinConsole(); }
+#endif // _WIN32
 
 // --- File: C:\Users\deral\code\ccode\src\cli\csv.cpp ---
 
@@ -6219,12 +9006,105 @@ std::vector<const Item*> search(std::string_view token) {
 // --- File: C:\Users\deral\code\ccode\src\cli\main.cpp ---
 
 #include <iostream>
-int run_shell(); // implemented in shell.cpp
+#include <sstream>
+#include "runtime/utf8_init.hpp"
 
-int main() {
-    try { return run_shell(); }
-    catch (const std::exception& ex) { std::cerr << "Fatal error: " << ex.what() << "\n"; return 1; }
+int run_shell(); // already implemented elsewhere
+
+int main(int argc, char** argv) {
+    (void)argc; (void)argv;
+  dottalk::init_utf8();
+
+  try { return run_shell(); }
+  catch (const std::exception& ex) {
+    std::cerr << "Fatal error: " << ex.what() << "\n";
+    return 1;
+  }
 }
+
+// --- File: C:\Users\deral\code\ccode\src\cli\memo_auto.cpp ---
+
+#include "cli/memo_auto.hpp"
+#include <unordered_map>
+#include <filesystem>
+
+namespace fs = std::filesystem;
+using xbase::memo::MemoStore;
+
+namespace cli_memo {
+
+static MemoConfig g_cfg{};
+static std::unordered_map<xbase::DbArea*, std::unique_ptr<MemoStore>> g_store;
+
+void set_memo_config(const MemoConfig& cfg) { g_cfg = cfg; }
+MemoConfig get_memo_config() { return g_cfg; }
+
+static std::string basepath_from(const std::string& openedPath) {
+    fs::path p(openedPath);
+    if (!p.has_extension()) return p.string();            // e.g., data\students
+    if (p.extension() == ".dbf" || p.extension() == ".DBF") {
+        return p.replace_extension().string();            // strip .dbf
+    }
+    return p.string();                                    // unknown ext: treat as base
+}
+
+static bool file_exists(const std::string& path) {
+    std::error_code ec; return fs::exists(fs::path(path), ec);
+}
+
+xbase::memo::MemoStore* memo_store_for(xbase::DbArea& area) {
+    auto it = g_store.find(&area);
+    return (it == g_store.end()) ? nullptr : it->second.get();
+}
+
+void memo_auto_on_close(xbase::DbArea& area) {
+    auto it = g_store.find(&area);
+    if (it != g_store.end()) {
+        // dtor flushes; if you want explicit flush: it->second->flush();
+        g_store.erase(it);
+    }
+}
+
+bool memo_auto_on_use(xbase::DbArea& area,
+                      const std::string& openedPath,
+                      bool hasMemoFields,
+                      std::string& err)
+{
+    // If we’re replacing a table in the same area, ensure old sidecar is closed
+    memo_auto_on_close(area);
+
+    if (!hasMemoFields) {
+        // No memo fields: nothing to attach.
+        return true;
+    }
+
+    // Compute sidecar path
+    std::string base = basepath_from(openedPath);
+    fs::path dtx = fs::path(base).replace_extension(".dtx");
+
+    try {
+        if (file_exists(dtx.string())) {
+            g_store[&area] = std::make_unique<MemoStore>(MemoStore::open(base));
+            return true;
+        }
+        // Missing sidecar
+        if (g_cfg.autocreate) {
+            g_store[&area] = std::make_unique<MemoStore>(MemoStore::create(base));
+            return true;
+        }
+        if (g_cfg.strict) {
+            err = "Memo sidecar missing: " + dtx.string();
+            return false;
+        }
+        // Not strict, not autocreate: continue without memo store
+        return true;
+    } catch (const std::exception& ex) {
+        err = ex.what();
+        return false;
+    }
+}
+
+} // namespace cli_memo
 
 // --- File: C:\Users\deral\code\ccode\src\cli\order_hooks.cpp ---
 
@@ -6863,30 +9743,36 @@ bool predx::eval_expr(xbase::DbArea& A, std::string expr) {
 using xbase::DbArea;
 
 // ---- Core command handlers (extern/forward decls) ----
-void cmd_USE   (xbase::DbArea&, std::istringstream&);
-void cmd_CLOSE (xbase::DbArea&, std::istringstream&);
-void cmd_LIST  (xbase::DbArea&, std::istringstream&);
-void cmd_COPY  (xbase::DbArea&, std::istringstream&);
-void cmd_EXPORT(xbase::DbArea&, std::istringstream&);
-void cmd_IMPORT(xbase::DbArea&, std::istringstream&);
-void cmd_APPEND(xbase::DbArea&, std::istringstream&);
+void cmd_USE      (xbase::DbArea&, std::istringstream&);
+void cmd_CLOSE    (xbase::DbArea&, std::istringstream&);
+void cmd_LIST     (xbase::DbArea&, std::istringstream&);
+void cmd_COPY     (xbase::DbArea&, std::istringstream&);
+void cmd_EXPORT   (xbase::DbArea&, std::istringstream&);
+void cmd_IMPORT   (xbase::DbArea&, std::istringstream&);
+void cmd_APPEND   (xbase::DbArea&, std::istringstream&);
 
-void cmd_TOP   (xbase::DbArea&, std::istringstream&);
-void cmd_BOTTOM(xbase::DbArea&, std::istringstream&);
-void cmd_GOTO  (xbase::DbArea&, std::istringstream&);
-void cmd_COUNT (xbase::DbArea&, std::istringstream&);
-void cmd_DISPLAY(xbase::DbArea&, std::istringstream&);
-void cmd_DELETE(xbase::DbArea&, std::istringstream&);
-void cmd_RECALL(xbase::DbArea&, std::istringstream&);
-void cmd_PACK  (xbase::DbArea&, std::istringstream&);
-void cmd_COLOR (xbase::DbArea&, std::istringstream&);
-void cmd_FIELDS(xbase::DbArea&, std::istringstream&);
+void cmd_TOP      (xbase::DbArea&, std::istringstream&);
+void cmd_BOTTOM   (xbase::DbArea&, std::istringstream&);
+void cmd_GOTO     (xbase::DbArea&, std::istringstream&);
+void cmd_COUNT    (xbase::DbArea&, std::istringstream&);
+void cmd_DISPLAY  (xbase::DbArea&, std::istringstream&);
+void cmd_DELETE   (xbase::DbArea&, std::istringstream&);
+void cmd_RECALL   (xbase::DbArea&, std::istringstream&);
+void cmd_PACK     (xbase::DbArea&, std::istringstream&);
+void cmd_COLOR    (xbase::DbArea&, std::istringstream&);
+void cmd_FIELDS   (xbase::DbArea&, std::istringstream&);
+void cmd_BROWSE   (xbase::DbArea&, std::istringstream&);
+void cmd_BROWSETUI(xbase::DbArea&, std::istringstream&);
+
+void browse_bind_invoke(void (*fn)(xbase::DbArea&, const std::string&));
+//void cmd_BROWSETUI(xbase::DbArea& area, std::istringstream& iss)
+
 
 // FIND/SEEK are available either way; SEEK may route to index or linear
-void cmd_FIND(xbase::DbArea&, std::istringstream& iss);
-void cmd_SEEK (xbase::DbArea&, std::istringstream&);
+void cmd_FIND     (xbase::DbArea&, std::istringstream& iss);
+void cmd_SEEK     (xbase::DbArea&, std::istringstream&);
 void cmd_SETORDER (xbase::DbArea&, std::istringstream&);
-void cmd_SET  (xbase::DbArea&, std::istringstream&);
+void cmd_SET      (xbase::DbArea&, std::istringstream&);
 
 // ---- Indexing command handlers (compiled when enabled) ----
 #if DOTTALK_WITH_INDEX
@@ -6898,18 +9784,18 @@ void cmd_DESCEND  (xbase::DbArea&, std::istringstream&);
 #endif
 
 // Already present ones...
-void cmd_CLEAR(xbase::DbArea&, std::istringstream&);
-void cmd_CREATE(xbase::DbArea&, std::istringstream&);
-void cmd_DUMP(xbase::DbArea&, std::istringstream&);
-void cmd_EDIT(xbase::DbArea&, std::istringstream&);
-void cmd_LOCATE(xbase::DbArea&, std::istringstream&);
+void cmd_CLEAR    (xbase::DbArea&, std::istringstream&);
+void cmd_CREATE   (xbase::DbArea&, std::istringstream&);
+void cmd_DUMP     (xbase::DbArea&, std::istringstream&);
+void cmd_EDIT     (xbase::DbArea&, std::istringstream&);
+void cmd_LOCATE   (xbase::DbArea&, std::istringstream&);
 
-void cmd_RECNO(xbase::DbArea&, std::istringstream&);
-void cmd_REFRESH(xbase::DbArea&, std::istringstream&);
-void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
-void cmd_STATUS(xbase::DbArea&, std::istringstream&);
-void cmd_STRUCT(xbase::DbArea&, std::istringstream&);
-void cmd_ZAP(xbase::DbArea&, std::istringstream&);
+void cmd_RECNO    (xbase::DbArea&, std::istringstream&);
+void cmd_REFRESH  (xbase::DbArea&, std::istringstream&);
+void cmd_REPLACE  (xbase::DbArea&, std::istringstream&);
+void cmd_STATUS   (xbase::DbArea&, std::istringstream&);
+void cmd_STRUCT   (xbase::DbArea&, std::istringstream&);
+void cmd_ZAP      (xbase::DbArea&, std::istringstream&);
 
 // System
 void cmd_DIR      (xbase::DbArea&, std::istringstream&);
@@ -6918,9 +9804,50 @@ void cmd_TEST     (xbase::DbArea&, std::istringstream&);
 void cmd_FOXHELP  (xbase::DbArea&, std::istringstream&);
 void cmd_SCAN     (xbase::DbArea&, std::istringstream&);
 void cmd_ENDSCAN  (xbase::DbArea&, std::istringstream&);
+void cmd_ECHO     (xbase::DbArea&, std::istringstream&);
+
+char prompt_char = '.';   // default prompt (was hard-coded '>')
 
 // Scripting
 void cmd_DOTSCRIPT(xbase::DbArea&, std::istringstream&);  // DotScript runner
+
+// ---- Single-line dispatcher used by BROWSETUI bridge -----------------------
+static void browsetui_dispatch_line(xbase::DbArea& area, const std::string& rawLine)
+{
+    using namespace dli;
+
+    // 1) Skip whole-line comments (allow leading whitespace)
+    {
+        size_t i = 0;
+        while (i < rawLine.size() && std::isspace(static_cast<unsigned char>(rawLine[i]))) ++i;
+        if (i < rawLine.size()) {
+            if (rawLine[i] == '#') return;
+            if (rawLine[i] == '/' && i + 1 < rawLine.size() && rawLine[i + 1] == '/') return;
+        }
+    }
+
+    // 2) Trim and get first token
+    std::string trimmed = textio::trim(rawLine);
+    if (trimmed.empty()) return;
+
+    std::istringstream tok(trimmed);
+    std::string cmdToken;
+    tok >> cmdToken;
+    if (cmdToken.empty()) return;
+
+    const std::string U = textio::up(cmdToken);
+
+    // 3) SCAN buffering: if active and not ENDSCAN, accumulate raw line
+    if (scanblock::state().active && U != "ENDSCAN") {
+        scanblock::state().lines.push_back(rawLine);
+        return;
+    }
+
+    // 4) Dispatch through the standard registry
+    if (!registry().run(area, U, tok)) {
+        std::cout << "Unknown command (from BROWSETUI): " << cmdToken << "\n";
+    }
+}
 
 int run_shell()
 {
@@ -6928,8 +9855,9 @@ int run_shell()
     using namespace dli;
 
     // Theme - compile err
- //   colors::applyTheme(colors::Theme::Green);
- //   struct ResetAtExit { ~ResetAtExit(){ colors::reset(); } } _reset_guard;
+    colors::applyTheme(colors::Theme::Green);
+ // struct ResetAtExit { ~ResetAtExit(){ colors::reset(); } } _reset_guard;
+ // dlc::colors::applyTheme(dlc::colors::Theme:Amber);
 
     XBaseEngine eng;
     eng.selectArea(0);
@@ -6982,44 +9910,50 @@ int run_shell()
     dli::registry().add("CLOSE",   [](DbArea& A, std::istringstream& S){ cmd_CLOSE(A,S); });
 
     // --- Record navigation & reporting ---
-    dli::registry().add("LIST",    [](DbArea& A, std::istringstream& S){ cmd_LIST(A,S); });
-    dli::registry().add("TOP",     [](DbArea& A, std::istringstream& S){ cmd_TOP(A,S); });
-    dli::registry().add("BOTTOM",  [](DbArea& A, std::istringstream& S){ cmd_BOTTOM(A,S); });
-    dli::registry().add("GOTO",    [](DbArea& A, std::istringstream& S){ cmd_GOTO(A,S); });
-    dli::registry().add("COUNT",   [](DbArea& A, std::istringstream& S){ cmd_COUNT(A,S); });
-    dli::registry().add("DISPLAY", [](DbArea& A, std::istringstream& S){ cmd_DISPLAY(A,S); });
+    dli::registry().add("LIST",        [](DbArea& A, std::istringstream& S){ cmd_LIST(A,S); });
+    dli::registry().add("TOP",         [](DbArea& A, std::istringstream& S){ cmd_TOP(A,S); });
+    dli::registry().add("BOTTOM",      [](DbArea& A, std::istringstream& S){ cmd_BOTTOM(A,S); });
+    dli::registry().add("GOTO",        [](DbArea& A, std::istringstream& S){ cmd_GOTO(A,S); });
+    dli::registry().add("COUNT",       [](DbArea& A, std::istringstream& S){ cmd_COUNT(A,S); });
+    dli::registry().add("DISPLAY",     [](DbArea& A, std::istringstream& S){ cmd_DISPLAY(A,S); });
+    // command_registry.cpp (pseudo � match your actual API)
+    dli::registry().add("BROWSE",      [](DbArea& A, std::istringstream& S){ cmd_BROWSE(A,S); }); 
+    dli::registry().add("BROWSE EDIT", [](DbArea& A, std::istringstream& S){ cmd_BROWSE(A,S); }); // alias; handler inspects "EDIT"
 
+    dli::registry().add("BROWSETUI",   [](DbArea& A, std::istringstream& S){ cmd_BROWSETUI(A,S); });  // 
+    dli::registry().add("BT",          [](DbArea& A, std::istringstream& S){ cmd_BROWSETUI(A,S); });  // 
+  
     // --- Data I/O & maintenance ---
-    dli::registry().add("COPY",    [](DbArea& A, std::istringstream& S){ cmd_COPY(A,S); });
-    dli::registry().add("EXPORT",  [](DbArea& A, std::istringstream& S){ cmd_EXPORT(A,S); });
-    dli::registry().add("IMPORT",  [](DbArea& A, std::istringstream& S){ cmd_IMPORT(A,S); });
-    dli::registry().add("APPEND",  [](DbArea& A, std::istringstream& S){ cmd_APPEND(A,S); });
-    dli::registry().add("DELETE",  [](DbArea& A, std::istringstream& S){ cmd_DELETE(A,S); });
-    dli::registry().add("RECALL",  [](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
-    dli::registry().add("UNDELETE",[](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
-    dli::registry().add("PACK",    [](DbArea& A, std::istringstream& S){ cmd_PACK(A,S); });
-    dli::registry().add("FIELDS",  [](DbArea& A, std::istringstream& S){ cmd_FIELDS(A,S); });
+    dli::registry().add("COPY",        [](DbArea& A, std::istringstream& S){ cmd_COPY(A,S); });
+    dli::registry().add("EXPORT",      [](DbArea& A, std::istringstream& S){ cmd_EXPORT(A,S); });
+    dli::registry().add("IMPORT",      [](DbArea& A, std::istringstream& S){ cmd_IMPORT(A,S); });
+    dli::registry().add("APPEND",      [](DbArea& A, std::istringstream& S){ cmd_APPEND(A,S); });
+    dli::registry().add("DELETE",      [](DbArea& A, std::istringstream& S){ cmd_DELETE(A,S); });
+    dli::registry().add("RECALL",      [](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
+    dli::registry().add("UNDELETE",    [](DbArea& A, std::istringstream& S){ cmd_RECALL(A,S); });
+    dli::registry().add("PACK",        [](DbArea& A, std::istringstream& S){ cmd_PACK(A,S); });
+    dli::registry().add("FIELDS",      [](DbArea& A, std::istringstream& S){ cmd_FIELDS(A,S); });
 
     // --- Search ---
     dli::registry().add("FIND", cmd_FIND);
     dli::registry().add("SEEK", cmd_SEEK);
 
     // --- UI/utility ---
-    dli::registry().add("COLOR",   [](DbArea& A, std::istringstream& S){ cmd_COLOR(A,S); });
-    dli::registry().add("VERSION", [](DbArea& A, std::istringstream& S){ cmd_VERSION(A,S); });
+    dli::registry().add("COLOR",        [](DbArea& A, std::istringstream& S){ cmd_COLOR(A,S); });
+    dli::registry().add("VERSION",      [](DbArea& A, std::istringstream& S){ cmd_VERSION(A,S); });
 
     // --- Indexing (only when enabled) ---
 #if DOTTALK_WITH_INDEX
-    dli::registry().add("INDEX",       [](DbArea& A, std::istringstream& S){ cmd_INDEX(A,S); });
-    dli::registry().add("REINDEX",     [](DbArea& A, std::istringstream& S){ cmd_REINDEX(A,S); });
-    dli::registry().add("SETINDEX",    [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
-    dli::registry().add("SET INDEX",   [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });   // spaced key support
-    dli::registry().add("SET INDEX TO",[](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });   // nicety
-    dli::registry().add("ASCEND",      [](DbArea& A, std::istringstream& S){ cmd_ASCEND(A,S); });
-    dli::registry().add("DESCEND",     [](DbArea& A, std::istringstream& S){ cmd_DESCEND(A,S); });
-    dli::registry().add("SETORDER",    [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
-    dli::registry().add("SET ORDER",   [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
-    dli::registry().add("SET",         [](DbArea& A, std::istringstream& S){ cmd_SET(A,S); });
+    dli::registry().add("INDEX",        [](DbArea& A, std::istringstream& S){ cmd_INDEX(A,S); });
+    dli::registry().add("REINDEX",      [](DbArea& A, std::istringstream& S){ cmd_REINDEX(A,S); });
+    dli::registry().add("SETINDEX",     [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });
+    dli::registry().add("SET INDEX",    [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });   // spaced key support
+    dli::registry().add("SET INDEX TO", [](DbArea& A, std::istringstream& S){ cmd_SETINDEX(A,S); });   // nicety
+    dli::registry().add("ASCEND",       [](DbArea& A, std::istringstream& S){ cmd_ASCEND(A,S); });
+    dli::registry().add("DESCEND",      [](DbArea& A, std::istringstream& S){ cmd_DESCEND(A,S); });
+    dli::registry().add("SETORDER",     [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
+    dli::registry().add("SET ORDER",    [](DbArea& A, std::istringstream& S){ cmd_SETORDER(A,S); });
+    dli::registry().add("SET",          [](DbArea& A, std::istringstream& S){ cmd_SET(A,S); });
 #endif
 
     dli::registry().add("CLEAR",        [](DbArea& A, std::istringstream& S){ cmd_CLEAR(A,S); });
@@ -7035,25 +9969,26 @@ int run_shell()
     dli::registry().add("ZAP",          [](DbArea& A, std::istringstream& S){ cmd_ZAP(A,S); });
 
     // System / utilities
-    dli::registry().add("DIR",     [](DbArea& A, std::istringstream& S){ cmd_DIR(A,S);   });
-    dli::registry().add("!",       [](DbArea& A, std::istringstream& S){ cmd_BANG(A,S);  });
+    dli::registry().add("DIR",          [](DbArea& A, std::istringstream& S){ cmd_DIR(A,S);   });
+    dli::registry().add("!",            [](DbArea& A, std::istringstream& S){ cmd_BANG(A,S);  });
 
     // ---- HELP is now a first-class command module ----
-    dli::registry().add("SCAN",    [](DbArea& A, std::istringstream& S){ cmd_SCAN(A,S); });
-    dli::registry().add("ENDSCAN", [](DbArea& A, std::istringstream& S){ cmd_ENDSCAN(A,S); });
-    dli::registry().add("HELP",    [](DbArea& A, std::istringstream& S){ cmd_HELP(A,S); });
-    dli::registry().add("?",       [](DbArea& A, std::istringstream& S){ cmd_HELP(A,S); });
-    dli::registry().add("TEST",    [](DbArea& A, std::istringstream& S){ cmd_TEST(A,S); });
-    dli::registry().add("FOXHELP", [](DbArea& A, std::istringstream& S){ cmd_FOXHELP(A,S); });
+    dli::registry().add("SCAN",         [](DbArea& A, std::istringstream& S){ cmd_SCAN(A,S); });
+    dli::registry().add("ENDSCAN",      [](DbArea& A, std::istringstream& S){ cmd_ENDSCAN(A,S); });
+    dli::registry().add("HELP",         [](DbArea& A, std::istringstream& S){ cmd_HELP(A,S); });
+    dli::registry().add("?",            [](DbArea& A, std::istringstream& S){ cmd_HELP(A,S); });
+    dli::registry().add("TEST",         [](DbArea& A, std::istringstream& S){ cmd_TEST(A,S); });
+    dli::registry().add("FOXHELP",      [](DbArea& A, std::istringstream& S){ cmd_FOXHELP(A,S); });
+    dli::registry().add("FH",           [](DbArea& A, std::istringstream& S){ cmd_FOXHELP(A,S); });
 
     // --- In the registration block with other commands ---
-    dli::registry().add("DOTSCRIPT", [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
-    dli::registry().add("RUN",       [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
-    dli::registry().add("DO",        [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
+    dli::registry().add("DOTSCRIPT",    [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
+    dli::registry().add("RUN",          [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
+    dli::registry().add("DO",           [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
+    dli::registry().add("ECHO",         [](DbArea& A, std::istringstream& S){ cmd_ECHO(A,S); });
 
-    // debug
-    std::cout << "[wire] FIND -> " << (void*)&cmd_FIND << "\n";
-    std::cout << "[wire] SEEK -> " << (void*)&cmd_SEEK  << "\n";
+    // --- Bind the BROWSETUI bridge so the TUI can execute commands ----------
+    //browse_bind_invoke(&browsetui_dispatch_line);
 
     // --- Startup banner ---
     std::cout << "DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.\n";
@@ -7061,7 +9996,8 @@ int run_shell()
     // --- REPL --------------------------------------------------------------
     std::string line;
     while (true) {
-        std::cout << "> " << std::flush;
+ //     std::cout << "> " << std::flush;
+        std::cout << prompt_char << " ";
         if (!std::getline(std::cin, line)) break;
 
         // 1) Skip whole-line comments (allow leading whitespace)
@@ -7104,7 +10040,6 @@ int run_shell()
 
     return 0;
 }
-
 
 // --- File: C:\Users\deral\code\ccode\src\cli\shell_api.cpp ---
 
@@ -7184,6 +10119,769 @@ bool shell_dispatch_line(DbArea& area, const std::string& line) {
 // Intentionally empty — text I/O helpers are header-only.
 // See include/textio.hpp.
 #include "textio.hpp"
+
+// --- File: C:\Users\deral\code\ccode\src\cli\utf8_init.cpp ---
+
+#include <clocale>
+
+#ifdef _WIN32
+  #ifndef NOMINMAX
+  #define NOMINMAX
+  #endif
+  #include <windows.h>
+#endif
+
+#include "runtime/utf8_init.hpp"
+
+namespace dottalk {
+  void init_utf8() {
+  #ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    std::setlocale(LC_ALL, ".UTF8");
+  #else
+    std::setlocale(LC_ALL, "");
+  #endif
+  }
+}
+
+// --- File: C:\Users\deral\code\ccode\src\dli\browsetui_fastpatch.cpp ---
+
+// dli/browsetui_fastpatch.cpp — surgical helpers to speed up browsetui
+#include "dli/screen.hpp"
+#include <string>
+#include <string_view>
+#include <vector>
+#include <algorithm>
+
+namespace dli {
+
+// Render a whole row from preformatted cells with optional highlight on one column.
+// cellXs: x positions for each column (same length as cells).
+// If highlightCol >= 0, that cell is drawn inverted using VT if available.
+void browsetui_render_row(int rowY,
+                          const std::vector<int>& cellXs,
+                          const std::vector<std::string>& cells,
+                          int highlightCol /*=-1*/,
+                          bool vt_capable /*=true*/) {
+    const int n = (int)cells.size();
+    for (int c = 0; c < n; ++c){
+        const int x = (c < (int)cellXs.size()) ? cellXs[c] : 0;
+        const std::string& txt = cells[c];
+        if (c == highlightCol && !txt.empty()){
+            screen_write_span(x, rowY, vt_inverse(txt, vt_capable));
+        } else {
+            screen_write_span(x, rowY, txt);
+        }
+    }
+}
+
+// Patch just one cell (fast path for in-cell edits).
+void browsetui_patch_cell(int rowY, int cellX, std::string_view text, bool highlighted, bool vt_capable){
+    if (highlighted) {
+        std::string inv = vt_inverse(text, vt_capable);
+        screen_write_span(cellX, rowY, inv);
+    } else {
+        screen_write_span(cellX, rowY, text);
+    }
+}
+
+// Update the status line (single write).
+void browsetui_set_status(int y, std::string_view text){
+    screen_write_line(y, text);
+}
+
+// Move highlight bar from one row to another by redrawing only those two lines.
+void browsetui_move_highlight(int oldY, int newY,
+                              const std::string& oldLine,
+                              const std::string& newLine){
+    if (oldY >= 0) screen_write_line(oldY, oldLine);
+    if (newY >= 0) screen_write_line(newY, newLine);
+}
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\src\dli\browsetui_integration.cpp ---
+
+#include "dli/browsetui_integration.hpp"
+#include "dli/screen.hpp"
+#include <algorithm>
+
+namespace dli {
+
+BrowsePaint::BrowsePaint(std::vector<int> cellXs, int width, int height, bool vt_capable)
+: m_cellXs(std::move(cellXs)), mW(width), mH(height), m_vt(vt_capable)
+{
+    mStatusY = std::max(0, height - 1);
+}
+
+void BrowsePaint::set_status_y(int y){ mStatusY = y; }
+
+void BrowsePaint::load_window(int topIndex, int visibleCount, const FetchRowByIndex& fetch){
+    m_topIndex = topIndex;
+    m_rows.assign(visibleCount, ViewRow{});
+    for (int i = 0; i < visibleCount; ++i){
+        fetch(topIndex + i, m_rows[i]);
+        render_row_line(i, m_rows[i], (i == m_highlightVisible) ? 0 : -1);
+    }
+}
+
+void BrowsePaint::redraw_all(){
+    for (int i = 0; i < (int)m_rows.size(); ++i){
+        render_row_line(i, m_rows[i], (i == m_highlightVisible) ? 0 : -1);
+    }
+}
+
+void BrowsePaint::move_highlight(int oldVisible, int newVisible){
+    // Redraw two lines only
+    if (oldVisible >= 0 && oldVisible < (int)m_rows.size()){
+        render_row_line(oldVisible, m_rows[oldVisible], /*highlightCol*/ -1);
+    }
+    m_highlightVisible = newVisible;
+    if (newVisible >= 0 && newVisible < (int)m_rows.size()){
+        render_row_line(newVisible, m_rows[newVisible], /*highlightCol*/ 0);
+    }
+}
+
+void BrowsePaint::patch_cell(int visibleRow, int col, std::string_view newText, bool highlighted){
+    if (visibleRow < 0 || visibleRow >= (int)m_rows.size()) return;
+    if (col < 0 || col >= (int)m_rows[visibleRow].cells.size()) return;
+    m_rows[visibleRow].cells[col] = std::string(newText);
+    int x = (col < (int)m_cellXs.size()) ? m_cellXs[col] : 0;
+    if (highlighted){
+        std::string inv = vt_inverse(newText, m_vt);
+        screen_write_span(x, visibleRow, inv);
+    } else {
+        screen_write_span(x, visibleRow, newText);
+    }
+}
+
+void BrowsePaint::set_status(std::string_view s){
+    screen_write_line(mStatusY, s);
+}
+
+void BrowsePaint::scroll(int delta, const FetchRowByIndex& fetch){
+    if (delta == 0 || m_rows.empty()) return;
+    int oldTop = m_topIndex;
+    m_topIndex += delta;
+    if (m_topIndex < 0) m_topIndex = 0; // clamp; real code should clamp to dataset size too
+
+    // Shift window and fetch only new rows
+    std::vector<ViewRow> newRows = m_rows;
+    if (delta > 0){
+        // Scrolling down
+        for (int i = 0; i < (int)m_rows.size()-delta; ++i) newRows[i] = m_rows[i+delta];
+        for (int i = (int)m_rows.size()-delta; i < (int)m_rows.size(); ++i){
+            fetch(m_topIndex + i, newRows[i]);
+        }
+    } else {
+        // Scrolling up
+        int k = -delta;
+        for (int i = (int)m_rows.size()-1; i >= k; --i) newRows[i] = m_rows[i-k];
+        for (int i = 0; i < k; ++i){
+            fetch(m_topIndex + i, newRows[i]);
+        }
+    }
+    m_rows.swap(newRows);
+    redraw_all();
+}
+
+void BrowsePaint::render_row_line(int visY, const ViewRow& row, int highlightCol){
+    // Compose by drawing each cell at its x position
+    for (int c = 0; c < (int)row.cells.size(); ++c){
+        int x = (c < (int)m_cellXs.size()) ? m_cellXs[c] : 0;
+        const std::string& t = row.cells[c];
+        if (highlightCol == c){
+            std::string inv = vt_inverse(t, m_vt);
+            screen_write_span(x, visY, inv);
+        } else {
+            screen_write_span(x, visY, t);
+        }
+    }
+}
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\src\dli\browse_edit.cpp ---
+
+#include "dli/browse_edit.hpp"
+#include "dli/replace_api.hpp"
+
+#include <sstream>
+#include <stdexcept>
+
+namespace dli {
+
+static Hooks g_hooks{}; // default-empty hooks
+
+void set_hooks(const Hooks& h) { g_hooks = h; }
+
+EditSession begin_edit(xbase::DbArea& db) {
+    EditSession es;
+    es.db = &db;
+    // We assume DbArea has recno() accessor; if not, adapt here.
+    // If you need a different call, wrap it with a small inline helper.
+    // e.g., es.recno = dli_current_recno(db);
+    extern long long dli_current_recno(xbase::DbArea&); // provide in your host app if you don't have DbArea::recno()
+    try {
+        // Prefer a direct member if available; otherwise fall back to external helper.
+        // NOTE: Remove the next two lines if your DbArea has recno().
+        // (The extern is only used if you provide it.)
+        es.recno = dli_current_recno(db);
+    } catch (...) {
+        // If an extern helper isn't provided, we just leave recno as 0.
+    }
+    es.active = true;
+    return es;
+}
+
+bool stage(EditSession& es, const std::string& field, const std::string& raw) {
+    if (!es.active || !es.db) return false;
+    es.staged[field] = raw;
+    return true;
+}
+
+static bool is_memo(xbase::DbArea& db, const std::string& field) {
+    if (g_hooks.field_type) {
+        char t = g_hooks.field_type(db, field);
+        return t == 'M' || t == 'm';
+    }
+    return false;
+}
+
+bool commit(EditSession& es, std::string& err) {
+    if (!es.active || !es.db) { err = "No active edit session."; return false; }
+    auto& db = *es.db;
+
+    // Apply staged changes using the real REPLACE handler so all hooks/index logic fires.
+    for (const auto& kv : es.staged) {
+        const std::string& field = kv.first;
+        const std::string& raw   = kv.second;
+
+        bool ok = false;
+        if (is_memo(db, field)) {
+            ok = dli::do_replace_memo_text(db, field, raw, &err);
+        } else {
+            ok = dli::do_replace_text(db, field, raw, &err);
+        }
+        if (!ok) {
+            if (err.empty()) err = std::string("Failed to update field '") + field + "'.";
+            return false;
+        }
+    }
+
+    es.active = false;
+    es.staged.clear();
+
+    // Give host a chance to reseek if order/filter changed
+    bool repositioned = false;
+    if (g_hooks.after_commit_reposition) {
+        repositioned = g_hooks.after_commit_reposition(db, es.recno, es.staged);
+    }
+
+    // Always request a UI refresh (host can no-op this)
+    if (g_hooks.refresh_row) {
+        g_hooks.refresh_row(db);
+    }
+
+    (void)repositioned; // placeholder; in case you want to branch behavior
+
+    return true;
+}
+
+void cancel(EditSession& es) {
+    es.active = false;
+    es.staged.clear();
+}
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\src\dli\cmd_set.cpp ---
+
+#include "dli/cmd_set.hpp"
+#include "dli/set_view.hpp"
+#include <string>
+#include <cctype>
+
+namespace dli {
+
+static std::string up(std::string s){
+    for (auto& c : s) c = (char)std::toupper((unsigned char)c);
+    return s;
+}
+
+void cmd_SET(xbase::DbArea& db, std::istringstream& args){
+    std::string tok;
+    if (!(args >> tok)) {
+        // No args -> do nothing or print help
+        return;
+    }
+    std::string head = up(tok);
+    if (head == "VIEW") {
+        // Forward remaining tail to SET VIEW
+        std::string tail;
+        std::getline(args, tail);
+        std::istringstream iss(tail);
+        cmd_SET_VIEW(db, iss);
+        return;
+    }
+    // You can add more subcommands: COLOR, EXACT, SAFETY, etc.
+    // For now, unknown -> ignore or log.
+}
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\src\dli\demo_main.cpp ---
+
+// dli/demo_main.cpp — optional minimal demo (build only if DLI_DEMO_MAIN defined)
+// Shows windowed vs full-screen toggle with F6. No DBF access—just fake fields.
+#ifdef DLI_DEMO_MAIN
+
+#include "dli/screen.hpp"
+#include "dli/browsetui_window.hpp"
+#include "dli/view_mode.hpp"
+#include "dli/set_view.hpp"
+#include <vector>
+#include <string>
+#include <cstdio>
+
+#ifdef _WIN32
+  #include <windows.h>
+#endif
+
+namespace demo {
+
+static void draw_window(){
+    int W = dli::screen_width();
+    int H = dli::screen_height();
+
+    std::vector<dli::FormField> fields = {
+        {"LAST_NAME",  "Grimwood"},
+        {"FIRST_NAME", "Derald"},
+        {"AGE",        "68"},
+        {"MEMO",       "This is a demo memo line."}
+    };
+
+    dli::FormOptions opt;
+    opt.inner_left_pad  = 1;
+    opt.inner_right_pad = 1;
+    opt.use_box_chars   = false;
+
+    dli::form_render_windowed(fields, W, H, opt);
+    dli::screen_set_cursor(0, H-1, false);
+    dli::screen_write_line(H-1, dli::view_status_label());
+}
+
+static void draw_fullscreen(){
+    int W = dli::screen_width();
+    int H = dli::screen_height();
+    // Fake grid: two rows, three columns
+    dli::screen_write_line(0,  "LAST_NAME     FIRST_NAME    AGE");
+    dli::screen_write_line(1,  "Grimwood      Derald        68 ");
+    dli::screen_write_line(2,  "Doe           Jane          42 ");
+    for (int y=3; y<H-1; ++y) dli::screen_write_line(y, "");
+    dli::screen_write_line(H-1, dli::view_status_label());
+}
+
+static void repaint(){
+    if (dli::get_view_mode() == dli::ViewMode::Window) draw_window();
+    else draw_fullscreen();
+}
+
+} // namespace demo
+
+int main(){
+    // Init fast paint area (fixed size for demo)
+    dli::screen_init(80, 24);
+    dli::screen_clear(true);
+    dli::screen_enable_vt(true);
+    dli::set_view_mode(dli::ViewMode::Window);
+    demo::repaint();
+
+#ifdef _WIN32
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    SetConsoleMode(hIn, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT);
+    for(;;){
+        INPUT_RECORD rec;
+        DWORD n=0;
+        if (!ReadConsoleInput(hIn, &rec, 1, &n)) break;
+        if (rec.EventType == KEY_EVENT && rec.Event.KeyEvent.bKeyDown){
+            auto vk = rec.Event.KeyEvent.wVirtualKeyCode;
+            std::string status;
+            if (dli::handle_toggle_view_hotkey((int)vk, &status)) {
+                dli::screen_write_line(23, status);
+                demo::repaint();
+            } else if (vk == VK_ESCAPE) {
+                break;
+            }
+        }
+    }
+#endif
+
+    dli::screen_shutdown();
+    return 0;
+}
+
+#endif // DLI_DEMO_MAIN
+
+// --- File: C:\Users\deral\code\ccode\src\dli\replace_api.cpp ---
+
+#include "dli/replace_api.hpp"
+
+#include <sstream>
+#include <string>
+#include <stdexcept>
+#include <filesystem>
+#include <fstream>
+#include <chrono>
+
+namespace fs = std::filesystem;
+
+namespace xbase { class DbArea; }
+
+// We call the *existing* command handler to guarantee indexes/memo hooks fire.
+// Provide this from your current build (already present alongside other dli command handlers).
+extern void cmd_REPLACE(xbase::DbArea& db, std::istringstream& args);
+
+namespace dli {
+
+static std::string quote_and_escape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 2);
+    out.push_back('"');
+    for (char c : s) {
+        if (c == '"') out += "\\\"";
+        else out.push_back(c);
+    }
+    out.push_back('"');
+    return out;
+}
+
+bool do_replace_text(xbase::DbArea& db,
+                     const std::string& fieldName,
+                     const std::string& rawUserText,
+                     std::string* errorOut) {
+    try {
+        // We conservatively quote the raw user text; your REPLACE handler already
+        // converts/types according to the field definition (N/D/L/C, etc.).
+        std::ostringstream oss;
+        oss << fieldName << " WITH " << quote_and_escape(rawUserText);
+        std::istringstream iss(oss.str());
+        cmd_REPLACE(db, iss);
+        return true;
+    } catch (const std::exception& ex) {
+        if (errorOut) *errorOut = ex.what();
+        return false;
+    } catch (...) {
+        if (errorOut) *errorOut = "Unknown error in REPLACE.";
+        return false;
+    }
+}
+
+static fs::path write_temp_memo(const std::string& text) {
+    auto dir = fs::temp_directory_path();
+    // Naive unique name using time since epoch + pid-ish randomness
+    auto ts  = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    fs::path p = dir / ("dli_memo_" + std::to_string(ts) + ".txt");
+    std::ofstream ofs(p, std::ios::binary);
+    ofs.write(text.data(), static_cast<std::streamsize>(text.size()));
+    ofs.close();
+    return p;
+}
+
+bool do_replace_memo_text(xbase::DbArea& db,
+                          const std::string& fieldName,
+                          const std::string& memoText,
+                          std::string* errorOut) {
+    try {
+        // Use FILE path route to avoid escaping issues for long/complex memo contents.
+        fs::path tmp = write_temp_memo(memoText);
+        std::ostringstream oss;
+        oss << fieldName << " WITH FILE " << quote_and_escape(tmp.string());
+        std::istringstream iss(oss.str());
+        cmd_REPLACE(db, iss);
+        // Optionally delete temp; if your REPLACE reads immediately, safe to remove now
+        std::error_code ec;
+        fs::remove(tmp, ec);
+        return true;
+    } catch (const std::exception& ex) {
+        if (errorOut) *errorOut = ex.what();
+        return false;
+    } catch (...) {
+        if (errorOut) *errorOut = "Unknown error in REPLACE (memo path).";
+        return false;
+    }
+}
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\src\dli\screen_win.cpp ---
+
+#include "dli/screen.hpp"
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstring>
+
+#ifdef _WIN32
+  #include <windows.h>
+#endif
+
+namespace dli {
+
+static int gW = 0, gH = 0;
+static bool gVT = false;
+static bool gCursorVisible = true;
+static
+#ifdef _WIN32
+HANDLE
+#else
+int
+#endif
+hOut = 0;
+
+static std::vector<std::string> gShadow;
+
+#ifdef _WIN32
+static void write_at(int x, int y, const char* data, size_t n) {
+  DWORD dummy;
+  COORD pos{(SHORT)x,(SHORT)y};
+  SetConsoleCursorPosition(hOut, pos);
+  WriteConsoleA(hOut, data, (DWORD)n, &dummy, nullptr);
+}
+#endif
+
+int screen_width(){ return gW; }
+int screen_height(){ return gH; }
+const std::vector<std::string>& screen_shadow(){ return gShadow; }
+
+bool screen_enable_vt(bool enable){
+#ifdef _WIN32
+  DWORD mode=0;
+  if (!GetConsoleMode(hOut, &mode)) return gVT;
+  if (enable) mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+  else        mode &= ~ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+  if (SetConsoleMode(hOut, mode)) gVT = enable;
+  return gVT;
+#else
+  (void)enable;
+  gVT = true;
+  return gVT;
+#endif
+}
+
+void screen_init(int width, int height){
+  gW = std::max(1, width);
+  gH = std::max(1, height);
+  gShadow.assign(gH, std::string(gW, ' '));
+#ifdef _WIN32
+  hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+  // Hide cursor by default for smooth painting
+  CONSOLE_CURSOR_INFO ci{};
+  ci.dwSize = 25;
+  ci.bVisible = FALSE;
+  SetConsoleCursorInfo(hOut, &ci);
+  // Try to enable VT for nicer highlighting if available
+  screen_enable_vt(true);
+#endif
+}
+
+void screen_shutdown(){
+#ifdef _WIN32
+  // Restore cursor visibility
+  CONSOLE_CURSOR_INFO ci{};
+  ci.dwSize = 25;
+  ci.bVisible = TRUE;
+  SetConsoleCursorInfo(hOut, &ci);
+#endif
+  gShadow.clear();
+  gW = gH = 0;
+}
+
+void screen_clear(bool clear_console){
+  for (auto& line : gShadow) std::fill(line.begin(), line.end(), ' ');
+#ifdef _WIN32
+  if (clear_console){
+    // Efficient full clear
+    CONSOLE_SCREEN_BUFFER_INFO csbi{};
+    GetConsoleScreenBufferInfo(hOut, &csbi);
+    DWORD cells = csbi.dwSize.X * csbi.dwSize.Y;
+    DWORD written = 0;
+    COORD home{0,0};
+    FillConsoleOutputCharacterA(hOut, ' ', cells, home, &written);
+    FillConsoleOutputAttribute(hOut, csbi.wAttributes, cells, home, &written);
+    SetConsoleCursorPosition(hOut, home);
+  }
+#else
+  (void)clear_console;
+#endif
+}
+
+static inline void pad_to_width(std::string& s){
+  if ((int)s.size() < gW) s.resize(gW, ' ');
+  else if ((int)s.size() > gW) s.resize(gW);
+}
+
+void screen_write_line(int y, std::string_view text){
+  if (y < 0 || y >= gH) return;
+  std::string line(text);
+  pad_to_width(line);
+#ifdef _WIN32
+  // Diff against shadow and write only changed spans
+  int i = 0, n = (int)line.size();
+  while (i < n){
+    while (i < n && line[i] == gShadow[y][i]) ++i;
+    if (i >= n) break;
+    int start = i;
+    while (i < n && line[i] != gShadow[y][i]) ++i;
+    int end = i;
+    write_at(start, y, line.data()+start, end-start);
+    std::copy(line.begin()+start, line.begin()+end, gShadow[y].begin()+start);
+  }
+#else
+  // Fallback: print whole line once (non-Windows); caller can redirect to ncurses later
+  (void)line;
+#endif
+}
+
+void screen_write_span(int x, int y, std::string_view text){
+  if (y < 0 || y >= gH) return;
+  if (x < 0 || x >= gW) return;
+  int maxlen = gW - x;
+  int n = (int)text.size();
+  if (n > maxlen) n = maxlen;
+#ifdef _WIN32
+  write_at(x, y, text.data(), n);
+  std::copy(text.begin(), text.begin()+n, gShadow[y].begin()+x);
+#else
+  (void)n;
+#endif
+}
+
+void screen_set_cursor(int x, int y, bool visible){
+#ifdef _WIN32
+  CONSOLE_CURSOR_INFO ci{};
+  ci.dwSize = 25;
+  ci.bVisible = visible ? TRUE : FALSE;
+  SetConsoleCursorInfo(hOut, &ci);
+  COORD pos{(SHORT)std::max(0,x),(SHORT)std::max(0,y)};
+  SetConsoleCursorPosition(hOut, pos);
+#else
+  (void)x; (void)y; (void)visible;
+#endif
+}
+
+std::string vt_inverse(std::string_view s, bool vt){
+  if (!vt) return std::string(s);
+  std::string out;
+  out.reserve(s.size()+8);
+  out += "\x1b[7m";
+  out.append(s.begin(), s.end());
+  out += "\x1b[27m";
+  return out;
+}
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\src\memo\memostore.cpp ---
+
+// memo_sidecar_v1/src/memo/memostore.cpp
+//
+// Skeleton implementation. Wire to your platform file I/O layer in the project.
+// This file is intentionally minimal (no real I/O) to serve as a starting point.
+
+#include "memo/memostore.hpp"
+#include "memo/dtx_format.hpp"
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+namespace xbase::memo {
+
+struct MemoStore::Impl {
+    std::string basepath;   // without extension
+    fs::path    dtx_path;   // "<basepath>.dtx"
+    StoreStat   sstat{};
+
+    Impl(std::string bp) : basepath(std::move(bp)) {
+        dtx_path = fs::path(basepath).replace_extension(".dtx");
+    }
+};
+
+MemoStore MemoStore::open(const std::string& basepath) {
+    MemoStore m;
+    m.impl_ = new Impl(basepath);
+    // TODO: open file, read header, validate CRC/magic/version
+    // For now, just check existence
+    if (!fs::exists(m.impl_->dtx_path)) {
+        throw io_error("Memo sidecar does not exist: " + m.impl_->dtx_path.string());
+    }
+    return std::move(m);
+}
+
+MemoStore MemoStore::create(const std::string& basepath, uint32_t block_size) {
+    (void)block_size; // TODO: use for header init
+    MemoStore m;
+    m.impl_ = new Impl(basepath);
+    // TODO: create/truncate file, write fresh header
+    // Here we just touch the file.
+    std::FILE* f = std::fopen(m.impl_->dtx_path.string().c_str(), "wb");
+    if (!f) throw io_error("Failed to create: " + m.impl_->dtx_path.string());
+    // Minimal header placeholder; a real impl must write DtxHeader fully.
+    std::array<char, 4096> zero{};
+    std::fwrite(zero.data(), 1, zero.size(), f);
+    std::fclose(f);
+    return std::move(m);
+}
+
+MemoStore::MemoStore() : impl_(nullptr) {}
+MemoStore::MemoStore(MemoStore&& o) noexcept : impl_(o.impl_) { o.impl_ = nullptr; }
+MemoStore& MemoStore::operator=(MemoStore&& o) noexcept { 
+    if (this != &o) { delete impl_; impl_ = o.impl_; o.impl_ = nullptr; }
+    return *this; 
+}
+MemoStore::~MemoStore() { delete impl_; }
+
+uint64_t MemoStore::put(const std::vector<uint8_t>& data) {
+    // TODO: append object, update id-map, stats; return id
+    (void)data;
+    throw memo_error("MemoStore::put not implemented");
+}
+
+std::vector<uint8_t> MemoStore::get(uint64_t object_id) const {
+    (void)object_id;
+    throw not_found("MemoStore::get not implemented");
+}
+
+void MemoStore::update(uint64_t object_id, const std::vector<uint8_t>& data) {
+    (void)object_id; (void)data;
+    throw memo_error("MemoStore::update not implemented");
+}
+
+void MemoStore::erase(uint64_t object_id) {
+    (void)object_id;
+    throw memo_error("MemoStore::erase not implemented");
+}
+
+MemoStat MemoStore::stat(uint64_t object_id) const {
+    (void)object_id;
+    MemoStat s; s.exists = false; return s;
+}
+
+void MemoStore::flush() { /* TODO: fsync */ }
+
+StoreStat MemoStore::store_stats() const { return impl_ ? impl_->sstat : StoreStat{}; }
+
+void MemoStore::memocheck(bool repair) { (void)repair; /* TODO: verify CRCs, rebuild id map */ }
+
+std::string MemoStore::sidecar_path() const {
+    return impl_ ? impl_->dtx_path.string() : std::string();
+}
+
+} // namespace xbase::memo
 
 // --- File: C:\Users\deral\code\ccode\src\xbase\dbarea.cpp ---
 
@@ -15427,6 +19125,260 @@ const std::unordered_map<std::string, dli::Handler>& map();
 namespace cli = dli;
 // ---------------------------------------------------------------------------
 
+// --- File: C:\Users\deral\code\ccode\include\cli\browsetui.hpp ---
+
+#pragma once
+#include <string>
+#include <vector>
+
+// Minimal structure describing a field to render in BROWSE
+struct FieldView {
+    std::string name;
+    std::string value;
+};
+
+// Build the inner content lines for the BROWSE pane.
+// - inner_width:  printable columns inside the frame (>= 0)
+// - inner_height: printable rows    inside the frame (>= 0)
+// - recno:        current record number to show on the first line
+// - fields:       name/value pairs for the current record
+// Returns exactly inner_height strings, each clipped to inner_width.
+// Caller is responsible for placing these lines at (frame.left+1, frame.top+1)
+// and for drawing the border itself.
+std::vector<std::string>
+build_browse_lines(int inner_width, int inner_height,
+                   int recno,
+                   const std::vector<FieldView>& fields);
+
+// --- File: C:\Users\deral\code\ccode\include\cli\console.hpp ---
+
+#pragma once
+#include <string>
+
+struct Size { int cols; int rows; };
+
+struct Console {
+    virtual ~Console() = default;
+    virtual void clear() = 0;
+    virtual void move_to(int x, int y) = 0;
+    virtual void draw_text(int x, int y, const std::string& s, int clip_to = -1) = 0;
+    virtual void draw_frame(int left, int top, int width, int height) = 0;
+    virtual int  get_key() = 0;   // blocking key read
+    virtual Size size() = 0;
+};
+
+Console* make_console(); // factory: picks Win or Posix
+
+// --- File: C:\Users\deral\code\ccode\include\cli\memo_auto.hpp ---
+
+#pragma once
+// Auto-open/close .dtx memo sidecars per work area.
+// You call memo_auto_on_use() from your USE command after the table is open,
+// and memo_auto_on_close() from CLOSE/when replacing a table in the same area.
+
+#include <string>
+#include <cstdint>
+#include "memo/memostore.hpp"
+#include "xbase.hpp"    // your DbArea
+
+namespace cli_memo {
+
+struct MemoConfig {
+    bool autocreate = true; // create .dtx if table has memo fields and file absent
+    bool strict     = false; // if true and .dtx missing/corrupt => fail USE
+};
+
+// Global config setters/getters (cheap singletons)
+void set_memo_config(const MemoConfig& cfg);
+MemoConfig get_memo_config();
+
+// Attach a MemoStore to this area if the opened table schema has memo fields.
+// - openedPath: the exact path the user passed to USE (with or without .dbf).
+// - hasMemoFields: true if schema has any 'M' memo fields.
+// Returns true on success; false and sets err on failure.
+// NOTE: If hasMemoFields is false, this will detach any previous sidecar (no-op success).
+bool memo_auto_on_use(xbase::DbArea& area,
+                      const std::string& openedPath,
+                      bool hasMemoFields,
+                      std::string& err);
+
+// Detach (flush+close) the MemoStore bound to this area (if any).
+void memo_auto_on_close(xbase::DbArea& area);
+
+// Non-owning access to the bound store (or nullptr if none).
+xbase::memo::MemoStore* memo_store_for(xbase::DbArea& area);
+
+} // namespace cli_memo
+
+// --- File: C:\Users\deral\code\ccode\include\cli\memo_display.hpp ---
+
+#pragma once
+#include <string>
+#include <vector>
+#include <cstdint>
+#include <algorithm>
+
+#include "cli/memo_wiring.hpp"   // uses field_is_memo(...) and require_memo_store(...)
+
+namespace memo_display {
+
+// right-trim spaces and CR/LF only (preserve internal whitespace and case)
+inline void rtrim_inplace(std::string& s) {
+    while (!s.empty()) {
+        char c = s.back();
+        if (c == ' ' || c == '\r' || c == '\n' || c == '\t') s.pop_back();
+        else break;
+    }
+}
+
+// Render memo preview for the CURRENT record and given field.
+// Returns true and fills `out` on success; false leaves `out` untouched.
+inline bool render_current(DbArea& area,
+                           const std::string& fieldName,
+                           std::string& out)
+{
+    if (!cli_memo::field_is_memo(area, fieldName)) return false;
+
+    std::string err;
+    auto* store = cli_memo::require_memo_store(area, &err);
+    if (!store) return false;
+
+    // You may already have a getter for the current record's memo id.
+    // Add this to memo_wiring.hpp when you wire your codec:
+    //   bool try_get_current_record_memo_id(DbArea&, const std::string&, uint64_t& out_id);
+    uint64_t id = 0;
+    if (!cli_memo::try_get_current_record_memo_id(area, fieldName, id)) {
+        // Not wired yet; treat as empty.
+        out.clear();
+        return true;
+    }
+    if (id == 0) { out.clear(); return true; }
+
+    std::vector<uint8_t> bytes;
+    try {
+        bytes = store->get(id);
+    } catch (...) {
+        // On read errors, show empty (DISPLAY should not crash)
+        out.clear();
+        return true;
+    }
+
+    std::string s(bytes.begin(), bytes.end()); // preserve case
+    rtrim_inplace(s);
+    if (s.size() > 256) s.resize(256);
+    out.swap(s);
+    return true;
+}
+
+} // namespace memo_display
+
+// --- File: C:\Users\deral\code\ccode\include\cli\memo_wiring.hpp ---
+
+#pragma once
+// include/cli/memo_wiring.hpp
+//
+// CLI glue for memo fields + compatibility shims so existing cmd_replace.cpp builds.
+// TODOs are safe stubs now; wire them to your schema/row codec when ready.
+
+#include <string>
+#include <vector>
+#include <cstdint>
+#include <memory>
+
+#include "xbase.hpp"
+#include "memo/memostore.hpp"
+#include "cli/memo_auto.hpp"  // memo_store_for(...)
+
+namespace cli_memo {
+
+// ---- Wiring points you will implement later --------------------------------
+
+// Return true if <fieldName> is a memo field in the current table schema.
+inline bool field_is_memo(xbase::DbArea& area, const std::string& fieldName) {
+    (void)area; (void)fieldName;
+    // TODO: area.table().find_field_ci(fieldName)->type == FieldType::Memo
+    return false;
+}
+
+// Set/replace memo bytes for <fieldName> on the *current record*.
+// Must set the record’s memo pointer (u64 id) and mark the row dirty.
+inline bool set_current_record_memo(
+    xbase::DbArea& area,
+    const std::string& fieldName,
+    uint64_t object_id,
+    uint32_t length,
+    std::string* err)
+{
+    (void)area; (void)fieldName; (void)object_id; (void)length;
+    if (err) *err = "set_current_record_memo: not wired to record codec.";
+    return false;
+}
+
+// Clear memo for <fieldName> on the current record (zero pointer, optional erase).
+inline bool clear_current_record_memo(
+    xbase::DbArea& area,
+    const std::string& fieldName,
+    std::string* err)
+{
+    (void)area; (void)fieldName;
+    if (err) *err = "clear_current_record_memo: not wired to record codec.";
+    return false;
+}
+
+// Fetch current record’s memo id. Return true if wired (even if id==0).
+inline bool try_get_current_record_memo_id(
+    xbase::DbArea& area,
+    const std::string& fieldName,
+    uint64_t& out_id)
+{
+    (void)area; (void)fieldName;
+    out_id = 0;
+    // TODO: out_id = row.get_memo_id(fieldName);
+    return false;
+}
+
+// Non-owning access to the already-open store for this area.
+inline xbase::memo::MemoStore* require_memo_store(xbase::DbArea& area, std::string* err) {
+    auto* st = cli_memo::memo_store_for(area);
+    if (!st && err) *err = "Memo sidecar is not open for this work area.";
+    return st;
+}
+
+} // namespace cli_memo
+
+// ---- Compatibility shims for existing cmd_replace.cpp -----------------------
+
+namespace cli_memo {
+
+struct _NoDel { void operator()(xbase::memo::MemoStore*) const noexcept {} };
+using MemoStoreHandle = std::unique_ptr<xbase::memo::MemoStore, _NoDel>;
+
+// Legacy acquire_memo_store(...) used by your current cmd_replace.cpp
+inline MemoStoreHandle acquire_memo_store(
+    xbase::DbArea& area,
+    bool /*autoCreate*/,
+    std::string* err)
+{
+    auto* st = cli_memo::memo_store_for(area);
+    if (!st) {
+        if (err) *err = "Memo sidecar is not open for this work area.";
+        return MemoStoreHandle{};
+    }
+    return MemoStoreHandle(st); // non-owning
+}
+
+// Legacy clear_current_record_memo(...) overload that takes a handle.
+inline bool clear_current_record_memo(
+    xbase::DbArea& area,
+    const std::string& fieldName,
+    MemoStoreHandle& /*store*/,
+    std::string* err)
+{
+    return clear_current_record_memo(area, fieldName, err);
+}
+
+} // namespace cli_memo
+
 // --- File: C:\Users\deral\code\ccode\include\cli\settings.hpp ---
 
 #pragma once
@@ -15455,6 +19407,250 @@ struct Settings {
 };
 
 } // namespace cli
+
+// --- File: C:\Users\deral\code\ccode\include\dli\browsetui_integration.hpp ---
+
+#pragma once
+// dli/browsetui_integration.hpp
+// High-level helper that threads dli::screen_* fast painting into a browse TUI loop.
+// No 'cli' symbols; namespace dli only.
+
+#include <string>
+#include <string_view>
+#include <vector>
+#include <functional>
+#include <cstdint>
+
+namespace dli {
+
+// Represents one visible row in the grid
+struct ViewRow {
+    int64_t recno = 0;
+    std::vector<std::string> cells; // one preformatted string per column
+};
+
+// Data provider fetches rows by absolute row index in the dataset or by recno.
+// Return false if row not available.
+using FetchRowByIndex = std::function<bool(int absoluteIndex, ViewRow& out)>;
+using FetchRowByRecno = std::function<bool(int64_t recno, ViewRow& out)>;
+
+// Integration object that owns Fast Paint usage for a grid view.
+class BrowsePaint {
+public:
+    // cellXs: horizontal positions (0-based columns) for each column start.
+    // width,height: logical render area.
+    // vt_capable: pass result of screen_enable_vt(true) here.
+    BrowsePaint(std::vector<int> cellXs, int width, int height, bool vt_capable);
+
+    // Set status line Y (defaults to bottom line: height-1)
+    void set_status_y(int y);
+
+    // Replace entire visible window with rows starting at absoluteIndex 'topIndex'.
+    // Uses 'fetch' to obtain ViewRow for each visible line.
+    void load_window(int topIndex, int visibleCount, const FetchRowByIndex& fetch);
+
+    // Redraw the whole visible window (fast; uses diffs).
+    void redraw_all();
+
+    // Move highlight bar from oldIdx (visible) to newIdx (visible), reusing cached line strings.
+    void move_highlight(int oldVisible, int newVisible);
+
+    // Patch a single cell for the given visible row and column.
+    // Also updates our cached copy.
+    void patch_cell(int visibleRow, int col, std::string_view newText, bool highlighted);
+
+    // Update the status line with a single write.
+    void set_status(std::string_view s);
+
+    // Scroll by delta lines; reuses cached rows and fetches only newly visible ones.
+    void scroll(int delta, const FetchRowByIndex& fetch);
+
+    // Returns current top absolute index in dataset.
+    int top_index() const { return m_topIndex; }
+
+    // Returns true if VT highlight is used.
+    bool vt() const { return m_vt; }
+
+    // Cached visible rows
+    const std::vector<ViewRow>& rows() const { return m_rows; }
+
+    // Column X positions
+    const std::vector<int>& cell_xs() const { return m_cellXs; }
+
+private:
+    void render_row_line(int visY, const ViewRow& row, int highlightCol);
+
+private:
+    std::vector<int> m_cellXs;
+    int mW=0, mH=0;
+    int mStatusY=0;
+    bool m_vt=false;
+
+    int m_topIndex=0;            // absolute index of first visible row
+    int m_highlightVisible=-1;   // which visible row is highlighted (-1 = none)
+    std::vector<ViewRow> m_rows; // cached visible rows (size == visibleCount)
+};
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\include\dli\browse_edit.hpp ---
+
+#pragma once
+#include <string>
+#include <unordered_map>
+#include <functional>
+
+namespace xbase { class DbArea; } // forward declaration
+
+namespace dli {
+
+// Lightweight edit-session container used by browsetui
+struct EditSession {
+    xbase::DbArea* db {nullptr};
+    long long recno {0};
+    std::unordered_map<std::string, std::string> staged; // field -> raw text as shown in UI
+    bool active {false};
+};
+
+// Optional integration hooks supplied by the host app (you)
+struct Hooks {
+    // Return field type as FoxPro-style code: 'C','N','F','D','L','M' (or 0 if unknown)
+    std::function<char(xbase::DbArea&, const std::string& fieldName)> field_type;
+
+    // After successful commit, you can reposition (e.g., re-SEEK on key change). 
+    // Return true if you handled repositioning; false to use default behavior.
+    std::function<bool(xbase::DbArea&, long long /*original_recno*/,
+                       const std::unordered_map<std::string,std::string>& /*staged*/)> after_commit_reposition;
+
+    // Redraw/refresh the current row in browsetui.
+    std::function<void(xbase::DbArea&)> refresh_row;
+};
+
+// Install/replace hooks (call once at app init, or anytime to update)
+void set_hooks(const Hooks& h);
+
+// Start an edit session on the current record
+EditSession begin_edit(xbase::DbArea& db);
+
+// Stage a field change from the UI (raw text). Returns false if no active session.
+bool stage(EditSession& es, const std::string& fieldName, const std::string& rawText);
+
+// Validate + commit all staged changes through the real DLI/command API (REPLACE).
+// On failure, returns false and sets 'err' with a human-readable message.
+bool commit(EditSession& es, std::string& err);
+
+// Discard staged changes
+void cancel(EditSession& es);
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\include\dli\cmd_set.hpp ---
+
+#pragma once
+// dli/cmd_set.hpp — Minimal SET router that recognizes "VIEW" and forwards to dli::cmd_SET_VIEW.
+// No 'cli' symbols; namespace dli only.
+#include <sstream>
+
+namespace xbase { class DbArea; }
+
+namespace dli {
+void cmd_SET(xbase::DbArea& db, std::istringstream& args);
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\include\dli\replace_api.hpp ---
+
+#pragma once
+#include <string>
+#include <optional>
+
+namespace xbase { class DbArea; }
+
+namespace dli {
+
+// Use the real REPLACE command handler to update a single field with raw text.
+// Returns true on success; on failure returns false and optionally sets errorOut.
+bool do_replace_text(xbase::DbArea& db,
+                     const std::string& fieldName,
+                     const std::string& rawUserText,
+                     std::string* errorOut = nullptr);
+
+// Memo-friendly path: writes content to a transient file and invokes
+//   REPLACE <field> WITH FILE "<temp_path>"
+// This avoids escaping/length pitfalls for large memo text.
+bool do_replace_memo_text(xbase::DbArea& db,
+                          const std::string& fieldName,
+                          const std::string& memoText,
+                          std::string* errorOut = nullptr);
+
+} // namespace dli
+
+// --- File: C:\Users\deral\code\ccode\include\dli\replace_multi.hpp ---
+
+#pragma once
+#include <string>
+#include <vector>
+
+namespace xbase { class DbArea; }
+
+struct FieldUpdate {
+    std::string name;
+    std::string value; // raw or normalized text; validation happens in the command
+};
+
+// Returns true on success; on failure fills *error (if not null)
+bool cmd_REPLACE_MULTI(xbase::DbArea&, const std::vector<FieldUpdate>& updates, std::string* error = nullptr);
+
+// --- File: C:\Users\deral\code\ccode\include\dli\screen.hpp ---
+
+#pragma once
+// dli/screen.hpp — tiny dirty-region console renderer (Windows-optimized)
+// No 'cli' symbols; all under namespace dli.
+#include <string>
+#include <string_view>
+#include <vector>
+#include <cstdint>
+
+namespace dli {
+
+// Initialize renderer and allocate shadow buffer (width x height);
+// hides cursor for smoother draws. Call shutdown() before exit.
+void screen_init(int width, int height);
+
+// Restore cursor and clean up.
+void screen_shutdown();
+
+// Optionally enable/disable VT mode (ANSI escape processing).
+// On Windows this attempts to turn on ENABLE_VIRTUAL_TERMINAL_PROCESSING.
+// Returns true if VT mode is active.
+bool screen_enable_vt(bool enable);
+
+// Clear internal shadow to blanks and optionally clear the console.
+void screen_clear(bool clear_console=true);
+
+// Stage write of a single line by diffing against the shadow and writing
+// only changed spans. 'text' is padded/truncated to current width.
+void screen_write_line(int y, std::string_view text);
+
+// Patch a small rectangular span (actually a single line span) at (x,y).
+void screen_write_span(int x, int y, std::string_view text);
+
+// Update the cursor position and show/hide as desired.
+void screen_set_cursor(int x, int y, bool visible);
+
+// Return current logical width/height used by the renderer.
+int screen_width();
+int screen_height();
+
+// Shadow buffer accessor (width-sized strings of current on-screen state).
+const std::vector<std::string>& screen_shadow();
+
+// Utility: build a highlighted (inverse) string without ANSI if not available.
+// If vt is true, wraps with ESC[7m/ESC[27m. Otherwise, just returns the text;
+// the caller should draw highlight by redrawing normal + inverted attributes
+// using platform API if desired.
+std::string vt_inverse(std::string_view s, bool vt);
+
+} // namespace dli
 
 // --- File: C:\Users\deral\code\ccode\include\dottalk\expr\api.hpp ---
 
@@ -15719,6 +19915,166 @@ struct Token {
 };
 
 }} // namespace
+
+// --- File: C:\Users\deral\code\ccode\include\memo\dtx_format.hpp ---
+
+#pragma once
+// memo_sidecar_v1/include/memo/dtx_format.hpp
+//
+// On-disk layout for DotTalk++ memo sidecar files (.dtx).
+// v1 is intentionally simple: a fixed 4KB header and an append-mostly object area.
+// All integers are little-endian. Alignment: 8 bytes for object bodies.
+//
+// NOTE: This header only defines on-disk structs and constants. High-level logic
+// lives in memostore.hpp/cpp.
+
+#include <cstdint>
+#include <array>
+
+namespace xbase::memo {
+
+constexpr std::array<char,4> DTX_MAGIC = {'D','T','X','1'};
+constexpr uint16_t DTX_VERSION = 0x0001;
+constexpr uint32_t DTX_DEFAULT_BLOCK_SIZE = 4096;
+constexpr uint32_t DTX_HEADER_SIZE        = 4096;
+constexpr uint32_t DTX_ALIGN              = 8;     // object bodies padded to 8 bytes
+
+// Header is fixed 4KB. Keep room for future fields.
+// --- at the top with the other includes
+#include <cstddef>
+
+// ... inside namespace xbase::memo {
+
+// Header is fixed 4KB. Keep room for future fields.
+struct DtxHeader {
+    char     magic[4];          // "DTX1"
+    uint16_t version;           // 0x0001
+    uint16_t reserved0;         // align (kept)
+    uint32_t block_size;        // typically 4096
+
+    uint32_t pad0;              // <<< NEW: explicit pad so next u64 is 8-byte aligned
+
+    uint64_t next_object_id;    // next id to assign (monotonic)
+    uint64_t free_bytes;        // total bytes in free-list (best effort)
+    uint64_t used_bytes;        // total payload bytes (sum of object lengths)
+    uint64_t object_count;      // count of allocated objects (live, not tombstoned)
+    uint64_t root_freelist_off; // file offset to free-list head (0 if none)
+    uint32_t header_crc32;      // crc of header with this field zeroed
+    uint32_t reserved1;         // align
+
+    // 64 bytes of fixed fields above; tail fills to 4096
+    uint8_t  reserved2[DTX_HEADER_SIZE - 64];
+};
+
+    static_assert(offsetof(DtxHeader, reserved2) == 64, "DtxHeader reserved2 must start at 64");
+    static_assert(sizeof(DtxHeader) == DTX_HEADER_SIZE, "DtxHeader must be 4KB");
+
+// Each object on disk is stored as: [u32 length][u32 crc][bytes...][padding to 8-byte]
+// This struct describes the fixed prefix; the body follows it.
+struct DtxObjectPrefix {
+    uint32_t length; // number of bytes of memo body
+    uint32_t crc32;  // CRC32 over the memo body (not including padding)
+};
+
+// Free list node (persisted) — simple singly-linked list (v1).
+// Larger strategies can be added in future versions.
+struct DtxFreeNode {
+    uint64_t size;      // free span length, in bytes (including node header itself)
+    uint64_t next_off;  // file offset of next free node (0 if none)
+    // Body of the free span follows (unused bytes)
+};
+
+} // namespace xbase::memo
+
+// --- File: C:\Users\deral\code\ccode\include\memo\memostore.hpp ---
+
+#pragma once
+// memo_sidecar_v1/include/memo/memostore.hpp
+//
+// Public interface for the memo sidecar store (.dtx).
+// Implementation is provided in src/memo/memostore.cpp (stubbed here).
+
+#include <cstdint>
+#include <cstddef>
+#include <string>
+#include <vector>
+#include <optional>
+#include <stdexcept>
+#include <functional>
+
+namespace xbase::memo {
+
+struct MemoStat {
+    uint64_t length = 0;
+    uint64_t created_epoch_ms = 0;
+    uint64_t updated_epoch_ms = 0;
+    bool     exists = false;
+};
+
+struct StoreStat {
+    uint64_t used_bytes = 0;
+    uint64_t free_bytes = 0;
+    uint64_t object_count = 0;
+    uint64_t next_object_id = 1;
+};
+
+// Error types
+struct memo_error : std::runtime_error { using std::runtime_error::runtime_error; };
+struct io_error   : memo_error { using memo_error::memo_error; };
+struct crc_error  : memo_error { using memo_error::memo_error; };
+struct not_found  : memo_error { using memo_error::memo_error; };
+struct bad_format : memo_error { using memo_error::memo_error; };
+
+// MemoStore is single-writer (process) in v1. Use open/create accordingly.
+class MemoStore {
+public:
+    // Open an existing store; throws if missing or invalid.
+    static MemoStore open(const std::string& basepath);   // basepath without extension; ".dtx" implied
+    // Create or truncate a store.
+    static MemoStore create(const std::string& basepath, uint32_t block_size = 4096);
+
+    MemoStore();                // movable, non-copyable
+    MemoStore(MemoStore&&) noexcept;
+    MemoStore& operator=(MemoStore&&) noexcept;
+    ~MemoStore();
+
+    MemoStore(const MemoStore&) = delete;
+    MemoStore& operator=(const MemoStore&) = delete;
+
+    // Main API
+    uint64_t put(const std::vector<uint8_t>& data);         // returns object_id
+    std::vector<uint8_t> get(uint64_t object_id) const;     // throws not_found
+    void update(uint64_t object_id, const std::vector<uint8_t>& data);
+    void erase(uint64_t object_id);                          // tombstone / free; id becomes invalid
+    MemoStat stat(uint64_t object_id) const;                 // len + timestamps (best effort)
+
+    // Store-wide ops
+    void flush();                                            // fsync updates
+    StoreStat store_stats() const;
+    void memocheck(bool repair = false);                     // validate CRCs, rebuild id map if requested
+
+    // Utilities
+    std::string sidecar_path() const;
+
+private:
+    struct Impl;
+    Impl* impl_; // PIMPL to keep ABI surface minimal
+};
+
+// Utility to convert strings to memo bytes (UTF-8 assumed)
+inline std::vector<uint8_t> to_bytes(const std::string& s) {
+    return std::vector<uint8_t>(s.begin(), s.end());
+}
+
+} // namespace xbase::memo
+
+// --- File: C:\Users\deral\code\ccode\include\runtime\utf8_init.hpp ---
+
+#pragma once
+
+namespace dottalk {
+  void init_utf8();
+}
 
 // --- File: C:\Users\deral\code\ccode\include\xindex\attach.hpp ---
 
@@ -17459,6 +21815,147 @@ inline double getFieldAsNumber(xbase::DbArea& db, const std::string& name) {
 
 } // namespace xfg
 
+// --- File: C:\Users\deral\code\ccode\memo_sidecar_v1\include\memo\dtx_format.hpp ---
+
+#pragma once
+// memo_sidecar_v1/include/memo/dtx_format.hpp
+//
+// On-disk layout for DotTalk++ memo sidecar files (.dtx).
+// v1 is intentionally simple: a fixed 4KB header and an append-mostly object area.
+// All integers are little-endian. Alignment: 8 bytes for object bodies.
+//
+// NOTE: This header only defines on-disk structs and constants. High-level logic
+// lives in memostore.hpp/cpp.
+
+#include <cstdint>
+#include <array>
+
+namespace xbase::memo {
+
+constexpr std::array<char,4> DTX_MAGIC = {'D','T','X','1'};
+constexpr uint16_t DTX_VERSION = 0x0001;
+constexpr uint32_t DTX_DEFAULT_BLOCK_SIZE = 4096;
+constexpr uint32_t DTX_HEADER_SIZE        = 4096;
+constexpr uint32_t DTX_ALIGN              = 8;     // object bodies padded to 8 bytes
+
+// Header is fixed 4KB. Keep room for future fields.
+struct DtxHeader {
+    char     magic[4];          // "DTX1"
+    uint16_t version;           // 0x0001
+    uint16_t reserved0;         // align
+    uint32_t block_size;        // typically 4096
+    uint64_t next_object_id;    // next id to assign (monotonic)
+    uint64_t free_bytes;        // total bytes in free-list (best effort)
+    uint64_t used_bytes;        // total payload bytes (sum of object lengths)
+    uint64_t object_count;      // count of allocated objects (live, not tombstoned)
+    uint64_t root_freelist_off; // file offset to free-list head (0 if none)
+    uint32_t header_crc32;      // crc of header with this field zeroed
+    uint32_t reserved1;         // align
+    uint8_t  reserved2[DTX_HEADER_SIZE -
+                       (4 + 2 + 2 + 4 + 8 + 8 + 8 + 8 + 8 + 4 + 4)];
+};
+
+static_assert(sizeof(DtxHeader) == DTX_HEADER_SIZE, "DtxHeader must be 4KB");
+
+// Each object on disk is stored as: [u32 length][u32 crc][bytes...][padding to 8-byte]
+// This struct describes the fixed prefix; the body follows it.
+struct DtxObjectPrefix {
+    uint32_t length; // number of bytes of memo body
+    uint32_t crc32;  // CRC32 over the memo body (not including padding)
+};
+
+// Free list node (persisted) — simple singly-linked list (v1).
+// Larger strategies can be added in future versions.
+struct DtxFreeNode {
+    uint64_t size;      // free span length, in bytes (including node header itself)
+    uint64_t next_off;  // file offset of next free node (0 if none)
+    // Body of the free span follows (unused bytes)
+};
+
+} // namespace xbase::memo
+
+// --- File: C:\Users\deral\code\ccode\memo_sidecar_v1\include\memo\memostore.hpp ---
+
+#pragma once
+// memo_sidecar_v1/include/memo/memostore.hpp
+//
+// Public interface for the memo sidecar store (.dtx).
+// Implementation is provided in src/memo/memostore.cpp (stubbed here).
+
+#include <cstdint>
+#include <cstddef>
+#include <string>
+#include <vector>
+#include <optional>
+#include <stdexcept>
+#include <functional>
+
+namespace xbase::memo {
+
+struct MemoStat {
+    uint64_t length = 0;
+    uint64_t created_epoch_ms = 0;
+    uint64_t updated_epoch_ms = 0;
+    bool     exists = false;
+};
+
+struct StoreStat {
+    uint64_t used_bytes = 0;
+    uint64_t free_bytes = 0;
+    uint64_t object_count = 0;
+    uint64_t next_object_id = 1;
+};
+
+// Error types
+struct memo_error : std::runtime_error { using std::runtime_error::runtime_error; };
+struct io_error   : memo_error { using memo_error::memo_error; };
+struct crc_error  : memo_error { using memo_error::memo_error; };
+struct not_found  : memo_error { using memo_error::memo_error; };
+struct bad_format : memo_error { using memo_error::memo_error; };
+
+// MemoStore is single-writer (process) in v1. Use open/create accordingly.
+class MemoStore {
+public:
+    // Open an existing store; throws if missing or invalid.
+    static MemoStore open(const std::string& basepath);   // basepath without extension; ".dtx" implied
+    // Create or truncate a store.
+    static MemoStore create(const std::string& basepath, uint32_t block_size = 4096);
+
+    MemoStore();                // movable, non-copyable
+    MemoStore(MemoStore&&) noexcept;
+    MemoStore& operator=(MemoStore&&) noexcept;
+    ~MemoStore();
+
+    MemoStore(const MemoStore&) = delete;
+    MemoStore& operator=(const MemoStore&) = delete;
+
+    // Main API
+    uint64_t put(const std::vector<uint8_t>& data);         // returns object_id
+    std::vector<uint8_t> get(uint64_t object_id) const;     // throws not_found
+    void update(uint64_t object_id, const std::vector<uint8_t>& data);
+    void erase(uint64_t object_id);                          // tombstone / free; id becomes invalid
+    MemoStat stat(uint64_t object_id) const;                 // len + timestamps (best effort)
+
+    // Store-wide ops
+    void flush();                                            // fsync updates
+    StoreStat store_stats() const;
+    void memocheck(bool repair = false);                     // validate CRCs, rebuild id map if requested
+
+    // Utilities
+    std::string sidecar_path() const;
+
+private:
+    struct Impl;
+    Impl* impl_; // PIMPL to keep ABI surface minimal
+};
+
+// Utility to convert strings to memo bytes (UTF-8 assumed)
+inline std::vector<uint8_t> to_bytes(const std::string& s) {
+    return std::vector<uint8_t>(s.begin(), s.end());
+}
+
+} // namespace xbase::memo
+
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_help.hpp ---
 
 #pragma once
@@ -17614,6 +22111,22 @@ void set_case_sensitive(bool on);
 bool get_case_sensitive();
 
 } // namespace predx
+
+// --- File: C:\Users\deral\code\ccode\src\cli\replace_multi.hpp ---
+
+#pragma once
+#include <string>
+#include <vector>
+
+namespace xbase { class DbArea; }
+
+struct FieldUpdate {
+    std::string name;
+    std::string value; // raw user input; validator will normalize/verify
+};
+
+// Returns true on success; on failure fills *error (if not null)
+bool cmd_REPLACE_MULTI(xbase::DbArea&, const std::vector<FieldUpdate>& updates, std::string* error = nullptr);
 
 // --- File: C:\Users\deral\code\ccode\src\cli\scan_state.hpp ---
 

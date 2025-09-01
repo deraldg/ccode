@@ -22,6 +22,7 @@ set(CCODE_SRC  "${CCODE_ROOT}/src")
 set(CCODE_XI   "${CCODE_SRC}/xindex")
 set(CCODE_CLI  "${CCODE_SRC}/cli")
 set(CCODE_XB   "${CCODE_SRC}/xbase")
+set(CCODE_MEMO "${CCODE_SRC}/memo")
 
 # =========================
 #  Libraries (xindex/xbase)
@@ -36,7 +37,6 @@ add_library(xindex STATIC ${XI_SOURCES})
 target_include_directories(xindex PUBLIC "${CCODE_INC}")
 
 # ---- xbase library ---------------------------------------------------------
-# Prefer files under src/xbase; if none, take non-CLI/non-xindex sources under src/
 file(GLOB_RECURSE XBASE_SOURCES "${CCODE_XB}/*.cpp")
 if(NOT XBASE_SOURCES)
   file(GLOB XBASE_FALLBACK "${CCODE_SRC}/*.cpp")
@@ -50,25 +50,16 @@ if(NOT XBASE_SOURCES)
   message(FATAL_ERROR "No xbase sources found under ${CCODE_XB} or fallback in ${CCODE_SRC}.")
 endif()
 
-# Explicitly exclude dbarea_introspection.cpp (was experimenting with new API)
+# Explicitly exclude experimental file if present
 list(FILTER XBASE_SOURCES EXCLUDE REGEX ".*/dbarea_introspection\\.cpp$")
 
 add_library(xbase STATIC ${XBASE_SOURCES})
 target_include_directories(xbase PUBLIC "${CCODE_INC}")
 
-if(TARGET memo)
-  target_compile_definitions(memo PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
-
-
 # ==========================================================
-#  Memo sidecar library (.dtx)  << NEW: isolated integration
+#  Memo sidecar library (.dtx)
 # ==========================================================
-# Design: keep memo code in its own tiny static lib to avoid new deps between xbase/xindex.
-# Public headers live under include/memo (already covered by CCODE_INC).
-set(CCODE_MEMO "${CCODE_SRC}/memo")
 file(GLOB MEMO_SOURCES "${CCODE_MEMO}/*.cpp")
-
 if(MEMO_SOURCES)
   add_library(memo STATIC ${MEMO_SOURCES})
   target_include_directories(memo PUBLIC "${CCODE_INC}")
@@ -91,11 +82,20 @@ list(FILTER CLI_SOURCES EXCLUDE REGEX ".*/src_cli_cmd_status\\.cpp$")
 
 add_executable(dottalkpp ${CLI_SOURCES})
 
-# Make headers available to the CLI
-target_include_directories(dottalkpp PRIVATE "${CCODE_INC}")
+# Make headers available to the CLI:
+#  - ${CCODE_INC} for public headers (include/…)
+#  - ${CCODE_SRC} so includes like "cli/replace_multi.hpp" resolve
+target_include_directories(dottalkpp PRIVATE
+  "${CCODE_INC}"
+  "${CCODE_SRC}"
+)
 
-# Link only at the executable level to avoid circular deps.
-# Include memo lib if present.
+# Ensure utf8_init.cpp is compiled into the exe (fixes LNK2019 on dottalk::init_utf8)
+target_sources(dottalkpp PRIVATE
+  ${CCODE_CLI}/utf8_init.cpp
+)
+
+# Link only at the executable level to avoid circular deps. Include memo if present.
 if(MEMO_ENABLED)
   target_link_libraries(dottalkpp PRIVATE xbase xindex memo)
 else()
@@ -103,8 +103,6 @@ else()
 endif()
 
 # ---- DotTalk++ Expr sources (keep as-is) -----------------------------------
-target_include_directories(dottalkpp PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
 set(DOTTALK_EXPR_SOURCES
   src/cli/expr/lexer.cpp
   src/cli/expr/parser.cpp

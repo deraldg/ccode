@@ -1,0 +1,6 @@
+C:/Users/deral/code/ccode/build-msvc/CMakeFiles/xindex.dir
+C:/Users/deral/code/ccode/build-msvc/CMakeFiles/xbase.dir
+C:/Users/deral/code/ccode/build-msvc/CMakeFiles/memo.dir
+C:/Users/deral/code/ccode/build-msvc/CMakeFiles/dottalkpp.dir
+C:/Users/deral/code/ccode/build-msvc/CMakeFiles/ALL_BUILD.dir
+C:/Users/deral/code/ccode/build-msvc/CMakeFiles/ZERO_CHECK.dir

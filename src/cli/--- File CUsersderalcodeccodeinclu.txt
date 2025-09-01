@@ -1,0 +1,43 @@
+// --- File: C:\Users\deral\code\ccode\include\xbase.hpp ---
+#pragma once
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <array>
+#include <fstream>
+#include <memory>
+#include <stdexcept>
+#include <optional>
+
+namespace xindex { class IndexManager; }
+
+namespace xbase {
+// ... other constants and structs
+
+// In-memory field metadata
+struct FieldDef {
+    std::string name;
+    char type{};
+    uint8_t length{};
+    uint8_t decimals{};
+};
+
+// DbArea Class
+class DbArea {
+public:
+    // ... existing public methods
+
+    // New method for transactional validation (dry-run)
+    bool trySet(int idx, const std::string& val) {
+        if (idx < 1 || idx > static_cast<int>(_fields.size())) return false;
+        // Perform validation logic here or return true to defer validation to the caller
+        return true;
+    }
+
+private:
+    // ... existing private members and methods
+};
+
+// ... other classes
+}
+using DbArea = xbase::DbArea;

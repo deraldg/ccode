@@ -1,0 +1,13 @@
+﻿* text=auto
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+*.cpp  text eol=lf
+*.hpp  text eol=lf
+*.h    text eol=lf
+*.c    text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+*.dbt filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.dbf filter=lfs diff=lfs merge=lfs -text
+*.fpt filter=lfs diff=lfs merge=lfs -text

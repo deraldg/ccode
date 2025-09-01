@@ -1,0 +1,6 @@
+#!/bin/bash
+# Ensure we run from project root so ./data is found
+cd /mnt/c/Users/deral/code/ccode || exit 1
+
+# Run binary in interactive mode
+exec ./build/dottalkpp "$@"

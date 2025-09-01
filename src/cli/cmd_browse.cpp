@@ -1,154 +1,69 @@
-// cmd_browse.cpp
-// DotTalk++ — Minimal interactive BROWSE with editing, no DbArea internals.
-// Uses existing handlers: LIST, DISPLAY, GOTO, REPLACE.
+// src/cli/cmd_browse.cpp
+//
+// DotTalk++ — BROWSE command handler (V1/V2 switch)
+// Default: legacy Browsetui (V1) runs exactly as it does today.
+// Opt-in: set env BROWSE_TUI_V2=1 to run V2 pilot (interfaces + stubs).
 
-#include <iostream>
 #include <sstream>
-#include <string>
-#include <algorithm>
-#include <cctype>
+#include <iostream>
+#include <memory>
 
-#include "xbase.hpp"  // xbase::DbArea
+// Bring in DbArea
+#include "xbase.hpp"
 
-// ---- Forward declarations of existing command handlers ---------------------
-void cmd_LIST   (xbase::DbArea&, std::istringstream&);
-void cmd_DISPLAY(xbase::DbArea&, std::istringstream&);
-void cmd_GOTO   (xbase::DbArea&, std::istringstream&);
-void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
+// V2 interfaces/stubs
+#include "browse/browse_flags.hpp"
+#include "browse/controller.hpp"
+#include "data/irecord_gateway.hpp"
+#include "ui/ibrowse_renderer.hpp"
+#include "input/iinput_source.hpp"
 
-// ---- Helpers ---------------------------------------------------------------
-static inline std::string trim(const std::string& s) {
-  size_t b = 0, e = s.size();
-  while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
-  while (e > b && std::isspace(static_cast<unsigned char>(s[e-1]))) --e;
-  return s.substr(b, e - b);
-}
+// -----------------------------------------------------------------------------
+// Legacy path (V1)
+// If your original cmd_browse.cpp had inline legacy code, paste it into
+// run_browsetui_v1(). If you already have a function elsewhere, declare
+// it as extern below and call it.
+// -----------------------------------------------------------------------------
 
-static inline std::string upper(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
-  return s;
-}
+// OPTION B (call out to an existing function somewhere else):
+// extern void legacy_browse(xbase::DbArea&, std::istringstream&);
 
-static inline bool needs_quotes(const std::string& v) {
-  for (unsigned char c : v) {
-    if (std::isspace(c) || !std::isalnum(c)) return true;
-  }
-  return v.empty();
-}
-
-static void show_menu(bool editEnabled) {
-  std::cout
-    << "\n=== BROWSE " << (editEnabled ? "EDIT " : "") << "===\n"
-    << "Commands:\n"
-    << "  L            - List (uses LIST)\n"
-    << "  D            - Display current record (uses DISPLAY)\n"
-    << "  G <n>        - Go to record n (uses GOTO)\n"
-    << "  E            - Edit a field in current record (uses REPLACE)\n"
-    << "  H or ?       - Help (this menu)\n"
-    << "  Q            - Quit browse\n";
-}
-
-// ---- Command implementation ------------------------------------------------
-void cmd_BROWSE(xbase::DbArea& area, std::istringstream& iss)
+static void run_browsetui_v1(xbase::DbArea& area, std::istringstream& args)
 {
-  // Parse optional "EDIT" token, but we allow E command regardless.
-  bool editMode = false;
-  {
-    std::string rest; std::getline(iss, rest);
-    rest = upper(trim(rest));
-    if (rest.find("EDIT") != std::string::npos) editMode = true;
-  }
+    // If you have an existing function, call it here instead:
+    // legacy_browse(area, args);
 
-  std::cout << "Entered BROWSE" << (editMode ? " EDIT" : "") << " mode.\n";
-  show_menu(editMode);
+    // TEMP placeholder so this compiles/links even if you haven't wired V1 yet.
+    std::cerr << "[browse] V1 path placeholder — wire your current Browsetui call here.\n";
+    (void)area; (void)args;
+}
 
-  for (;;) {
-    std::cout << "\nBROWSE> ";
-    std::string line;
-    if (!std::getline(std::cin, line)) break;
-    line = trim(line);
-    if (line.empty()) continue;
-
-    // Split first token
-    std::istringstream ls(line);
-    std::string cmd; ls >> cmd;
-    std::string arg; std::getline(ls, arg); arg = trim(arg);
-
-    std::string ucmd = upper(cmd);
-
-    // Quit
-    if (ucmd == "Q" || ucmd == "QUIT" || ucmd == "EXIT") {
-      std::cout << "Leaving BROWSE.\n";
-      break;
+// -----------------------------------------------------------------------------
+// Public command entry (registry dispatches here)
+// Signature matches other command handlers (void, not int).
+// -----------------------------------------------------------------------------
+void cmd_BROWSE(xbase::DbArea& area, std::istringstream& args)
+{
+    // === Legacy by default ===
+    if (!browse::use_v2()) {
+        run_browsetui_v1(area, args);
+        return;
     }
 
-    // Help
-    if (ucmd == "H" || ucmd == "?") {
-      show_menu(editMode);
-      continue;
+    // === V2 pilot (safe/read-only) ===
+    std::unique_ptr<browse::IRecordGateway> gw(browse::create_dbf_gateway_stub());
+    std::unique_ptr<browse::IBrowseRenderer> r (browse::create_renderer_v2());
+    std::unique_ptr<browse::IInputSource>   in(browse::create_legacy_input_adapter());
+
+    browse::Controller ctl(*gw, *r, *in);
+
+    // TODO: replace with actual terminal size from your TUI backend
+    const int termW = 120;
+    const int termH = 40;
+
+    ctl.init_vm(termW, termH, browse::windowed_default());
+
+    while (ctl.tick()) {
+        // loop until Quit → returns to shell
     }
-
-    // List (delegate to LIST)
-    if (ucmd == "L" || ucmd == "LIST") {
-      std::istringstream empty;
-      cmd_LIST(area, empty);
-      continue;
-    }
-
-    // Display current record (delegate to DISPLAY)
-    if (ucmd == "D" || ucmd == "DISPLAY") {
-      std::istringstream empty;
-      cmd_DISPLAY(area, empty);
-      continue;
-    }
-
-    // GOTO <n>
-    if (ucmd == "G" || ucmd == "GOTO") {
-      if (arg.empty()) {
-        std::cout << "Usage: G <recno>\n";
-        continue;
-      }
-      std::istringstream go(arg);
-      cmd_GOTO(area, go);
-      // show the record after moving
-      std::istringstream empty;
-      cmd_DISPLAY(area, empty);
-      continue;
-    }
-
-    // Edit current record: prompt for field and value, call REPLACE
-    if (ucmd == "E" || ucmd == "EDIT") {
-      // We allow edit regardless of initial EDIT token (keeps it simple)
-      std::string field;
-      std::cout << "Field name: ";
-      if (!std::getline(std::cin, field)) break;
-      field = trim(field);
-      if (field.empty()) {
-        std::cout << "Canceled (empty field).\n";
-        continue;
-      }
-
-      std::string newv;
-      std::cout << "New value: ";
-      if (!std::getline(std::cin, newv)) break;
-      newv = trim(newv);
-
-      // Build REPLACE <FIELD> WITH <value>
-      std::ostringstream ro;
-      ro << field << " WITH ";
-      if (needs_quotes(newv)) ro << '"' << newv << '"';
-      else                     ro << newv;
-
-      std::istringstream riss(ro.str());
-      cmd_REPLACE(area, riss);
-
-      // Show the updated record
-      std::istringstream empty;
-      cmd_DISPLAY(area, empty);
-      continue;
-    }
-
-    std::cout << "Unknown command. Type H for help.\n";
-  }
 }

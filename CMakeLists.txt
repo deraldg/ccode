@@ -90,6 +90,28 @@ target_include_directories(dottalkpp PRIVATE
   "${CCODE_SRC}"
 )
 
+# === Browsetui V2 stubs (safe pilot) ========================================
+# Link the new stub sources so cmd_browse.cpp resolves its references.
+target_sources(dottalkpp PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/ui/layout_manager.cpp
+  ${CMAKE_SOURCE_DIR}/src/ui/renderer_v2_stub.cpp
+  ${CMAKE_SOURCE_DIR}/src/input/legacy_input_adapter.cpp
+  ${CMAKE_SOURCE_DIR}/src/data/record_gateway_dbf_stub.cpp
+  ${CMAKE_SOURCE_DIR}/src/browse/controller.cpp
+)
+
+# Ensure the new public headers are visible
+target_include_directories(dottalkpp PRIVATE
+  "${CMAKE_SOURCE_DIR}/include"
+)
+
+# Silence MSVC getenv() warning in browse_flags.hpp
+if (MSVC)
+  target_compile_definitions(dottalkpp PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+# ============================================================================
+
+
 # Ensure utf8_init.cpp is compiled into the exe (fixes LNK2019 on dottalk::init_utf8)
 target_sources(dottalkpp PRIVATE
   ${CCODE_CLI}/utf8_init.cpp

@@ -34,12 +34,7 @@ if (Test-Path $Cache) {
 if (!(Test-Path $BuildDir)) { New-Item -ItemType Directory -Path $BuildDir | Out-Null }
 
 # --- 2) Configure ---
-$generator = ''
-if ($UseNinja) {
-  $generator = 'Ninja'
-} else {
-  $generator = 'Visual Studio 17 2022'
-}
+$generator = if ($UseNinja) { 'Ninja' } else { 'Visual Studio 17 2022' }
 
 $configureArgs = @('-S', $RepoRoot, '-B', $BuildDir, '-G', $generator, '-D', "CMAKE_BUILD_TYPE=$Config")
 if (-not $UseNinja) { $configureArgs += @('-A','x64') }
@@ -57,15 +52,17 @@ if ($UseNinja) {
 
 # --- 4) Locate executable ---
 $CandidatePaths = @(
-  Join-Path $BuildDir "bin\$Config\dottalkpp.exe",
-  Join-Path $BuildDir "$Config\dottalkpp.exe",
-  Join-Path $BuildDir "dottalkpp.exe",
-  Join-Path $BuildDir "Release\dottalkpp.exe",
-  Join-Path $BuildDir "Debug\dottalkpp.exe"
+  (Join-Path $BuildDir "bin\$Config\dottalkpp.exe"),
+  (Join-Path $BuildDir "$Config\dottalkpp.exe"),
+  (Join-Path $BuildDir "dottalkpp.exe"),
+  (Join-Path $BuildDir "Release\dottalkpp.exe"),
+  (Join-Path $BuildDir "Debug\dottalkpp.exe")
 )
 
 $exe = $null
-foreach ($p in $CandidatePaths) { if (Test-Path $p) { $exe = $p; break } }
+foreach ($p in $CandidatePaths) {
+  if (Test-Path $p) { $exe = $p; break }
+}
 
 if ($exe) {
   Write-Host "Built OK: $exe"

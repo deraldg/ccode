@@ -719,7 +719,7 @@ int run_shell()
     return 0;
 }
 
-// --- File: C:\Users\deral\code\ccode\build\CMakeFiles\3.28.3\CompilerIdCXX\CMakeCXXCompilerId.cpp ---
+// --- File: C:\Users\deral\code\ccode\build\CMakeFiles\4.1.0-rc4\CompilerIdCXX\CMakeCXXCompilerId.cpp ---
 
 /* This source file must have a .cpp extension so that all C++ compilers
    recognize the extension without flags.  Borland does not know .cxx for
@@ -738,13 +738,7 @@ int run_shell()
 /* Version number components: V=Version, R=Revision, P=Patch
    Version date components:   YYYY=Year, MM=Month,   DD=Day  */
 
-#if defined(__COMO__)
-# define COMPILER_ID "Comeau"
-  /* __COMO_VERSION__ = VRR */
-# define COMPILER_VERSION_MAJOR DEC(__COMO_VERSION__ / 100)
-# define COMPILER_VERSION_MINOR DEC(__COMO_VERSION__ % 100)
-
-#elif defined(__INTEL_COMPILER) || defined(__ICC)
+#if defined(__INTEL_COMPILER) || defined(__ICC)
 # define COMPILER_ID "Intel"
 # if defined(_MSC_VER)
 #  define SIMULATE_ID "MSVC"
@@ -907,6 +901,7 @@ int run_shell()
 # define COMPILER_VERSION_MINOR DEC(__open_xl_release__)
 # define COMPILER_VERSION_PATCH DEC(__open_xl_modification__)
 # define COMPILER_VERSION_TWEAK DEC(__open_xl_ptf_fix_level__)
+# define COMPILER_VERSION_INTERNAL_STR  __clang_version__
 
 
 #elif defined(__ibmxl__) && defined(__clang__)
@@ -1012,6 +1007,13 @@ int run_shell()
 # define COMPILER_VERSION_MINOR DEC(__ORANGEC_MINOR__)
 # define COMPILER_VERSION_PATCH DEC(__ORANGEC_PATCHLEVEL__)
 
+#elif defined(__RENESAS__)
+# define COMPILER_ID "Renesas"
+/* __RENESAS_VERSION__ = 0xVVRRPP00 */
+# define COMPILER_VERSION_MAJOR HEX(__RENESAS_VERSION__ >> 24 & 0xFF)
+# define COMPILER_VERSION_MINOR HEX(__RENESAS_VERSION__ >> 16 & 0xFF)
+# define COMPILER_VERSION_PATCH HEX(__RENESAS_VERSION__ >> 8  & 0xFF)
+
 #elif defined(__SCO_VERSION__)
 # define COMPILER_ID "SCO"
 
@@ -1051,6 +1053,13 @@ int run_shell()
   # define COMPILER_VERSION_MINOR DEC(__ARMCOMPILER_VERSION/10000 % 100)
   # define COMPILER_VERSION_PATCH DEC(__ARMCOMPILER_VERSION/100   % 100)
 # define COMPILER_VERSION_INTERNAL DEC(__ARMCOMPILER_VERSION)
+
+#elif defined(__clang__) && defined(__ti__)
+# define COMPILER_ID "TIClang"
+  # define COMPILER_VERSION_MAJOR DEC(__ti_major__)
+  # define COMPILER_VERSION_MINOR DEC(__ti_minor__)
+  # define COMPILER_VERSION_PATCH DEC(__ti_patchlevel__)
+# define COMPILER_VERSION_INTERNAL DEC(__ti_version__)
 
 #elif defined(__clang__)
 # define COMPILER_ID "Clang"
@@ -1137,6 +1146,14 @@ int run_shell()
 #  define COMPILER_VERSION_PATCH DEC(__SUBVERSION__)
 #  define COMPILER_VERSION_INTERNAL DEC(__IAR_SYSTEMS_ICC__)
 # endif
+
+#elif defined(__DCC__) && defined(_DIAB_TOOL)
+# define COMPILER_ID "Diab"
+  # define COMPILER_VERSION_MAJOR DEC(__VERSION_MAJOR_NUMBER__)
+  # define COMPILER_VERSION_MINOR DEC(__VERSION_MINOR_NUMBER__)
+  # define COMPILER_VERSION_PATCH DEC(__VERSION_ARCH_FEATURE_NUMBER__)
+  # define COMPILER_VERSION_TWEAK DEC(__VERSION_BUG_FIX_NUMBER__)
+
 
 
 /* These compilers are either not known or too old to define an
@@ -1387,6 +1404,14 @@ char const *info_cray = "INFO" ":" "compiler_wrapper[CrayPrgEnv]";
 #  define ARCHITECTURE_ID ""
 # endif
 
+#elif defined(__clang__) && defined(__ti__)
+# if defined(__ARM_ARCH)
+#  define ARCHITECTURE_ID "ARM"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
 #elif defined(__TI_COMPILER_VERSION__)
 # if defined(__TI_ARM__)
 #  define ARCHITECTURE_ID "ARM"
@@ -1418,7 +1443,7 @@ char const *info_cray = "INFO" ":" "compiler_wrapper[CrayPrgEnv]";
 # elif defined(__CMCS__)
 #  define ARCHITECTURE_ID "MCS"
 
-# elif defined(__CARM__)
+# elif defined(__CARM__) || defined(__CPARM__)
 #  define ARCHITECTURE_ID "ARM"
 
 # elif defined(__CARC__)
@@ -1429,6 +1454,20 @@ char const *info_cray = "INFO" ":" "compiler_wrapper[CrayPrgEnv]";
 
 # elif defined(__CPCP__)
 #  define ARCHITECTURE_ID "PCP"
+
+# else
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__RENESAS__)
+# if defined(__CCRX__)
+#  define ARCHITECTURE_ID "RX"
+
+# elif defined(__CCRL__)
+#  define ARCHITECTURE_ID "RL78"
+
+# elif defined(__CCRH__)
+#  define ARCHITECTURE_ID "RH850"
 
 # else
 #  define ARCHITECTURE_ID ""
@@ -1520,32 +1559,73 @@ char const* info_arch = "INFO" ":" "arch[" ARCHITECTURE_ID "]";
 
 
 
-#if defined(__INTEL_COMPILER) && defined(_MSVC_LANG) && _MSVC_LANG < 201403L
-#  if defined(__INTEL_CXX11_MODE__)
-#    if defined(__cpp_aggregate_nsdmi)
-#      define CXX_STD 201402L
-#    else
-#      define CXX_STD 201103L
-#    endif
+#define CXX_STD_98 199711L
+#define CXX_STD_11 201103L
+#define CXX_STD_14 201402L
+#define CXX_STD_17 201703L
+#define CXX_STD_20 202002L
+#define CXX_STD_23 202302L
+
+#if defined(__INTEL_COMPILER) && defined(_MSVC_LANG)
+#  if _MSVC_LANG > CXX_STD_17
+#    define CXX_STD _MSVC_LANG
+#  elif _MSVC_LANG == CXX_STD_17 && defined(__cpp_aggregate_paren_init)
+#    define CXX_STD CXX_STD_20
+#  elif _MSVC_LANG > CXX_STD_14 && __cplusplus > CXX_STD_17
+#    define CXX_STD CXX_STD_20
+#  elif _MSVC_LANG > CXX_STD_14
+#    define CXX_STD CXX_STD_17
+#  elif defined(__INTEL_CXX11_MODE__) && defined(__cpp_aggregate_nsdmi)
+#    define CXX_STD CXX_STD_14
+#  elif defined(__INTEL_CXX11_MODE__)
+#    define CXX_STD CXX_STD_11
 #  else
-#    define CXX_STD 199711L
+#    define CXX_STD CXX_STD_98
 #  endif
 #elif defined(_MSC_VER) && defined(_MSVC_LANG)
-#  define CXX_STD _MSVC_LANG
+#  if _MSVC_LANG > __cplusplus
+#    define CXX_STD _MSVC_LANG
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif defined(__NVCOMPILER)
+#  if __cplusplus == CXX_STD_17 && defined(__cpp_aggregate_paren_init)
+#    define CXX_STD CXX_STD_20
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif defined(__INTEL_COMPILER) || defined(__PGI)
+#  if __cplusplus == CXX_STD_11 && defined(__cpp_namespace_attributes)
+#    define CXX_STD CXX_STD_17
+#  elif __cplusplus == CXX_STD_11 && defined(__cpp_aggregate_nsdmi)
+#    define CXX_STD CXX_STD_14
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif (defined(__IBMCPP__) || defined(__ibmxl__)) && defined(__linux__)
+#  if __cplusplus == CXX_STD_11 && defined(__cpp_aggregate_nsdmi)
+#    define CXX_STD CXX_STD_14
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif __cplusplus == 1 && defined(__GXX_EXPERIMENTAL_CXX0X__)
+#  define CXX_STD CXX_STD_11
 #else
 #  define CXX_STD __cplusplus
 #endif
 
 const char* info_language_standard_default = "INFO" ":" "standard_default["
-#if CXX_STD > 202002L
+#if CXX_STD > CXX_STD_23
+  "26"
+#elif CXX_STD > CXX_STD_20
   "23"
-#elif CXX_STD > 201703L
+#elif CXX_STD > CXX_STD_17
   "20"
-#elif CXX_STD >= 201703L
+#elif CXX_STD > CXX_STD_14
   "17"
-#elif CXX_STD >= 201402L
+#elif CXX_STD > CXX_STD_11
   "14"
-#elif CXX_STD >= 201103L
+#elif CXX_STD >= CXX_STD_11
   "11"
 #else
   "98"
@@ -1554,7 +1634,7 @@ const char* info_language_standard_default = "INFO" ":" "standard_default["
 
 const char* info_language_extensions_default = "INFO" ":" "extensions_default["
 #if (defined(__clang__) || defined(__GNUC__) || defined(__xlC__) ||           \
-     defined(__TI_COMPILER_VERSION__)) &&                                     \
+     defined(__TI_COMPILER_VERSION__) || defined(__RENESAS__)) &&             \
   !defined(__STRICT_ANSI__)
   "ON"
 #else
@@ -1573,7 +1653,7 @@ int main(int argc, char* argv[])
 #ifdef COMPILER_VERSION_MAJOR
   require += info_version[argc];
 #endif
-#ifdef COMPILER_VERSION_INTERNAL
+#if defined(COMPILER_VERSION_INTERNAL) || defined(COMPILER_VERSION_INTERNAL_STR)
   require += info_version_internal[argc];
 #endif
 #ifdef SIMULATE_ID
@@ -2751,6 +2831,44 @@ void cmd_LOCATE(xbase::DbArea& area, std::istringstream& iss) {
   std::cout << "[LOCATE demo] WHERE: " << where_text << " (compiled ok)\n";
 }
 
+// --- File: C:\Users\deral\code\ccode\src\browse\controller.cpp ---
+
+#include "browse/controller.hpp"
+#include "ui/layout_manager.hpp"
+#include <algorithm>
+namespace browse {
+Controller::Controller(IRecordGateway& gw, IBrowseRenderer& r, IInputSource& in)
+: gw_(gw), r_(r), in_(in) {}
+void Controller::init_vm(int termW, int termH, bool windowedDefault) {
+    vm_.windowed = windowedDefault;
+    vm_.leftPadding = 1;
+    vm_.columns.clear();
+    for (auto& n : gw_.column_names()) { Column c; c.name=n; c.width= (int)std::max<size_t>(6, n.size()+1); vm_.columns.push_back(c); }
+    vm_.totalRows = gw_.total_rows();
+    vm_.vp = {0, std::max(0, termH-3), 0, (int)vm_.columns.size()};
+    vm_.selected = 0;
+    vm_.status = "Browsetui V2 (stub) — read-only pilot";
+}
+bool Controller::tick() {
+    Command cmd = in_.next();
+    switch (cmd) {
+    case Command::Quit: return false;
+    case Command::NavigateUp:   if (vm_.selected>0) vm_.selected--; break;
+    case Command::NavigateDown: vm_.selected++; break;
+    case Command::PageUp:       vm_.selected = std::max(0, vm_.selected - std::max(1, vm_.vp.visibleRows-1)); break;
+    case Command::PageDown:     vm_.selected += std::max(1, vm_.vp.visibleRows-1); break;
+    case Command::ToggleWindowed: vm_.windowed = !vm_.windowed; r_.set_windowed(vm_.windowed); break;
+    case Command::EditRecord: case Command::SaveRecord: case Command::None: default: break;
+    }
+    if (vm_.selected < 0) vm_.selected = 0;
+    if (vm_.selected >= vm_.totalRows) vm_.selected = std::max(0, vm_.totalRows-1);
+    LayoutManager lm; LayoutSettings s; s.windowed=vm_.windowed; s.minInnerMargin=vm_.leftPadding;
+    auto L = lm.compute(120, 40, s); // TODO: replace with actual terminal size
+    r_.render(vm_, L);
+    return true;
+}
+} // namespace browse
+
 // --- File: C:\Users\deral\code\ccode\src\cli\expr\api.cpp ---
 
 #include "dottalk/expr/api.hpp"
@@ -3386,159 +3504,74 @@ void cmd_BOTTOM(xbase::DbArea& a, std::istringstream& iss) {
 
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_browse.cpp ---
 
-// cmd_browse.cpp
-// DotTalk++ — Minimal interactive BROWSE with editing, no DbArea internals.
-// Uses existing handlers: LIST, DISPLAY, GOTO, REPLACE.
+// src/cli/cmd_browse.cpp
+//
+// DotTalk++ — BROWSE command handler (V1/V2 switch)
+// Default: legacy Browsetui (V1) runs exactly as it does today.
+// Opt-in: set env BROWSE_TUI_V2=1 to run V2 pilot (interfaces + stubs).
 
-#include <iostream>
 #include <sstream>
-#include <string>
-#include <algorithm>
-#include <cctype>
+#include <iostream>
+#include <memory>
 
-#include "xbase.hpp"  // xbase::DbArea
+// Bring in DbArea
+#include "xbase.hpp"
 
-// ---- Forward declarations of existing command handlers ---------------------
-void cmd_LIST   (xbase::DbArea&, std::istringstream&);
-void cmd_DISPLAY(xbase::DbArea&, std::istringstream&);
-void cmd_GOTO   (xbase::DbArea&, std::istringstream&);
-void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
+// V2 interfaces/stubs
+#include "browse/browse_flags.hpp"
+#include "browse/controller.hpp"
+#include "data/irecord_gateway.hpp"
+#include "ui/ibrowse_renderer.hpp"
+#include "input/iinput_source.hpp"
 
-// ---- Helpers ---------------------------------------------------------------
-static inline std::string trim(const std::string& s) {
-  size_t b = 0, e = s.size();
-  while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
-  while (e > b && std::isspace(static_cast<unsigned char>(s[e-1]))) --e;
-  return s.substr(b, e - b);
-}
+// -----------------------------------------------------------------------------
+// Legacy path (V1)
+// If your original cmd_browse.cpp had inline legacy code, paste it into
+// run_browsetui_v1(). If you already have a function elsewhere, declare
+// it as extern below and call it.
+// -----------------------------------------------------------------------------
 
-static inline std::string upper(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
-  return s;
-}
+// OPTION B (call out to an existing function somewhere else):
+// extern void legacy_browse(xbase::DbArea&, std::istringstream&);
 
-static inline bool needs_quotes(const std::string& v) {
-  for (unsigned char c : v) {
-    if (std::isspace(c) || !std::isalnum(c)) return true;
-  }
-  return v.empty();
-}
-
-static void show_menu(bool editEnabled) {
-  std::cout
-    << "\n=== BROWSE " << (editEnabled ? "EDIT " : "") << "===\n"
-    << "Commands:\n"
-    << "  L            - List (uses LIST)\n"
-    << "  D            - Display current record (uses DISPLAY)\n"
-    << "  G <n>        - Go to record n (uses GOTO)\n"
-    << "  E            - Edit a field in current record (uses REPLACE)\n"
-    << "  H or ?       - Help (this menu)\n"
-    << "  Q            - Quit browse\n";
-}
-
-// ---- Command implementation ------------------------------------------------
-void cmd_BROWSE(xbase::DbArea& area, std::istringstream& iss)
+static void run_browsetui_v1(xbase::DbArea& area, std::istringstream& args)
 {
-  // Parse optional "EDIT" token, but we allow E command regardless.
-  bool editMode = false;
-  {
-    std::string rest; std::getline(iss, rest);
-    rest = upper(trim(rest));
-    if (rest.find("EDIT") != std::string::npos) editMode = true;
-  }
+    // If you have an existing function, call it here instead:
+    // legacy_browse(area, args);
 
-  std::cout << "Entered BROWSE" << (editMode ? " EDIT" : "") << " mode.\n";
-  show_menu(editMode);
+    // TEMP placeholder so this compiles/links even if you haven't wired V1 yet.
+    std::cerr << "[browse] V1 path placeholder — wire your current Browsetui call here.\n";
+    (void)area; (void)args;
+}
 
-  for (;;) {
-    std::cout << "\nBROWSE> ";
-    std::string line;
-    if (!std::getline(std::cin, line)) break;
-    line = trim(line);
-    if (line.empty()) continue;
-
-    // Split first token
-    std::istringstream ls(line);
-    std::string cmd; ls >> cmd;
-    std::string arg; std::getline(ls, arg); arg = trim(arg);
-
-    std::string ucmd = upper(cmd);
-
-    // Quit
-    if (ucmd == "Q" || ucmd == "QUIT" || ucmd == "EXIT") {
-      std::cout << "Leaving BROWSE.\n";
-      break;
+// -----------------------------------------------------------------------------
+// Public command entry (registry dispatches here)
+// Signature matches other command handlers (void, not int).
+// -----------------------------------------------------------------------------
+void cmd_BROWSE(xbase::DbArea& area, std::istringstream& args)
+{
+    // === Legacy by default ===
+    if (!browse::use_v2()) {
+        run_browsetui_v1(area, args);
+        return;
     }
 
-    // Help
-    if (ucmd == "H" || ucmd == "?") {
-      show_menu(editMode);
-      continue;
+    // === V2 pilot (safe/read-only) ===
+    std::unique_ptr<browse::IRecordGateway> gw(browse::create_dbf_gateway_stub());
+    std::unique_ptr<browse::IBrowseRenderer> r (browse::create_renderer_v2());
+    std::unique_ptr<browse::IInputSource>   in(browse::create_legacy_input_adapter());
+
+    browse::Controller ctl(*gw, *r, *in);
+
+    // TODO: replace with actual terminal size from your TUI backend
+    const int termW = 120;
+    const int termH = 40;
+
+    ctl.init_vm(termW, termH, browse::windowed_default());
+
+    while (ctl.tick()) {
+        // loop until Quit → returns to shell
     }
-
-    // List (delegate to LIST)
-    if (ucmd == "L" || ucmd == "LIST") {
-      std::istringstream empty;
-      cmd_LIST(area, empty);
-      continue;
-    }
-
-    // Display current record (delegate to DISPLAY)
-    if (ucmd == "D" || ucmd == "DISPLAY") {
-      std::istringstream empty;
-      cmd_DISPLAY(area, empty);
-      continue;
-    }
-
-    // GOTO <n>
-    if (ucmd == "G" || ucmd == "GOTO") {
-      if (arg.empty()) {
-        std::cout << "Usage: G <recno>\n";
-        continue;
-      }
-      std::istringstream go(arg);
-      cmd_GOTO(area, go);
-      // show the record after moving
-      std::istringstream empty;
-      cmd_DISPLAY(area, empty);
-      continue;
-    }
-
-    // Edit current record: prompt for field and value, call REPLACE
-    if (ucmd == "E" || ucmd == "EDIT") {
-      // We allow edit regardless of initial EDIT token (keeps it simple)
-      std::string field;
-      std::cout << "Field name: ";
-      if (!std::getline(std::cin, field)) break;
-      field = trim(field);
-      if (field.empty()) {
-        std::cout << "Canceled (empty field).\n";
-        continue;
-      }
-
-      std::string newv;
-      std::cout << "New value: ";
-      if (!std::getline(std::cin, newv)) break;
-      newv = trim(newv);
-
-      // Build REPLACE <FIELD> WITH <value>
-      std::ostringstream ro;
-      ro << field << " WITH ";
-      if (needs_quotes(newv)) ro << '"' << newv << '"';
-      else                     ro << newv;
-
-      std::istringstream riss(ro.str());
-      cmd_REPLACE(area, riss);
-
-      // Show the updated record
-      std::istringstream empty;
-      cmd_DISPLAY(area, empty);
-      continue;
-    }
-
-    std::cout << "Unknown command. Type H for help.\n";
-  }
 }
 
 // --- File: C:\Users\deral\code\ccode\src\cli\cmd_browsetui.cpp ---
@@ -8935,6 +8968,11 @@ std::string escape(const std::string& s) {
 
 } // namespace csv
 
+// --- File: C:\Users\deral\code\ccode\src\cli\field_codecs.cpp ---
+
+#include "cli/field_codecs.hpp"
+// All inline in header for simplicity.
+
 // --- File: C:\Users\deral\code\ccode\src\cli\foxref.cpp ---
 
 // src/cli/foxref.cpp
@@ -9002,6 +9040,11 @@ std::vector<const Item*> search(std::string_view token) {
 }
 
 } // namespace foxref
+
+// --- File: C:\Users\deral\code\ccode\src\cli\hex_dump.cpp ---
+
+#include "cli/hex_dump.hpp"
+// Header-only; TU provided for build systems that like .cpp files.
 
 // --- File: C:\Users\deral\code\ccode\src\cli\main.cpp ---
 
@@ -9721,6 +9764,11 @@ bool predx::eval_expr(xbase::DbArea& A, std::string expr) {
     return predx::eval_triplet(A, lhsTok, op, rest);
 }
 
+// --- File: C:\Users\deral\code\ccode\src\cli\record_pack.cpp ---
+
+#include "cli/record_pack.hpp"
+// All inline in header for simplicity. This TU exists to allow easy build inclusion.
+
 // --- File: C:\Users\deral\code\ccode\src\cli\shell.cpp ---
 
 // shell.cpp   restored command registry + indexing hooks
@@ -10144,6 +10192,22 @@ namespace dottalk {
   #endif
   }
 }
+
+// --- File: C:\Users\deral\code\ccode\src\data\record_gateway_dbf_stub.cpp ---
+
+#include "data/irecord_gateway.hpp"
+#include <iostream>
+namespace browse {
+class DbfGatewayStub final : public IRecordGateway {
+public:
+    int total_rows() override { return 0; }
+    std::vector<std::string> column_names() override { return {}; }
+    std::vector<GatewayRow> load_page(const PageRequest& req) override { (void)req; return {}; }
+    bool update_record(std::uint32_t recno, const std::unordered_map<std::string,std::string>& vals) override {
+        (void)recno; (void)vals; std::cerr << "[dbf_gateway_stub] update_record (noop)\n"; return false; }
+};
+IRecordGateway* create_dbf_gateway_stub(){ return new DbfGatewayStub(); }
+} // namespace browse
 
 // --- File: C:\Users\deral\code\ccode\src\dli\browsetui_fastpatch.cpp ---
 
@@ -10783,6 +10847,23 @@ std::string vt_inverse(std::string_view s, bool vt){
 
 } // namespace dli
 
+// --- File: C:\Users\deral\code\ccode\src\input\legacy_input_adapter.cpp ---
+
+#include "input/iinput_source.hpp"
+#include <iostream>
+namespace browse {
+class LegacyInputAdapter final : public IInputSource {
+public:
+    Command next() override {
+        // TODO: Replace with adapter to your existing InputHandler.
+        // Preserve F6 behavior by mapping it to Command::ToggleWindowed (or current binding).
+        std::cerr << "[legacy_input_adapter_stub] next()\n";
+        return Command::None;
+    }
+};
+IInputSource* create_legacy_input_adapter(){ return new LegacyInputAdapter(); }
+} // namespace browse
+
 // --- File: C:\Users\deral\code\ccode\src\memo\memostore.cpp ---
 
 // memo_sidecar_v1/src/memo/memostore.cpp
@@ -10882,6 +10963,67 @@ std::string MemoStore::sidecar_path() const {
 }
 
 } // namespace xbase::memo
+
+// --- File: C:\Users\deral\code\ccode\src\ui\layout_manager.cpp ---
+
+#include "ui/layout_manager.hpp"
+#include <algorithm> // std::min/std::max
+
+namespace browse {
+
+Layout LayoutManager::compute(int termW, int termH, const LayoutSettings& s) const {
+    Layout L;
+    L.frame  = {0, 0, termW, termH};
+    L.header = {0, 0, termW, 1};
+    L.status = {0, termH > 0 ? termH - 1 : 0, termW, 1};
+
+    int listY = 1;
+    int listH = termH - 2; // minus header/status
+    if (listH < 0) listH = 0;
+
+    if (!s.windowed) {
+        L.window = L.frame;
+        L.list   = {0, listY, termW, listH};
+        return L;
+    }
+
+    int margin = s.minInnerMargin < 1 ? 1 : s.minInnerMargin;
+
+    int winW = s.desiredWidth  > 0 ? std::min(s.desiredWidth,  termW - 2*margin) : termW - 2*margin;
+    int winH = s.desiredHeight > 0 ? std::min(s.desiredHeight, termH - 2*margin) : termH - 2*margin;
+
+    if (winW < 20) winW = std::max(0, termW - 2*margin);
+    if (winH < 5)  winH = std::max(0, termH - 2*margin);
+
+    int winX = (termW - winW) / 2;
+    int winY = (termH - winH) / 2;
+
+    L.window = {winX, winY, winW, winH};
+    L.header = {winX, winY, winW, 1};
+    L.status = {winX, winY + winH - 1, winW, 1};
+    L.list   = {winX, winY + 1, winW, winH - 2};
+    return L;
+}
+
+} // namespace browse
+
+// --- File: C:\Users\deral\code\ccode\src\ui\renderer_v2_stub.cpp ---
+
+#include "ui/ibrowse_renderer.hpp"
+#include <iostream>
+namespace browse {
+class RendererV2Stub final : public IBrowseRenderer {
+    bool windowed_ = true;
+public:
+    void render(const BrowseViewModel&, const Layout&) override {
+        static int counter=0;
+        if (++counter<=1) std::cerr << "[renderer_v2_stub] render() (stub) windowed=" << (windowed_?"true":"false") << "\n";
+    }
+    void invalidate_all() override {}
+    void set_windowed(bool on) override { windowed_ = on; }
+};
+IBrowseRenderer* create_renderer_v2(){ return new RendererV2Stub(); }
+} // namespace browse
 
 // --- File: C:\Users\deral\code\ccode\src\xbase\dbarea.cpp ---
 
@@ -19125,6 +19267,70 @@ const std::unordered_map<std::string, dli::Handler>& map();
 namespace cli = dli;
 // ---------------------------------------------------------------------------
 
+// --- File: C:\Users\deral\code\ccode\include\browse\browse_flags.hpp ---
+
+#pragma once
+#include <cstdlib>
+#include <string>
+namespace browse {
+inline bool env_flag(const char* name, bool def=false) {
+    if (const char* v = std::getenv(name)) {
+        std::string s(v);
+        for (auto& c: s) c = (char)tolower((unsigned char)c);
+        return s=="1" || s=="true" || s=="on" || s=="yes";
+    }
+    return def;
+}
+inline bool use_v2()              { return env_flag("BROWSE_TUI_V2", false); }
+inline bool allow_write()         { return env_flag("BROWSE_TUI_ALLOW_WRITE", false); }
+inline bool renderer_diff_mode()  { return env_flag("BROWSE_TUI_DIFF", true); }
+inline bool windowed_default()    { return env_flag("BROWSE_TUI_WINDOWED", true); }
+} // namespace browse
+
+// --- File: C:\Users\deral\code\ccode\include\browse\browse_view_model.hpp ---
+
+#pragma once
+#include <string>
+#include <vector>
+#include <cstdint>
+namespace browse {
+struct Column { std::string name; int width{10}; };
+struct Cell   { std::string text; };
+struct Row    { std::vector<Cell> cells; std::uint32_t recno{0}; };
+struct Viewport { int firstRow{0}; int visibleRows{0}; int firstCol{0}; int visibleCols{0}; };
+struct BrowseViewModel {
+    std::vector<Column> columns;
+    std::vector<Row>    rows;
+    Viewport            vp;
+    int                 selected{0};
+    int                 totalRows{0};
+    std::string         status;
+    bool                windowed{true};
+    int                 leftPadding{1};
+};
+} // namespace browse
+
+// --- File: C:\Users\deral\code\ccode\include\browse\controller.hpp ---
+
+#pragma once
+#include "browse_view_model.hpp"
+#include "ui/ibrowse_renderer.hpp"
+#include "data/irecord_gateway.hpp"
+#include "input/iinput_source.hpp"
+namespace browse {
+class Controller {
+public:
+    Controller(IRecordGateway& gw, IBrowseRenderer& r, IInputSource& in);
+    bool tick();
+    void init_vm(int termW, int termH, bool windowedDefault);
+private:
+    IRecordGateway& gw_;
+    IBrowseRenderer& r_;
+    IInputSource& in_;
+    BrowseViewModel vm_;
+};
+} // namespace browse
+
 // --- File: C:\Users\deral\code\ccode\include\cli\browsetui.hpp ---
 
 #pragma once
@@ -19168,6 +19374,190 @@ struct Console {
 };
 
 Console* make_console(); // factory: picks Win or Posix
+
+// --- File: C:\Users\deral\code\ccode\include\cli\field_codecs.hpp ---
+
+#pragma once
+// Plan A: Strict DBF field codecs with predictable packing rules.
+// No file I/O; pure formatting functions.
+#include <string>
+#include <string_view>
+#include <optional>
+#include <cctype>
+#include <algorithm>
+#include <sstream>
+#include <vector>
+#include <limits>
+#include <stdexcept>
+
+namespace cli_planA {
+
+inline std::string rpad_spaces(std::string s, int width) {
+    if (width <= 0) return {};
+    if ((int)s.size() > width) s.resize(width);
+    if ((int)s.size() < width) s.append(width - (int)s.size(), ' ');
+    return s;
+}
+
+inline std::string lpad_spaces(std::string s, int width) {
+    if (width <= 0) return {};
+    if ((int)s.size() > width) s = s.substr((int)s.size() - width);
+    if ((int)s.size() < width) s.insert(0, width - (int)s.size(), ' ');
+    return s;
+}
+
+// ---- Character (C) ----
+inline std::string pack_char(std::string_view in, int length) {
+    std::string s(in);
+    // Strip any embedded NULs (DBF expects spaces, not NUL padding)
+    s.erase(std::remove(s.begin(), s.end(), '\0'), s.end());
+    return rpad_spaces(std::move(s), length);
+}
+
+// ---- Numeric / Float (N/F) ----
+// Format with fixed precision; total width must fit length (including sign and dot).
+inline std::string pack_numeric(double value, int length, int dec, bool& ok) {
+    ok = true;
+    if (length <= 0) { ok = false; return {}; }
+    if (dec < 0) dec = 0;
+    std::ostringstream oss;
+    oss.setf(std::ios::fixed); 
+    oss.precision(dec);
+    oss << value;
+    std::string s = oss.str();
+
+    // If too wide, attempt rounding to fit by reducing precision (as a last resort).
+    if ((int)s.size() > length) {
+        for (int p = std::max(0, dec - 1); p >= 0; --p) {
+            std::ostringstream tryoss;
+            tryoss.setf(std::ios::fixed);
+            tryoss.precision(p);
+            tryoss << value;
+            s = tryoss.str();
+            if ((int)s.size() <= length) break;
+        }
+    }
+    if ((int)s.size() > length) {
+        ok = false; // cannot fit
+        return std::string(length, '*'); // visual overflow marker
+    }
+    return lpad_spaces(std::move(s), length);
+}
+
+// Accept numeric from string input
+inline std::string pack_numeric_from_string(std::string_view in, int length, int dec, bool& ok) {
+    try {
+        // Allow leading/trailing spaces and commas/underscores
+        std::string s(in);
+        s.erase(std::remove_if(s.begin(), s.end(), [](unsigned char c){ return c == ',' || c == '_'; }), s.end());
+        double v = std::stod(s);
+        return pack_numeric(v, length, dec, ok);
+    } catch (...) {
+        ok = false;
+        return lpad_spaces("0", length);
+    }
+}
+
+// ---- Date (D): YYYYMMDD ----
+inline bool is_digits(std::string_view s) {
+    for (char c : s) if (!std::isdigit((unsigned char)c)) return false;
+    return true;
+}
+
+inline std::string pack_date(std::string_view in, bool& ok) {
+    ok = true;
+    std::string s(in);
+    // Accept YYYY-MM-DD or YYYY/MM/DD; normalize to YYYYMMDD
+    if (s.size() == 10 && (s[4] == '-' || s[4] == '/') && (s[7] == '-' || s[7] == '/')) {
+        s.erase(7,1);
+        s.erase(4,1);
+    }
+    if (s.size() == 0) return "00000000";
+    if (s.size() != 8 || !is_digits(s)) {
+        ok = false;
+        return "00000000";
+    }
+    return s;
+}
+
+// ---- Logical (L): 'T','F','?' ----
+inline char pack_logical_char(char c) {
+    if (c == 0) return '?';
+    c = (char)std::toupper((unsigned char)c);
+    if (c=='Y') c='T';
+    if (c=='N') c='F';
+    if (c!='T' && c!='F' && c!='?') c='?';
+    return c;
+}
+
+inline char pack_logical_from_string(std::string_view in) {
+    if (in.empty()) return '?';
+    return pack_logical_char(in.front());
+}
+
+// ---- Memo pointer (M): default 4-byte little-endian dBase pointer ----
+// Some variants use 10-byte ASCII. We provide both.
+inline std::string pack_memo_ptr_le32(uint32_t block_id, int length) {
+    if (length < 4) return std::string(length, '\0');
+    std::string out(length, '\0');
+    out[0] = (char)(block_id & 0xFF);
+    out[1] = (char)((block_id >> 8) & 0xFF);
+    out[2] = (char)((block_id >> 16) & 0xFF);
+    out[3] = (char)((block_id >> 24) & 0xFF);
+    // Remaining bytes (if any) left as 0
+    return out;
+}
+
+inline std::string pack_memo_ptr_ascii(uint32_t block_id, int length) {
+    std::string s = std::to_string(block_id);
+    return rpad_spaces(std::move(s), length);
+}
+
+} // namespace cli_planA
+
+// --- File: C:\Users\deral\code\ccode\include\cli\field_meta.hpp ---
+
+#pragma once
+// Plan A: Minimal field metadata POD used by codecs/packer.
+// Keep this header-only and free of external dependencies.
+#include <string>
+#include <cstddef>
+
+namespace cli_planA {
+
+struct FieldMeta {
+    std::string name;   // uppercase, ASCII (DBF header uses ASCII names up to 11 bytes)
+    char        type{}; // 'C','N','F','D','L','M','G','B' etc.
+    int         length{0};
+    int         decimal{0};
+    std::size_t offset{0}; // byte offset from START OF DATA (i.e., AFTER the deleted-flag)
+};
+
+} // namespace cli_planA
+
+// --- File: C:\Users\deral\code\ccode\include\cli\hex_dump.hpp ---
+
+#pragma once
+#include <string>
+#include <vector>
+#include <sstream>
+#include <iomanip>
+
+namespace cli_planA {
+
+inline std::string hex_dump(const std::vector<char>& bytes, std::size_t max_bytes = 64) {
+    std::ostringstream oss;
+    std::size_t n = bytes.size();
+    if (n > max_bytes) n = max_bytes;
+    for (std::size_t i = 0; i < n; ++i) {
+        if (i && (i % 16 == 0)) oss << "\n";
+        unsigned v = static_cast<unsigned char>(bytes[i]);
+        oss << std::hex << std::setw(2) << std::setfill('0') << v << ' ';
+    }
+    return oss.str();
+}
+
+} // namespace cli_planA
 
 // --- File: C:\Users\deral\code\ccode\include\cli\memo_auto.hpp ---
 
@@ -19379,6 +19769,122 @@ inline bool clear_current_record_memo(
 
 } // namespace cli_memo
 
+// --- File: C:\Users\deral\code\ccode\include\cli\record_pack.hpp ---
+
+#pragma once
+// Plan A: Field-level packers into a record data buffer (no flag byte).
+// Caller is responsible for copying into the full record with deleted flag prefix.
+#include "field_meta.hpp"
+#include "field_codecs.hpp"
+#include "hex_dump.hpp"
+#include <functional>
+#include <vector>
+#include <string>
+#include <iostream>
+
+namespace cli_planA {
+
+struct PackResult {
+    bool ok{true};
+    std::string fieldName;
+    std::string error; // empty if ok
+};
+
+// memoWriter: optional callback returning a block id for text payloads
+using MemoWriter = std::function<uint32_t(const std::string& text)>;
+
+// Packs a single field's user-facing string value into the record data bytes at meta.offset.
+inline PackResult pack_field(std::vector<char>& recordData,
+                             const FieldMeta& meta,
+                             const std::string& userValue,
+                             MemoWriter memoWriter = nullptr,
+                             bool asciiMemoPtr = false)
+{
+    PackResult res; res.fieldName = meta.name;
+    auto boundsOK = [&](int need) -> bool {
+        return meta.offset + (std::size_t)need <= recordData.size();
+    };
+
+    switch (meta.type) {
+        case 'C': case 'c': {
+            std::string bytes = pack_char(userValue, meta.length);
+            if (!boundsOK(meta.length)) { res.ok=false; res.error="bounds"; return res; }
+            std::copy(bytes.begin(), bytes.end(), recordData.begin() + meta.offset);
+            return res;
+        }
+        case 'N': case 'n': case 'F': case 'f': {
+            bool ok = true;
+            std::string bytes = pack_numeric_from_string(userValue, meta.length, meta.decimal, ok);
+            if (!ok) { res.ok=false; res.error="numeric overflow or invalid"; }
+            if (!boundsOK(meta.length)) { res.ok=false; res.error="bounds"; return res; }
+            std::copy(bytes.begin(), bytes.end(), recordData.begin() + meta.offset);
+            return res;
+        }
+        case 'D': case 'd': {
+            bool ok=true;
+            std::string ymd = pack_date(userValue, ok);
+            if (!ok) { res.ok=false; res.error="invalid date"; }
+            if (meta.length < 8) { res.ok=false; res.error="date field too short"; return res; }
+            if (!boundsOK(8)) { res.ok=false; res.error="bounds"; return res; }
+            std::copy(ymd.begin(), ymd.end(), recordData.begin() + meta.offset);
+            // Pad any remaining length with spaces
+            for (int i = 8; i < meta.length; ++i) recordData[meta.offset + i] = ' ';
+            return res;
+        }
+        case 'L': case 'l': {
+            if (!boundsOK(1)) { res.ok=false; res.error="bounds"; return res; }
+            char c = pack_logical_from_string(userValue);
+            recordData[meta.offset] = c;
+            // pad rest of length with spaces if length>1
+            for (int i = 1; i < meta.length; ++i) recordData[meta.offset + i] = ' ';
+            return res;
+        }
+        case 'M': case 'm': case 'B': case 'b': case 'G': case 'g': {
+            if (!boundsOK(meta.length)) { res.ok=false; res.error="bounds"; return res; }
+            uint32_t block_id = 0;
+            if (memoWriter) {
+                block_id = memoWriter(userValue);
+            } // else keep 0 pointer
+            std::string ptr = asciiMemoPtr ? pack_memo_ptr_ascii(block_id, meta.length)
+                                           : pack_memo_ptr_le32(block_id, meta.length);
+            std::copy(ptr.begin(), ptr.end(), recordData.begin() + meta.offset);
+            return res;
+        }
+        default: {
+            // Unknown type: write spaces
+            if (!boundsOK(meta.length)) { res.ok=false; res.error="bounds"; return res; }
+            std::fill(recordData.begin() + meta.offset, recordData.begin() + meta.offset + meta.length, ' ');
+            res.ok=false; res.error="unknown type";
+            return res;
+        }
+    }
+}
+
+// Build a full on-disk record: deletedFlag + recordData
+inline std::vector<char> build_record(char deletedFlag, const std::vector<char>& recordData) {
+    std::vector<char> rec;
+    rec.reserve(recordData.size() + 1);
+    rec.push_back(deletedFlag);
+    rec.insert(rec.end(), recordData.begin(), recordData.end());
+    return rec;
+}
+
+// Simple tracer to std::cerr
+inline void trace_pack(const std::string& table,
+                       int recno,
+                       const std::vector<FieldMeta>& metas,
+                       const std::vector<char>& recordData,
+                       const std::vector<std::string>& changedFields)
+{
+    std::cerr << "[trace] table=" << table << " recno=" << recno
+              << " changed=" << changedFields.size()
+              << " bytes=" << recordData.size() << "\n";
+    std::cerr << "[trace] hex:\n" << hex_dump(recordData) << "\n";
+    (void)metas;
+}
+
+} // namespace cli_planA
+
 // --- File: C:\Users\deral\code\ccode\include\cli\settings.hpp ---
 
 #pragma once
@@ -19407,6 +19913,27 @@ struct Settings {
 };
 
 } // namespace cli
+
+// --- File: C:\Users\deral\code\ccode\include\data\irecord_gateway.hpp ---
+
+#pragma once
+#include <string>
+#include <vector>
+#include <cstdint>
+#include <unordered_map>
+namespace browse {
+struct GatewayRow { std::uint32_t recno{0}; std::vector<std::string> fields; };
+struct PageRequest { int offset{0}; int count{0}; };
+class IRecordGateway {
+public:
+    virtual ~IRecordGateway() = default;
+    virtual int total_rows() = 0;
+    virtual std::vector<std::string> column_names() = 0;
+    virtual std::vector<GatewayRow> load_page(const PageRequest& req) = 0;
+    virtual bool update_record(std::uint32_t recno, const std::unordered_map<std::string,std::string>& newValues) = 0;
+};
+IRecordGateway* create_dbf_gateway_stub();
+} // namespace browse
 
 // --- File: C:\Users\deral\code\ccode\include\dli\browsetui_integration.hpp ---
 
@@ -19916,6 +20443,15 @@ struct Token {
 
 }} // namespace
 
+// --- File: C:\Users\deral\code\ccode\include\input\iinput_source.hpp ---
+
+#pragma once
+namespace browse {
+enum class Command { None=0, Quit, NavigateUp, NavigateDown, PageUp, PageDown, ToggleWindowed, EditRecord, SaveRecord };
+class IInputSource { public: virtual ~IInputSource() = default; virtual Command next() = 0; };
+IInputSource* create_legacy_input_adapter();
+} // namespace browse
+
 // --- File: C:\Users\deral\code\ccode\include\memo\dtx_format.hpp ---
 
 #pragma once
@@ -20075,6 +20611,53 @@ inline std::vector<uint8_t> to_bytes(const std::string& s) {
 namespace dottalk {
   void init_utf8();
 }
+
+// --- File: C:\Users\deral\code\ccode\include\ui\ibrowse_renderer.hpp ---
+
+#pragma once
+#include "browse/browse_view_model.hpp"
+#include "layout_manager.hpp"
+namespace browse {
+class IBrowseRenderer {
+public:
+    virtual ~IBrowseRenderer() = default;
+    virtual void render(const BrowseViewModel& vm, const Layout& layout) = 0;
+    virtual void invalidate_all() = 0;
+    virtual void set_windowed(bool on) = 0;
+};
+IBrowseRenderer* create_renderer_v2();
+} // namespace browse
+
+// --- File: C:\Users\deral\code\ccode\include\ui\layout_manager.hpp ---
+
+#pragma once
+#include "browse/browse_view_model.hpp"
+
+namespace browse {
+
+struct Rect { int x{0}, y{0}, w{0}, h{0}; };
+
+struct Layout {
+    Rect frame;
+    Rect window;
+    Rect header;
+    Rect list;
+    Rect status;
+};
+
+struct LayoutSettings {
+    bool windowed{true};
+    int  minInnerMargin{1};
+    int  desiredWidth{0};   // 0 = auto
+    int  desiredHeight{0};  // 0 = auto
+};
+
+class LayoutManager {
+public:
+    Layout compute(int termW, int termH, const LayoutSettings& s) const;
+};
+
+} // namespace browse
 
 // --- File: C:\Users\deral\code\ccode\include\xindex\attach.hpp ---
 

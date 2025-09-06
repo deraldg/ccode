@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-build-test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure (CMake, MSVC)
+        run: >
+          cmake -S . -B build
+          -G "Visual Studio 17 2022"
+          -A x64
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+
+      - name: Build (Release, parallel)
+        run: cmake --build build --config Release -- /m
+
+      - name: CTest (best-effort)
+        run: |
+          if (Test-Path build\Testing -or (Test-Path build\CTestTestfile.cmake)) {
+            ctest --test-dir build -C Release --output-on-failure
+          } else {
+            Write-Host "No CTest tests found; skipping."
+          }
+
+      - name: Python quick tests (pycrud) — best-effort
+        run: |
+          if (Test-Path "pycrud") {
+            cd pycrud
+            if (Test-Path requirements.txt) { pip install -r requirements.txt }
+            else { pip install pytest sqlalchemy fastapi uvicorn pydantic }
+            if (Test-Path tests) { pytest -q } else { Write-Host "No pytest tests found; skipping." }
+          } else { Write-Host "No pycrud folder; skipping Python checks." }
+
+      - name: Upload build artifacts (Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccode-${{ github.sha }}-win64-Release
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            build/Release/**
+            !**/*.obj
+            !**/*.pdb
+
+  ubuntu-python:
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install & test pycrud (best-effort)
+        run: |
+          if [ -d "pycrud" ]; then
+            cd pycrud
+            if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install pytest sqlalchemy fastapi uvicorn pydantic; fi
+            if [ -d tests ]; then pytest -q; else echo "No pytest tests; skipping."; fi
+          else
+            echo "No pycrud folder; skipping."
+          fi

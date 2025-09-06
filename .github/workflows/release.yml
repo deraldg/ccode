@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure (CMake, MSVC)
+        run: >
+          cmake -S . -B build
+          -G "Visual Studio 17 2022"
+          -A x64
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+
+      - name: Build (Release)
+        run: |
+          cmake --build build --config Release -- /m
+          if (Test-Path build\Testing -or (Test-Path build\CTestTestfile.cmake)) {
+            ctest --test-dir build -C Release --output-on-failure
+          } else {
+            Write-Host "No CTest tests found; continuing."
+          }
+
+      - name: Create MANIFEST.txt
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Get-ChildItem -Recurse build\Release | Select-Object FullName, Length, LastWriteTime |
+            Format-Table | Out-String | Set-Content artifacts\MANIFEST.txt
+
+      - name: Package ZIP (tag)
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $zip = "ccode-$tag-win64.zip"
+          Copy-Item -Recurse -Force build\Release artifacts\bin
+          Copy-Item -Recurse -Force artifacts\MANIFEST.txt artifacts\
+          Compress-Archive -Path artifacts\* -DestinationPath $zip
+          Write-Host "Created $zip"
+
+      - name: Upload ZIP as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccode-${{ github.ref_name }}-win64
+          path: ccode-${{ github.ref_name }}-win64.zip
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ccode-${{ github.ref_name }}-win64.zip
+          generate_release_notes: true

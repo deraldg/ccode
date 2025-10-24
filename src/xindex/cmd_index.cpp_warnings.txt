@@ -1,0 +1,12 @@
+  cmd_index.cpp
+  cmd_list.cpp
+  cmd_locate.cpp
+  cmd_order.cpp
+C:\Users\deral\code\ccode\src\cli\cmd_create.cpp(147,29): warning C4310: cast truncates constant value [C:\Users\deral\code\ccode\build-msvc\dottalkpp.vcxproj]
+C:\Users\deral\code\ccode\src\cli\cmd_create.cpp(24,20): warning C4505: '`anonymous-namespace'::to_upper': unreferenced function with internal linkage has been removed [C:\Users\deral\code\ccode\build-msvc\dottalkpp.vcxproj]
+  cmd_pack.cpp
+  cmd_recall.cpp
+C:\Users\deral\code\ccode\src\cli\cmd_browsetui.cpp(69,33): warning C4505: 'snapshot_record': unreferenced function with internal linkage has been removed [C:\Users\deral\code\ccode\build-msvc\dottalkpp.vcxproj]
+C:\Users\deral\code\ccode\src\cli\cmd_browsetui.cpp(331,20): warning C4505: 'make_replace_payload': unreferenced function with internal linkage has been removed [C:\Users\deral\code\ccode\build-msvc\dottalkpp.vcxproj]
+  cmd_recno.cpp
+  cmd_refresh.cpp

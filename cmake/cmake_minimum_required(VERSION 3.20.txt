@@ -1,0 +1,34 @@
+cmake_minimum_required(VERSION 3.20)
+project(dottalkpp)
+
+# Suppress CMP0144 warning
+cmake_policy(SET CMP0144 NEW)
+
+# Find Turbo Vision
+find_package(tvision CONFIG REQUIRED)
+
+# Define the executable
+add_executable(dottalkpp
+    src/cli/shell.cpp
+    src/cli/cmd_tvision.cpp
+    src/cli/hello.cpp
+    src/cli/cmd_foxpro.cpp
+    # Other source files
+)
+
+# Link Turbo Vision
+target_link_libraries(dottalkpp PRIVATE tvision::tvision)
+
+# Include directories
+target_include_directories(dottalkpp PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/cli
+    ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include
+)
+
+# Define DOTTALK_TV_AVAILABLE
+target_compile_definitions(dottalkpp PRIVATE DOTTALK_TV_AVAILABLE)
+
+# Optional: pydottalk target (if applicable)
+# add_library(pydottalk MODULE src/python/pydottalk.cpp)
+# find_package(Python3 COMPONENTS Development REQUIRED)
+# target_link_libraries(pydottalk PRIVATE Python3::Python tvision::tvision)

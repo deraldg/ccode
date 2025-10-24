@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# WSL environment bootstrap for DotTalk++
+# Usage: source ~/wslenv_setup.sh
+
+set -euo pipefail
+
+### ---- 0) Config you might tweak ----
+# Project root on Windows (adjust if your path moves)
+WIN_PROJ_ROOT="/mnt/c/Users/deral/code/ccode"
+LIN_PROJ_LINK="$HOME/ccode"        # convenience symlink
+BIN_DIR="$HOME/bin"                # where helper launchers go
+BUILD_DIR="$WIN_PROJ_ROOT/build"   # CMake/Ninja build dir
+DATA_DIR="$WIN_PROJ_ROOT/data"     # runtime data dir expected by dottalkpp
+
+### ---- 1) Basic checks ----
+if [ ! -d "$WIN_PROJ_ROOT" ]; then
+  echo "ERROR: Project root not found at: $WIN_PROJ_ROOT"
+  echo "Fix WIN_PROJ_ROOT in this script and re-run."
+  return 1 2>/dev/null || exit 1
+fi
+
+mkdir -p "$BIN_DIR"
+
+# Make/update convenience symlink ~/ccode -> project root
+if [ ! -L "$LIN_PROJ_LINK" ]; then
+  ln -s "$WIN_PROJ_ROOT" "$LIN_PROJ_LINK"
+fi
+
+### ---- 2) Shell UX niceties ----
+# Ensure UTF-8 locale (usually already fine on Ubuntu 24.04)
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
+# Add our helper bin dir to PATH (runtime)
+case ":$PATH:" in
+  *":$BIN_DIR:"*) : ;;
+  *) export PATH="$BIN_DIR:$PATH" ;;
+esac
+
+# Optionally add build dir to PATH so you can run `dottalkpp` anywhere
+if [ -d "$BUILD_DIR" ]; then
+  case ":$PATH:" in
+    *":$BUILD_DIR:"*) : ;;
+    *) export PATH="$BUILD_DIR:$PATH" ;;
+  esac
+fi
+
+### ---- 3) Graphics: WSLg vs X410 v3 handling ----
+# If WAYLAND_DISPLAY exists, we’re on WSLg (Win11 GUI). No X server needed.
+if [ -n "${WAYLAND_DISPLAY-}" ]; then
+  # WSLg: most GUI apps “just work”; DISPLAY is typically set for you.
+  : # nothing to do
+else
+  # X410 route (Win10 style, or you prefer X410 on Win11)
+  # Point DISPLAY at Windows host (nameserver from resolv.conf) on screen :0
+  HOST_IP="$(grep -m1 nameserver /etc/resolv.conf | awk '{print $2}')"
+  if [ -n "$HOST_IP" ]; then
+    export DISPLAY="${HOST_IP}:0"
+    export LIBGL_ALWAYS_INDIRECT=1
+    # Some Java/ATK toolkits are noisy under WSL; this quiets them
+    export NO_AT_BRIDGE=1
+  fi
+fi
+
+### ---- 4) Helpful aliases ----
+alias ccode="cd \"$WIN_PROJ_ROOT\""
+alias cbuild="(cd \"$WIN_PROJ_ROOT\" && rm -rf build && cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build -j)"
+alias cbuild-debug="(cd \"$WIN_PROJ_ROOT\" && rm -rf build && cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j)"
+alias crun="(cd \"$WIN_PROJ_ROOT\" && ./build/dottalkpp)"
+alias cclean="(cd \"$WIN_PROJ_ROOT\" && rm -rf build)"
+
+### ---- 5) One-click dependency check (non-destructive) ----
+# Tip: run these once manually if needed:
+#   sudo apt update
+#   sudo apt install -y build-essential cmake ninja-build pkg

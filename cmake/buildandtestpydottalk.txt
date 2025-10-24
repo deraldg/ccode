@@ -1,0 +1,13 @@
+cd C:\Users\deral\code\ccode
+if (Test-Path .\build) { Remove-Item .\build -Recurse -Force }
+
+$VcpkgRoot = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\vcpkg"
+$py = "C:\Users\deral\code\ccode\pycrud\.venv\Scripts\python.exe"
+
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE="$VcpkgRoot\scripts\buildsystems\vcpkg.cmake" `
+  -DVCPKG_MANIFEST_MODE=ON `
+  -DBUILD_PYDOTTALK=ON `
+  -DPython3_EXECUTABLE="$py"
+
+cmake --build .\build --config Release --target pydottalk

@@ -1,0 +1,73 @@
+// cmd_setorder.cpp
+#include "shell_api.hpp"
+#include "command_registry.hpp"
+#include <string>
+#include <vector>
+
+#if DOTTALK_WITH_INDEX
+  #include "xindex/index_manager.hpp"
+#endif
+
+using Args = std::vector<std::string>;
+
+static int setorder_core(Shell& sh, const Args& args) {
+    if (args.size() < 2) {
+        sh.println("Usage: SETORDER <n|tag>");
+        return 1;
+    }
+    const std::string arg = args[1];
+
+#if DOTTALK_WITH_INDEX
+    auto* area = sh.api().current_area();
+    if (!area) { sh.println("No work area."); return 1; }
+    auto& db = *area;
+
+    // If we have an index manager, check loaded tags.
+    if (db._idx) {
+        const bool has_tags =
+            !db._idx->listTags().empty(); // or list_tags()
+
+        if (!has_tags) {
+            // Fallback: no tags loaded → treat SETORDER <x> as SETINDEX <x>
+            // Try direct delegate to existing handler (preferred)
+            extern int cmd_setindex(Shell&, const Args&);
+            Args forwarded = {"SETINDEX", arg};
+            return cmd_setindex(sh, forwarded);
+        }
+
+        // We *do* have tags; allow numeric or name
+        // numeric?
+        bool is_num = !arg.empty() && std::all_of(arg.begin(), arg.end(), ::isdigit);
+        if (is_num) {
+            int n = std::stoi(arg);
+            auto tags = db._idx->listTags();
+            if (n < 1 || n > static_cast<int>(tags.size())) {
+                sh.println("SET ORDER: out of range.");
+                return 1;
+            }
+            if (db._idx->set_active(tags[n-1])) {
+                sh.println("Order set to tag: " + tags[n-1]);
+                return 0;
+            }
+            sh.println("SET ORDER: failed to activate tag.");
+            return 1;
+        } else {
+            if (db._idx->set_active(arg)) {
+                sh.println("Order set to tag: " + arg);
+                return 0;
+            }
+            sh.println("SET ORDER: tag not found.");
+            return 1;
+        }
+    }
+#endif
+
+    // No index subsystem compiled or no manager — try to forward anyway
+    extern int cmd_setindex(Shell&, const Args&);
+    Args forwarded = {"SETINDEX", arg};
+    return cmd_setindex(sh, forwarded);
+}
+
+int cmd_setorder(Shell& sh, const Args& args) {
+    return setorder_core(sh, args);
+}

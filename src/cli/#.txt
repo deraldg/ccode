@@ -1,0 +1,25 @@
+
+
+
+
+loop through areas 1 to 26 max  
+
+DotTalk Status Report // Header
+
+Workspace (area)
+in each area display the dbf fle info 
+    run fields() 
+       to display the fields of the table
+    Order/Index Info //title
+    show index file info as usual
+    Index Fields //title
+       field name...
+       ...
+    Indexed Formulas
+      formula index 
+      ....
+endloop
+
+
+
+

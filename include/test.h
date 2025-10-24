@@ -1,0 +1,27 @@
+#ifndef _TEST_H
+#define _TEST_H
+
+#define Uses_TApplication
+#define Uses_TMenuBar
+#define Uses_TStatusLine      // <-- add this line
+#define Uses_TRect
+#define Uses_TEvent
+#define Uses_TPalette
+#define Uses_TSubMenu         // <-- and these two for the builders below
+#define Uses_TMenuItem
+#include <tvision/tv.h>
+
+class TTestApp : public TApplication
+{
+public:
+    TTestApp();
+    static TMenuBar*    initMenuBar(TRect r);
+    static TStatusLine* initStatusLine(TRect r);   // <-- add this
+    virtual void handleEvent(TEvent& event);
+    virtual TPalette& getPalette() const;
+private:
+    void aboutDlg();
+    void paletteView();
+};
+
+#endif // _TEST_H

@@ -1,0 +1,36 @@
+# src/CMakeLists.txt
+# Build the main CLI app.
+
+file(GLOB_RECURSE DOTTALKPP_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
+)
+
+# --- Exclude bindings and other optional dirs from the build ---
+set(_EXCLUDE_DIRS
+    "${CMAKE_CURRENT_SOURCE_DIR}/bindings"
+    "${CMAKE_CURRENT_SOURCE_DIR}/python"
+    "${CMAKE_CURRENT_SOURCE_DIR}/pybind"
+)
+foreach(_dir IN LISTS _EXCLUDE_DIRS)
+  if (EXISTS "${_dir}")
+    file(GLOB_RECURSE _TMP CONFIGURE_DEPENDS "${_dir}/*.*")
+    list(REMOVE_ITEM DOTTALKPP_SOURCES ${_TMP})
+  endif()
+endforeach()
+
+# If you keep public headers in include/, make them visible:
+set(DOTTALKPP_PUBLIC_INC "${CMAKE_SOURCE_DIR}/include")
+if (EXISTS "${DOTTALKPP_PUBLIC_INC}")
+  include_directories("${DOTTALKPP_PUBLIC_INC}")
+endif()
+
+add_executable(dottalkpp ${DOTTALKPP_SOURCES})
+
+# Basic compile options (tweak to taste)
+if (MSVC)
+  target_compile_options(dottalkpp PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(dottalkpp PRIVATE -Wall -Wextra -Wpedantic)
+endif()

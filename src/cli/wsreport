@@ -1,0 +1,18 @@
+    void cmd_WSREPORT (xbase::DbArea&, std::istringstream&); //WSREPORT
+
+
+
+
+
+    dli::registry().add("DOTSCRIPT", [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
+    dli::registry().add("RUN", [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
+    dli::registry().add("DO", [](DbArea& A, std::istringstream& S){ cmd_DOTSCRIPT(A,S); });
+
+    dli::registry.add("WSREPORT",   [](DbArea& A, std::istringstream& S){ cmd_WSREPORT(A,S); });
+    dli::registry.add("STATUSALL",  [](DbArea& A, std::istringstream& S){ cmd_WSREPORT(A,S); });
+    dli::registry.add("STATUS/ALL", [](DbArea& A, std::istringstream& S){ cmd_WSREPORT(A,S); });
+
+
+
+
+

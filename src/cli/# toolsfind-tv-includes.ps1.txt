@@ -1,0 +1,55 @@
+# tools/find-tv-includes.ps1
+param(
+  [switch]$VerboseOutput
+)
+
+$ErrorActionPreference = 'Stop'
+
+# File globs we care about
+$codeExt = '*.h','*.hpp','*.hh','*.c','*.cc','*.cpp','*.ipp','*.ixx','*.cxx'
+
+# Gather files once
+$codeFiles = Get-ChildItem -Recurse -Include $codeExt -File
+
+Write-Host "== Direct #include of tvision/keys.h =="
+$hitsKeys = $codeFiles |
+  Select-String -Pattern '^\s*#\s*include\s*[<"]tvision/keys\.h[>"]'
+if ($hitsKeys) {
+  $hitsKeys | ForEach-Object { '{0}:{1}: {2}' -f $_.Path,$_.LineNumber,$_.Line.Trim() }
+} else {
+  Write-Host "(none)"
+}
+
+Write-Host "`n== Any #include of tvision/* =="
+$hitsAll = $codeFiles |
+  Select-String -Pattern '^\s*#\s*include\s*[<"]tvision/[^>"]+[>"]'
+if ($hitsAll) {
+  $hitsAll |
+    ForEach-Object { '{0}:{1}: {2}' -f $_.Path,$_.LineNumber,$_.Line.Trim() } |
+    Sort-Object -Unique
+} else {
+  Write-Host "(none)"
+}
+
+Write-Host "`n== Files that include pch.h =="
+$hitsPch = $codeFiles |
+  Select-String -Pattern '^\s*#\s*include\s*["<]pch\.h[">]'
+if ($hitsPch) {
+  $hitsPch | ForEach-Object { $_.Path } | Sort-Object -Unique
+} else {
+  Write-Host "(none)"
+}
+
+Write-Host "`n== CMake mentions of PCH or force-include or tvision target =="
+Get-ChildItem -Recurse -Include '*.cmake','CMakeLists.txt' -File |
+  Select-String -Pattern 'target_precompile_headers|/FI|FORCE_INCLUDE|tvision::tvision' |
+  ForEach-Object { '{0}:{1}: {2}' -f $_.Path,$_.LineNumber,$_.Line.Trim() }
+
+if ($VerboseOutput -and $hitsKeys) {
+  Write-Host "`n-- Context around tvision/keys.h includes --"
+  $hitsKeys | ForEach-Object {
+    Get-Content $_.Path | Select-Object -Index (($_.LineNumber-3)..($_.LineNumber+1)) `
+      | ForEach-Object { $_ }
+    Write-Host "--- $($_.Path):$($_.LineNumber) ---`n"
+  }
+}

@@ -1,0 +1,44 @@
+﻿# Build trees
+/build/
+/out/
+/dist/
+/bin/
+/obj/
+/CMakeCache.txt
+/CMakeFiles/
+/cmake-build-*/
+/.vs/
+*.vcxproj.user
+*.VC.db
+
+# Compiled artifacts
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+*.ilk
+*.exp
+*.pch
+
+# CMake generators
+*.sln
+*.vcxproj
+*.vcxproj.filters
+
+# Logs, temps
+*.log
+*.tmp
+*.cache
+
+# Python helpers
+__pycache__/
+*.pyc
+
+# PowerShell transcript
+*.ps1xml
+
+# Test results
+/results/
+
+.fake

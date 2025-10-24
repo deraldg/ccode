@@ -1,0 +1,51 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 16
+  },
+  "configurePresets": [
+    {
+      "name": "pro-md",
+      "displayName": "dottalk pro (MSVC, /MD, TV via vcpkg)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64"
+      },
+      "binaryDir": "${sourceDir}/build-pro-md",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL$<$<CONFIG:Debug>:DebugDLL>",
+        "DOTTALK_WITH_TVISION": "ON"
+      }
+    },
+    {
+      "name": "ansi-mt",
+      "displayName": "ANSI (MSVC, /MT, no TV)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64"
+      },
+      "binaryDir": "${sourceDir}/build-ansi-mt",
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
+        "DOTTALK_WITH_TVISION": "OFF"
+      }
+    },
+    {
+      "name": "wsl",
+      "displayName": "WSL (Linux, Ninja, no TV)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-wsl",
+      "cacheVariables": {
+        "DOTTALK_WITH_TVISION": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "pro-md-Release",  "configurePreset": "pro-md",  "configuration": "Release" },
+    { "name": "ansi-mt-Release", "configurePreset": "ansi-mt", "configuration": "Release" },
+    { "name": "wsl-Release",     "configurePreset": "wsl",     "configuration": "Release" }
+  ]
+}

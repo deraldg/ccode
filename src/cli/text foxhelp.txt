@@ -1,0 +1,79 @@
+  TEST              FOXHELP           BANG
+. use students
+Opened students.dbf with 7 records.
+. set index to students.dtx
+Index file not found: to.inx
+. set index students.dtx
+Index set: students.dtx
+. ascend
+Order: ASCENDING.
+. descend
+Order: DESCENDING.
+. top
+Recno: 1
+. reindex
+Reindexed: students.dbf
+. list
+      STUDENT_ID LAST_NAME            FIRST_NAME      CITY                 BIRTHDATE GPA  ACTIVE NOTES
+Failed to open index: students.dtx (unrecognized index format)
+    1 100001 Smith                Alice           Portland             20030822 3.78 T
+    2 100002 Johnson              Marco           Eugene               20020714 2.95 T
+    3 100003 Nguyen               Linh            Bend                 20040105 3.42 T
+    4 100004 Brown                Diana           Corvallis            20030530 3.12 F
+    5 100005 Garcia               Eve             Ashland              20021119 4.44 T
+    6 100006 Head                 Dick            Portland             20031202 1.00 T
+    7        Grimwood
+7 record(s) listed (limit 20). Use LIST ALL to show more.
+. list
+      STUDENT_ID LAST_NAME            FIRST_NAME      CITY                 BIRTHDATE GPA  ACTIVE NOTES
+Failed to open index: students.dtx (unrecognized index format)
+    7        Grimwood
+1 record(s) listed (limit 20). Use LIST ALL to show more.
+. top
+Recno: 1
+. ascend
+Order: ASCENDING.
+. list
+      STUDENT_ID LAST_NAME            FIRST_NAME      CITY                 BIRTHDATE GPA  ACTIVE NOTES
+Failed to open index: students.dtx (unrecognized index format)
+    1 100001 Smith                Alice           Portland             20030822 3.78 T
+    2 100002 Johnson              Marco           Eugene               20020714 2.95 T
+    3 100003 Nguyen               Linh            Bend                 20040105 3.42 T
+    4 100004 Brown                Diana           Corvallis            20030530 3.12 F
+    5 100005 Garcia               Eve             Ashland              20021119 4.44 T
+    6 100006 Head                 Dick            Portland             20031202 1.00 T
+    7        Grimwood
+7 record(s) listed (limit 20). Use LIST ALL to show more.
+. top
+Recno: 1
+. descend
+Order: DESCENDING.
+. list
+      STUDENT_ID LAST_NAME            FIRST_NAME      CITY                 BIRTHDATE GPA  ACTIVE NOTES
+Failed to open index: students.dtx (unrecognized index format)
+    1 100001 Smith                Alice           Portland             20030822 3.78 T
+    2 100002 Johnson              Marco           Eugene               20020714 2.95 T
+    3 100003 Nguyen               Linh            Bend                 20040105 3.42 T
+    4 100004 Brown                Diana           Corvallis            20030530 3.12 F
+    5 100005 Garcia               Eve             Ashland              20021119 4.44 T
+    6 100006 Head                 Dick            Portland             20031202 1.00 T
+    7        Grimwood
+7 record(s) listed (limit 20). Use LIST ALL to show more.
+.
+
+
+
+
+Recno: 1
+. display
+Record 1
+  STUDENT_ID = 100001
+  LAST_NAME = Smith
+  FIRST_NAME = Alice
+  CITY = Portland
+  BIRTHDATE = 20030822
+  GPA = 3.78
+  ACTIVE = T
+  NOTES = Onboarding complete. Works well in teams.
+.
+current run

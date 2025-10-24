@@ -1,0 +1,156 @@
+cmake_minimum_required(VERSION 3.21)
+
+# -------------------- Project --------------------
+project(DotTalkpp VERSION 0.6 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Prefer modern behavior so *_ROOT hints are honored consistently.
+if(POLICY CMP0144)
+  cmake_policy(SET CMP0144 NEW)
+endif()
+
+# Default build type for single-config generators (e.g., Ninja)
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
+
+# -------------------- Options --------------------
+option(DOTTALK_WITH_TV      "Enable Turbo Vision features" ON)
+option(DOTTALK_TV_TESTS     "Build Turbo Vision probe tests" ON)
+option(DOTTALK_WITH_INDEX   "Enable xindex (indexing) support" ON)
+option(BUILD_PYDOTTALK      "Build Python bindings" OFF)
+
+# Paths (adjustable from -D)
+set(TVISION_ROOT "C:/Users/deral/code/tvision" CACHE PATH "Local Turbo Vision source tree")
+set(VCPKG_ROOT   "C:/Users/deral/vcpkg"       CACHE PATH "vcpkg root (hint)")
+
+# ---- Turbo Vision wiring (root-level) ----
+option(DOTTALK_WITH_TV "Enable Turbo Vision features" ON)
+
+# New insertion for color changes
+if (DOTTALK_WITH_TV)
+  # If you build with vcpkg, the toolchain/manifest will expose this package.
+  find_package(tvision CONFIG REQUIRED)
+endif()
+
+# Allow finding packages installed via local vcpkg manifest builds
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows")
+
+# Nice-to-have Windows defines
+if (MSVC)
+  add_compile_definitions(NOMINMAX _CRT_SECURE_NO_WARNINGS)
+endif()
+
+# -------------------- Code & Targets --------------------
+# All libraries/apps live under src/ (this will add xbase/xindex if present)
+add_subdirectory(src)
+
+# Python binding helper (added AFTER code targets exist so it can link to them)
+include(cmake/AddPydotTalkIfPresent.cmake OPTIONAL)
+
+# -------------------- Turbo Vision detection --------------------
+set(_tvision_found OFF)
+set(_tvision_origin "none")
+
+if (DOTTALK_WITH_TV)
+  # 1) Prefer a config package (vcpkg)
+  find_package(tvision CONFIG QUIET)
+
+  # Normalize to 'tvision' alias if port exports tvision::tvision
+  if (TARGET tvision::tvision AND NOT TARGET tvision)
+    add_library(tvision INTERFACE IMPORTED)
+    target_link_libraries(tvision INTERFACE tvision::tvision)
+  endif()
+
+  if (TARGET tvision)
+    set(_tvision_found ON)
+    set(_tvision_origin "vcpkg/config")
+  endif()
+
+  # 2) Fallback to local source tree
+  if (NOT _tvision_found AND EXISTS "${TVISION_ROOT}/CMakeLists.txt")
+    message(STATUS "Turbo Vision: using local source at ${TVISION_ROOT}")
+    add_subdirectory("${TVISION_ROOT}" _tvision_local EXCLUDE_FROM_ALL)
+    if (TARGET tvision)
+      set(_tvision_found ON)
+      set(_tvision_origin "local")
+    endif()
+  endif()
+
+  # 3) If user passed -Dtvision_DIR=...
+  if (NOT _tvision_found AND DEFINED tvision_DIR)
+    find_package(tvision CONFIG REQUIRED)
+    if (TARGET tvision::tvision AND NOT TARGET tvision)
+      add_library(tvision INTERFACE IMPORTED)
+      target_link_libraries(tvision INTERFACE tvision::tvision)
+    endif()
+    if (TARGET tvision)
+      set(_tvision_found ON)
+      set(_tvision_origin "explicit-dir")
+    endif()
+  endif()
+
+  # Apply to main target
+  if (TARGET dottalkpp)
+    if (_tvision_found)
+      target_link_libraries(dottalkpp PRIVATE tvision)
+      target_compile_definitions(dottalkpp PRIVATE DOTTALK_TV_AVAILABLE=1)
+      message(STATUS "Turbo Vision ENABLED for 'dottalkpp' via ${_tvision_origin}.")
+    else()
+      target_compile_definitions(dottalkpp PRIVATE DOTTALK_TV_AVAILABLE=0)
+      message(WARNING "Turbo Vision NOT found; 'dottalkpp' will build WITHOUT TV.")
+    endif()
+  else()
+    message(WARNING "Target 'dottalkpp' not defined yet; TV wiring deferred.")
+  endif()
+else()
+  if (TARGET dottalkpp)
+    target_compile_definitions(dottalkpp PRIVATE DOTTALK_TV_AVAILABLE=0)
+  endif()
+  message(STATUS "Turbo Vision explicitly disabled (DOTTALK_WITH_TV=OFF).")
+endif()
+
+# -------------------- Indexing wiring (global) --------------------
+# Apply compile-defs + link xindex (when available) to CLI and binding.
+if (TARGET dottalkpp)
+  if (DOTTALK_WITH_INDEX)
+    target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=1)
+    if (TARGET xindex)
+      target_link_libraries(dottalkpp PRIVATE xindex)
+    endif()
+    message(STATUS "Indexing ENABLED for 'dottalkpp'.")
+  else()
+    target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=0)
+    message(STATUS "Indexing DISABLED for 'dottalkpp'.")
+  endif()
+endif()
+
+if (BUILD_PYDOTTALK AND TARGET pydottalk)
+  if (DOTTALK_WITH_INDEX)
+    target_compile_definitions(pydottalk PRIVATE DOTTALK_WITH_INDEX=1)
+    if (TARGET xindex)
+      target_link_libraries(pydottalk PRIVATE xindex)
+    endif()
+    message(STATUS "Indexing ENABLED for 'pydottalk'.")
+  else()
+    target_compile_definitions(pydottalk PRIVATE DOTTALK_WITH_INDEX=0)
+    message(STATUS "Indexing DISABLED for 'pydottalk'.")
+  endif()
+endif()
+
+# -------------------- Tests (ctest) --------------------
+include(CTest)
+if (BUILD_TESTING AND DOTTALK_TV_TESTS AND TARGET tvision)
+  add_subdirectory(tests)
+endif()
+
+# -------------------- Summary --------------------
+message(STATUS "==== DotTalk++ / Build summary ====")
+message(STATUS "  DOTTALK_WITH_TV     : ${DOTTALK_WITH_TV}")
+message(STATUS "  DOTTALK_TV_TESTS    : ${DOTTALK_TV_TESTS}")
+message(STATUS "  DOTTALK_WITH_INDEX  : ${DOTTALK_WITH_INDEX}")
+message(STATUS "  TVISION_ROOT        : ${TVISION_ROOT}")
+message(STATUS "  tvision origin      : ${_tvision_origin}")
+message(STATUS "===============================")

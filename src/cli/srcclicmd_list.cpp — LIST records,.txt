@@ -1,0 +1,217 @@
+// src/cli/cmd_list.cpp — LIST records, respecting ASCEND/DESCEND when an order is active.
+//
+// Behavior:
+//   LIST              -> 20 rows (or fewer if table smaller)
+//   LIST ALL          -> all rows
+//   LIST <n>          -> exactly n rows (best-effort; skips deleted)
+// Direction:
+//   When an order is attached via order_state, we walk index recnos in
+//   ascending or descending order depending on ASCEND/DESCEND.
+//   Without an order, we list in physical record order (TOP..BOTTOM).
+//
+// Dependencies expected to exist elsewhere in the repo:
+//   - bool load_inx_recnos(const std::string& inxPath, int recCount,
+//                          std::vector<uint32_t>& out, std::string* errMsg);
+//   - xbase::DbArea API (gotoRec/readCurrent/fields/get/etc.)
+//   - orderstate::{hasOrder,orderName,isAscending}
+//
+// Only change vs. older versions:
+//   * Traversal honors orderstate::isAscending(A) when an order is present.
+
+#include "xbase.hpp"
+#include "order_state.hpp"
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+// Forward decl: provided elsewhere in your tree.
+extern bool load_inx_recnos(const std::string& inxPath, int recCount,
+                            std::vector<uint32_t>& out, std::string* errMsg);
+
+// ---------------------------- helpers ---------------------------------------
+
+static inline bool ieq(char a, char b) {
+    return std::toupper(static_cast<unsigned char>(a))
+         == std::toupper(static_cast<unsigned char>(b));
+}
+static inline bool ieqstr(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) if (!ieq(a[i], b[i])) return false;
+    return true;
+}
+
+static inline bool parse_limit(std::istringstream& iss, int& limit, bool& all) {
+    // Accept: ALL | <int>
+    std::string tok;
+    if (!(iss >> tok)) { limit = 20; all = false; return true; } // default
+    if (ieqstr(tok, "ALL")) { all = true; limit = 0; return true; }
+    // allow "LIST 0" to mean "nothing"
+    try {
+        size_t pos = 0;
+        int n = std::stoi(tok, &pos);
+        if (pos != tok.size() || n < 0) return false;
+        limit = n;
+        all = (n == 0); // 0 -> nothing; keep as is
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+static inline void print_header(const xbase::DbArea& A) {
+    // You already have a custom fixed header for STUDENTS.DBF in your older build.
+    // To keep this generic and safe, we print the field names with minimal padding.
+    // If you have a project-specific header function, you can replace this call.
+    const auto& F = A.fields();
+    if (F.empty()) return;
+
+    // Build simple widths: max( field name, field length ), capped a bit for display.
+    std::vector<int> w; w.reserve(F.size());
+    for (const auto& fd : F) {
+        int namew = static_cast<int>(fd.name.size());
+        int fieldw = static_cast<int>(fd.length ? fd.length : 8);
+        int width = std::max(namew, fieldw);
+        width = std::min(width, 32); // cap wide texts (e.g., MEMOs often printed elsewhere)
+        w.push_back(width);
+    }
+
+    // Leading columns similar to your samples: recno as 4-wide + a space.
+    std::cout << std::setw(4) << " " << ' ';
+    for (size_t i = 0; i < F.size(); ++i) {
+        std::cout << std::left << std::setw(w[i]) << F[i].name;
+        if (i + 1 < F.size()) std::cout << ' ';
+    }
+    std::cout << "\n";
+}
+
+static inline void print_row(xbase::DbArea& A) {
+    // print current record as in LIST, using raw strings from DbArea::get().
+    const auto& F = A.fields();
+    if (F.empty()) return;
+
+    // Same widths logic as header (kept local for clarity).
+    std::vector<int> w; w.reserve(F.size());
+    for (const auto& fd : F) {
+        int namew = static_cast<int>(fd.name.size());
+        int fieldw = static_cast<int>(fd.length ? fd.length : 8);
+        int width = std::max(namew, fieldw);
+        width = std::min(width, 32);
+        w.push_back(width);
+    }
+
+    // recno column
+    std::cout << std::right << std::setw(4) << A.recno() << ' ';
+
+    // fields
+    for (size_t i = 0; i < F.size(); ++i) {
+        std::string s = A.get(static_cast<int>(i) + 1); // DbArea::get is 1-based
+        // Trim right padding typical of DBF char fields.
+        while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+            s.pop_back();
+        // For numerics, often left-trim is nicer (optional); keep conservative.
+        std::cout << std::left << std::setw(w[i]) << s;
+        if (i + 1 < F.size()) std::cout << ' ';
+    }
+    std::cout << "\n";
+}
+
+// ---------------------------- main command ----------------------------------
+
+// Set to true if you want physical listing to also respect DESCEND by
+// walking from bottom to top when no order is attached.
+static constexpr bool PHYSICAL_RESPECTS_DIRECTION = false;
+
+void cmd_LIST(xbase::DbArea& A, std::istringstream& iss) {
+    if (!A.isOpen()) { std::cout << "No table open.\n"; return; }
+
+    int limit = 20;
+    bool all = false;
+    if (!parse_limit(iss, limit, all)) {
+        std::cout << "Usage: LIST [ALL | <count>]\n";
+        return;
+    }
+
+    // Build plan: index-driven or physical.
+    const bool hasOrder = orderstate::hasOrder(A);
+    const bool asc = orderstate::isAscending(A);
+
+    int printed = 0;
+    const int total = A.recCount();
+    if (total <= 0) { std::cout << "0 record(s).\n"; return; }
+
+    print_header(A);
+
+    if (hasOrder) {
+        // ---- Index-driven path --------------------------------------------
+        std::string inxPath = orderstate::orderName(A);
+        std::vector<uint32_t> recnos;
+        std::string err;
+        if (!load_inx_recnos(inxPath, total, recnos, &err)) {
+            std::cout << "[WARN] Failed to load index '" << inxPath
+                      << "' (" << err << "). Falling back to physical order.\n";
+        } else {
+            // Traverse respecting direction.
+            if (asc) {
+                for (uint32_t rn : recnos) {
+                    if (!A.gotoRec(static_cast<int>(rn)) || !A.readCurrent()) continue;
+                    if (A.isDeleted()) continue;
+                    print_row(A);
+                    if (!all && ++printed >= limit) break;
+                }
+            } else {
+                for (auto it = recnos.rbegin(); it != recnos.rend(); ++it) {
+                    uint32_t rn = *it;
+                    if (!A.gotoRec(static_cast<int>(rn)) || !A.readCurrent()) continue;
+                    if (A.isDeleted()) continue;
+                    print_row(A);
+                    if (!all && ++printed >= limit) break;
+                }
+            }
+
+            std::cout << (printed) << " record(s) listed"
+                      << (all ? "" : " (limit " + std::to_string(limit) + ")")
+                      << ". Use LIST ALL to show more.\n";
+            return;
+        }
+        // If we got here, we fell through to physical.
+    }
+
+    // ---- Physical path -----------------------------------------------------
+    // Classic FoxPro LIST ignores ASCEND/DESCEND without an active index.
+    // Keep that default unless PHYSICAL_RESPECTS_DIRECTION = true.
+    if (!A.top()) { std::cout << "Could not position to TOP.\n"; return; }
+
+    if (PHYSICAL_RESPECTS_DIRECTION && !asc) {
+        // From bottom up
+        if (!A.bottom()) { std::cout << "Could not position to BOTTOM.\n"; return; }
+        int recs = total;
+        while (recs-- > 0) {
+            if (!A.readCurrent()) { if (!A.skip(-1)) break; continue; }
+            if (!A.isDeleted()) {
+                print_row(A);
+                if (!all && ++printed >= limit) break;
+            }
+            if (!A.skip(-1)) break;
+        }
+    } else {
+        // From top down (natural)
+        int recs = total;
+        while (recs-- > 0) {
+            if (!A.readCurrent()) { if (!A.skip(1)) break; continue; }
+            if (!A.isDeleted()) {
+                print_row(A);
+                if (!all && ++printed >= limit) break;
+            }
+            if (!A.skip(1)) break;
+        }
+    }
+
+    std::cout << (printed) << " record(s) listed"
+              << (all ? "" : " (limit " + std::to_string(limit) + ")")
+              << ". Use LIST ALL to show more.\n";
+}

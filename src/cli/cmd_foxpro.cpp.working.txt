@@ -1,0 +1,672 @@
+// src/cli/cmd_foxpro.cpp — FOXPRO-like Turbo Vision UI for DotTalk++
+// Batched output capture to an in-app Output window (fast), ring buffer (bounded),
+// C++/C stdio capture, ↑/↓ history, F5 repeat, F7 clear, Ctrl+F find, F3 find-next,
+// local /SELFTEST [n] generator, and command echo.
+//
+// Build: define DOTTALK_WITH_TV (or DOTTALK_TV_AVAILABLE) and link tvision.
+
+#include <iostream>
+#include <sstream>
+#include <streambuf>
+#include <vector>
+#include <deque>
+#include <string>
+#include <memory>
+#include <algorithm>
+#include <cstdint>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <chrono>
+#include <cctype>
+
+#ifdef _WIN32
+#  include <io.h>
+#  include <fcntl.h>
+#endif
+
+#include "xbase.hpp"
+#include "command_registry.hpp"
+#include "textio.hpp"
+
+// ---- Turbo Vision units ----
+#define Uses_TApplication
+#define Uses_TDialog
+#define Uses_TScreen
+#define Uses_TRect
+#define Uses_TEvent
+#define Uses_TMenuBar
+#define Uses_TSubMenu
+#define Uses_TMenuItem
+#define Uses_TStatusLine
+#define Uses_TStatusItem
+#define Uses_TStatusDef
+#define Uses_TDeskTop
+#define Uses_TInputLine
+#define Uses_TButton
+#define Uses_TKeys
+#define Uses_TProgInit
+#define Uses_TWindow
+#define Uses_TScroller
+#define Uses_TScrollBar
+#define Uses_TDrawBuffer
+#define Uses_MsgBox
+#include <tvision/tv.h>
+
+// ---- helper casts / utils ---------------------------------------------------
+static inline short S(int v) { return static_cast<short>(v); }
+
+static std::string toLower(const std::string& s) {
+    std::string o; o.reserve(s.size());
+    for (unsigned char c : s) o.push_back((char)std::tolower(c));
+    return o;
+}
+
+// ---- Access the shell's engine & registrar (provided by shell.cpp) ----------
+extern "C" xbase::XBaseEngine* shell_engine();
+extern "C" void register_shell_commands(xbase::XBaseEngine& eng, bool include_ui_cmds);
+
+// ---- Commands (IDs) ---------------------------------------------------------
+static const int cmFoxProCommand  = 101;
+static const int cmFoxProExit     = cmQuit;
+static const int cmShowOutput     = 201;
+static const int cmModeWindow     = 202;
+static const int cmModeConsole    = 203;
+static const int cmModeBoth       = 204;
+static const int cmFlushLog       = 205;   // UI-thread flush signal
+
+// ---- Output routing mode ----------------------------------------------------
+enum class OutputMode { ToWindow, ToConsole, ToBoth };
+
+// ---- Scrolling output view (ring buffer) ------------------------------------
+class TLogView : public TScroller {
+public:
+    explicit TLogView(const TRect& r, TScrollBar* h, TScrollBar* v)
+        : TScroller(r, h, v) {
+        options |= ofFramed;
+        growMode = gfGrowHiX | gfGrowHiY;
+        setLimit(S(1), S(1));
+        // std::deque has no reserve(); growth is segmented.
+    }
+
+    void setMaxLines(size_t maxLines) { maxLines_ = std::max<size_t>(1024, maxLines); }
+
+    void appendBatch(const std::vector<std::string>& chunks) {
+        for (const auto& s : chunks) appendInternal(s);
+        finalizeAppend();
+    }
+
+    void clearAll() {
+        lines_.clear(); maxWidth_ = 0;
+        setLimit(S(1), S(1));
+        scrollTo(S(0), S(0));
+        drawView();
+    }
+
+    // Returns row index of the found line, or -1.
+    int findNext(const std::string& term, int fromRow, bool caseInsensitive) {
+        if (term.empty() || lines_.empty()) return -1;
+        const int n = (int)lines_.size();
+        int i = std::max(0, fromRow);
+        std::string needle = caseInsensitive ? toLower(term) : term;
+        for (int k = 0; k < n; ++k) {
+            int row = (i + k) % n;
+            const std::string& src = lines_[(size_t)row];
+            bool hit = false;
+            if (caseInsensitive) {
+                std::string low = toLower(src);
+                hit = low.find(needle) != std::string::npos;
+            } else {
+                hit = src.find(needle) != std::string::npos;
+            }
+            if (hit) {
+                scrollTo(S(0), S(std::max(0, row)));
+                drawView();
+                return row;
+            }
+        }
+        return -1;
+    }
+
+    void draw() override {
+        TDrawBuffer b;
+        const ushort color = getColor(0x0301);
+        for (short row = 0; row < size.y; ++row) {
+            const int idx = delta.y + row;
+            std::string text = (idx >= 0 && idx < (int)lines_.size()) ? lines_[(size_t)idx] : std::string();
+
+            const short sx = size.x;
+            const short tlen = (short)text.size();
+            if (tlen < sx) {
+                const size_t pad = (size_t)((int)sx - (int)tlen);
+                text.append(pad, ' ');
+            } else if (tlen > sx) {
+                text.resize((size_t)sx);
+            }
+
+            b.moveStr(0, text.c_str(), color);
+            writeLine(S(0), row, size.x, S(1), b);
+        }
+    }
+
+private:
+    void appendInternal(const std::string& s) {
+        size_t start = 0;
+        while (start <= s.size()) {
+            size_t nl = s.find('\n', start);
+            std::string line = (nl == std::string::npos)
+                ? s.substr(start)
+                : s.substr(start, nl - start);
+            if (!line.empty() || nl != std::string::npos) {
+                lines_.push_back(line);
+                while (lines_.size() > maxLines_) lines_.pop_front();
+                const short w = (short)line.size();
+                if (w > maxWidth_) maxWidth_ = w;
+            }
+            if (nl == std::string::npos) break;
+            start = nl + 1;
+        }
+    }
+
+    void finalizeAppend() {
+        const short limX = std::max<short>(S(1), maxWidth_);
+        const short limY = std::max<short>(S(1), (short)lines_.size());
+        setLimit(limX, limY);
+        scrollTo(S(0), std::max<short>(S(0), (short)lines_.size() - size.y));
+        drawView(); // single redraw per batch
+    }
+
+    std::deque<std::string> lines_;
+    size_t maxLines_{100000}; // default: 100k lines
+    short  maxWidth_{0};
+};
+
+// ---- forward decl for queue sink
+class TDotTalkApp;
+
+// ---- streambuf redirector (C++ iostreams → queue) ---------------------------
+class CoutRedirectBuf : public std::streambuf {
+public:
+    CoutRedirectBuf(TDotTalkApp* app, std::streambuf* original, OutputMode mode)
+        : app_(app), original_(original), mode_(mode) {
+        setp(buf_, buf_ + sizeof(buf_) - 1);
+    }
+    void setMode(OutputMode m) { mode_ = m; }
+
+protected:
+    int sync() override { flushBuffer(); return 0; }
+    int overflow(int ch) override {
+        if (ch != EOF) { *pptr() = (char)ch; pbump(1); }
+        if (ch == '\n') { flushBuffer(); return ch; } // snappy on newline
+        if (pptr() >= epptr()) flushBuffer();         // or buffer full
+        return ch;
+    }
+
+private:
+    void flushBuffer();
+    TDotTalkApp*  app_;
+    std::streambuf* original_;
+    OutputMode    mode_;
+    char          buf_[64 * 1024];
+};
+
+// ---- History input line -----------------------------------------------------
+class THistoryInput : public TInputLine {
+public:
+    THistoryInput(const TRect& r, ushort maxLen,
+                  std::vector<std::string>& hist,
+                  int& histIndexRef,
+                  std::string& lastRef)
+        : TInputLine(r, maxLen), hist_(hist), idxRef_(histIndexRef), last_(lastRef) {}
+
+    void prefill(const std::string& s) { setData((void*)s.c_str()); selectAll(True); }
+
+    void handleEvent(TEvent& ev) override {
+        TInputLine::handleEvent(ev);
+        if (ev.what == evKeyDown) {
+            if (ev.keyDown.keyCode == kbUp) {
+                if (!hist_.empty()) {
+                    if (idxRef_ == -1) idxRef_ = (int)hist_.size() - 1;
+                    else if (idxRef_ > 0) --idxRef_;
+                    setData((void*)hist_[(size_t)idxRef_].c_str());
+                    selectAll(True);
+                    clearEvent(ev);
+                }
+            } else if (ev.keyDown.keyCode == kbDown) {
+                if (!hist_.empty()) {
+                    if (idxRef_ >= 0 && idxRef_ < (int)hist_.size() - 1) {
+                        ++idxRef_;
+                        setData((void*)hist_[(size_t)idxRef_].c_str());
+                    } else {
+                        idxRef_ = -1;
+                        setData((void*)last_.c_str());
+                    }
+                    selectAll(True);
+                    clearEvent(ev);
+                }
+            }
+        }
+    }
+private:
+    std::vector<std::string>& hist_;
+    int& idxRef_;
+    std::string& last_;
+};
+
+// ---- Application ------------------------------------------------------------
+class TDotTalkApp : public TApplication {
+public:
+    TDotTalkApp();
+    ~TDotTalkApp() override;
+
+    void handleEvent(TEvent& event) override;
+    void idle() override;  // flush pending logs during idle
+
+    static TMenuBar* initMenuBar(TRect r);
+    static TStatusLine* initStatusLine(TRect r);
+
+    void commandDialog(xbase::DbArea& area, const std::string& prefill = "");
+    void setDbArea(xbase::DbArea* a) { dbArea_ = a; }
+
+    // Sink used by redirectors/threads
+    void enqueueChunk(const std::string& s) {
+        std::lock_guard<std::mutex> lk(qMutex_);
+        pending_.push_back(s);
+        if (!flushPosted_) {
+            flushPosted_ = true;
+            TEvent ev; ev.what = evCommand; ev.message.command = cmFlushLog; putEvent(ev);
+        }
+    }
+    void flushPending() {
+        std::vector<std::string> chunks;
+        {
+            std::lock_guard<std::mutex> lk(qMutex_);
+            if (pending_.empty()) return;
+            chunks.swap(pending_);
+            flushPosted_ = false;
+        }
+        if (outView_) outView_->appendBatch(chunks);
+    }
+
+private:
+    void createOutputWindow();
+    void showOutputWindow();
+    void installRedirection();
+    void restoreRedirection();
+    void setOutputMode(OutputMode m);
+    void openFindDialog();
+    void doSelfTest(size_t n);
+
+#ifdef _WIN32
+    void startCStdCapture();
+    void stopCStdCapture();
+    static void readerThreadLoop(TDotTalkApp* app, int fd);
+    int oldStdout_{-1}, oldStderr_{-1};
+    int pipeOut_[2]{-1,-1}, pipeErr_[2]{-1,-1};
+    std::thread tOut_, tErr_;
+    std::atomic<bool> running_{false};
+#endif
+
+    // History
+    std::vector<std::string> history_;
+    int         histIndex_{-1};
+    std::string lastInput_;
+
+    // Find state
+    std::string lastFind_;
+    bool        findCaseInsensitive_{true};
+
+    // Queue for log chunks (UI thread consumes)
+    std::mutex qMutex_;
+    std::vector<std::string> pending_;
+    bool flushPosted_{false};
+
+    // DB & UI
+    xbase::DbArea* dbArea_ {nullptr};
+    TWindow*  outWin_  {nullptr};
+    TLogView* outView_ {nullptr};
+
+    // iostream redirection
+    std::unique_ptr<CoutRedirectBuf> coutBuf_;
+    std::unique_ptr<CoutRedirectBuf> cerrBuf_;
+    std::streambuf* oldCout_ {nullptr};
+    std::streambuf* oldCerr_ {nullptr};
+    OutputMode mode_ {OutputMode::ToWindow};
+};
+
+TDotTalkApp::TDotTalkApp()
+    : TProgInit(&TDotTalkApp::initStatusLine,
+                &TDotTalkApp::initMenuBar,
+                &TDotTalkApp::initDeskTop) {
+    createOutputWindow();
+
+    static bool s_gui_registered = false;
+    if (!s_gui_registered) {
+        if (auto* eng = shell_engine()) register_shell_commands(*eng, /*include_ui_cmds=*/false);
+        s_gui_registered = true;
+    }
+
+    installRedirection();
+}
+
+TDotTalkApp::~TDotTalkApp() { restoreRedirection(); }
+
+void TDotTalkApp::createOutputWindow() {
+    const short L = 2, T = 3;
+    const short R = (short)(TScreen::screenWidth  - 2);
+    const short B = (short)(TScreen::screenHeight - 2);
+    TRect r(L, T, R, B);
+
+    outWin_ = new TWindow(r, "Output", 0);
+    outWin_->flags   |= wfGrow | wfZoom;
+    outWin_->growMode = gfGrowAll;
+
+    const short winW = (short)(r.b.x - r.a.x);
+    const short winH = (short)(r.b.y - r.a.y);
+
+    const short h_x1 = (short)1, h_y1 = (short)(winH - 2);
+    const short h_x2 = (short)(winW - 2), h_y2 = (short)(winH - 1);
+
+    const short v_x1 = (short)(winW - 2), v_y1 = (short)1;
+    const short v_x2 = (short)(winW - 1), v_y2 = (short)(winH - 2);
+
+    TScrollBar* h = new TScrollBar(TRect(h_x1, h_y1, h_x2, h_y2));
+    TScrollBar* v = new TScrollBar(TRect(v_x1, v_y1, v_x2, v_y2));
+
+    outWin_->insert(h); outWin_->insert(v);
+
+    const short vr_x1 = (short)1, vr_y1 = (short)1;
+    const short vr_x2 = (short)(winW - 2), vr_y2 = (short)(winH - 2);
+
+    TRect vr(vr_x1, vr_y1, vr_x2, vr_y2);
+    outView_ = new TLogView(vr, h, v);
+    outView_->setMaxLines(100000); // ring buffer cap
+    outWin_->insert(outView_);
+
+    deskTop->insert(outWin_);
+}
+
+void TDotTalkApp::showOutputWindow() { if (outWin_) { outWin_->select(); outWin_->show(); } }
+
+void TDotTalkApp::installRedirection() {
+    oldCout_ = std::cout.rdbuf();
+    oldCerr_ = std::cerr.rdbuf();
+    coutBuf_ = std::make_unique<CoutRedirectBuf>(this, oldCout_, mode_);
+    cerrBuf_ = std::make_unique<CoutRedirectBuf>(this, oldCerr_, mode_);
+    std::cout.rdbuf(coutBuf_.get());
+    std::cerr.rdbuf(cerrBuf_.get());
+    std::cout << "Output redirected to in-app 'Output' window.\n" << std::flush; // show banner
+#ifdef _WIN32
+    startCStdCapture();
+#endif
+}
+
+void TDotTalkApp::restoreRedirection() {
+#ifdef _WIN32
+    stopCStdCapture();
+#endif
+    if (oldCout_) std::cout.rdbuf(oldCout_);
+    if (oldCerr_) std::cerr.rdbuf(oldCerr_);
+}
+
+void TDotTalkApp::setOutputMode(OutputMode m) {
+    mode_ = m;
+    if (coutBuf_) coutBuf_->setMode(m);
+    if (cerrBuf_) cerrBuf_->setMode(m);
+    const char* label = (m == OutputMode::ToWindow) ? "window" :
+                        (m == OutputMode::ToConsole) ? "console" : "both";
+    std::cout << "[Output mode: " << label << "]\n";
+}
+
+void TDotTalkApp::commandDialog(xbase::DbArea& area, const std::string& prefill) {
+    TDialog* d = new TDialog(TRect(10, 5, 70, 15), "DotTalk Command");
+    d->options |= ofCentered;
+
+    THistoryInput* input = new THistoryInput(TRect(2, 2, 58, 3), 256, history_, histIndex_, lastInput_);
+    d->insert(input);
+    if (!prefill.empty()) input->prefill(prefill);
+
+    d->insert(new TButton(TRect(40, 4, 58, 6), "~O~K", cmOK, bfDefault));
+    d->insert(new TButton(TRect(40, 6, 58, 8), "~C~ancel", cmCancel, bfNormal));
+
+    const ushort result = deskTop->execView(d);
+    if (result == cmOK) {
+        const char* raw = input->data;
+        std::string trimmed = raw ? std::string(raw) : std::string();
+        lastInput_ = trimmed;
+
+        if (!trimmed.empty()) {
+            if (history_.empty() || history_.back() != trimmed) history_.push_back(trimmed);
+            histIndex_ = -1;
+
+            // Echo to output window before execution.
+            std::cout << "> " << trimmed << "\n";
+
+            // Local /SELFTEST [n] handled here to avoid flooding registry.
+            std::istringstream tok(trimmed);
+            std::string cmdToken; tok >> cmdToken;
+            std::string U = textio::up(cmdToken);
+
+            if (U == "/SELFTEST" || U == "SELFTEST") {
+                size_t n = 10000;
+                if (tok.good()) tok >> n;
+                doSelfTest(n);
+            } else {
+                if (!dli::registry().run(area, U, tok)) {
+                    messageBox(("Unknown command: " + cmdToken).c_str(), mfError | mfOKButton);
+                }
+            }
+        }
+    }
+    destroy(d);
+}
+
+void TDotTalkApp::openFindDialog() {
+    TDialog* d = new TDialog(TRect(18, 6, 64, 12), "Find");
+    d->options |= ofCentered;
+    TInputLine* input = new TInputLine(TRect(2, 2, 40, 3), 128);
+    d->insert(input);
+    if (!lastFind_.empty()) input->setData((void*)lastFind_.c_str());
+
+    const char* ciLbl = findCaseInsensitive_ ? "Case: ~I~nsensitive" : "Case: ~S~ensitive";
+    const ushort cmToggleCase = 301;
+    d->insert(new TButton(TRect(42, 2, 62, 4), ciLbl, cmToggleCase, bfNormal));
+    d->insert(new TButton(TRect(2, 4, 12, 6), "~F~ind", cmOK, bfDefault));
+    d->insert(new TButton(TRect(14, 4, 26, 6), "~C~ancel", cmCancel, bfNormal));
+
+    while (true) {
+        ushort res = deskTop->execView(d);
+        if (res == cmToggleCase) {
+            findCaseInsensitive_ = !findCaseInsensitive_;
+            destroy(d);
+            openFindDialog();
+            return;
+        } else if (res == cmOK || res == cmCancel) {
+            if (res == cmOK) {
+                const char* raw = input->data;
+                std::string term = raw ? std::string(raw) : std::string();
+                if (!term.empty()) {
+                    lastFind_ = term;
+                    const int startRow = outView_ ? (int)outView_->delta.y + 1 : 0;
+                    int found = outView_ ? outView_->findNext(term, startRow, findCaseInsensitive_) : -1;
+                    if (found < 0) messageBox("Not found.", mfInformation | mfOKButton);
+                }
+            }
+            destroy(d);
+            return;
+        }
+    }
+}
+
+void TDotTalkApp::doSelfTest(size_t n) {
+    std::cout << "[SELFTEST] Generating " << n << " lines..." << std::endl;
+    for (size_t i = 1; i <= n; ++i) {
+        std::cout << "cout line " << i << " lorem ipsum\n";
+        if ((i % 50) == 0) std::cout.flush();
+#ifdef _WIN32
+        std::printf("printf line %zu dolor sit amet\n", i);
+        if ((i % 50) == 0) std::fflush(stdout);
+#else
+        printf("printf line %zu dolor sit amet\n", i);
+        if ((i % 50) == 0) fflush(stdout);
+#endif
+    }
+    std::cout << "[SELFTEST] Done.\n";
+}
+
+void TDotTalkApp::idle() {
+    TApplication::idle();
+    std::cout.flush();
+    std::cerr.flush();
+    flushPending();
+}
+
+void TDotTalkApp::handleEvent(TEvent& event) {
+    TApplication::handleEvent(event);
+
+    if (event.what == evCommand && event.message.command == cmFlushLog) {
+        flushPending();
+        clearEvent(event);
+        return;
+    }
+
+    if (event.what == evKeyDown) {
+        if (event.keyDown.keyCode == kbF5) {
+            if (dbArea_) commandDialog(*dbArea_, lastInput_);
+            clearEvent(event); return;
+        }
+        if (event.keyDown.keyCode == kbF7) {
+            if (outView_) outView_->clearAll();
+            clearEvent(event); return;
+        }
+        if (event.keyDown.keyCode == kbCtrlF) {
+            openFindDialog();
+            clearEvent(event); return;
+        }
+        if (event.keyDown.keyCode == kbF3) {
+            if (!lastFind_.empty() && outView_) {
+                const int startRow = (int)outView_->delta.y + 1;
+                int found = outView_->findNext(lastFind_, startRow, findCaseInsensitive_);
+                if (found < 0) messageBox("Not found.", mfInformation | mfOKButton);
+            }
+            clearEvent(event); return;
+        }
+    }
+
+    if (event.what == evCommand) {
+        switch (event.message.command) {
+            case cmFoxProCommand: if (dbArea_) commandDialog(*dbArea_); clearEvent(event); break;
+            case cmShowOutput:    showOutputWindow();                   clearEvent(event); break;
+            case cmModeWindow:    setOutputMode(OutputMode::ToWindow);  clearEvent(event); break;
+            case cmModeConsole:   setOutputMode(OutputMode::ToConsole); clearEvent(event); break;
+            case cmModeBoth:      setOutputMode(OutputMode::ToBoth);    clearEvent(event); break;
+            default: break;
+        }
+    }
+}
+
+TMenuBar* TDotTalkApp::initMenuBar(TRect r) {
+    r.b.y = (short)(r.a.y + 1);
+    return new TMenuBar(r,
+        *new TSubMenu("~F~ile", kbAltF) +
+            *new TMenuItem("E~x~it", cmFoxProExit, kbAltX, hcNoContext, "Alt-X") +
+        *new TSubMenu("~D~atabase", kbAltD) +
+            *new TMenuItem("~E~nter Command...", cmFoxProCommand, kbAltE, hcNoContext, "Alt-E") +
+        *new TSubMenu("~V~iew", kbAltV) +
+            *new TMenuItem("~O~utput Window", cmShowOutput, kbF2, hcNoContext, "F2") +
+            *new TSubMenu("~O~utput Mode", kbNoKey) +
+                *new TMenuItem("To ~W~indow",  cmModeWindow,  kbNoKey) +
+                *new TMenuItem("To ~C~onsole", cmModeConsole, kbNoKey) +
+                *new TMenuItem("~B~oth",       cmModeBoth,    kbNoKey) +
+        *new TSubMenu("~H~elp", kbAltH) +
+            *new TMenuItem("~A~bout", cmHelp, kbNoKey)
+    );
+}
+
+TStatusLine* TDotTalkApp::initStatusLine(TRect r) {
+    r.a.y = (short)(r.b.y - 1);
+    return new TStatusLine(r,
+        *new TStatusDef(0, 0xFFFF) +
+            *new TStatusItem("~Alt-X~ Exit",      kbAltX, cmFoxProExit) +
+            *new TStatusItem("~F10~ Menu",        kbF10,  cmMenu) +
+            *new TStatusItem("~Alt-E~ Command",   kbAltE, cmFoxProCommand) +
+            *new TStatusItem("~F2~ Output",       kbF2,   cmShowOutput) +
+            *new TStatusItem("~F5~ Repeat",       kbF5,   cmFoxProCommand) +
+            *new TStatusItem("~F7~ Clear",        kbF7,   0) +
+            *new TStatusItem("~Ctrl-F~ Find",     kbCtrlF,0) +
+            *new TStatusItem("~F3~ Find Next",    kbF3,   0)
+    );
+}
+
+#ifdef _WIN32
+void TDotTalkApp::readerThreadLoop(TDotTalkApp* app, int fd) {
+    char buf[64 * 1024];
+    while (app->running_.load(std::memory_order_relaxed)) {
+        int n = _read(fd, buf, (unsigned)sizeof(buf));
+        if (n <= 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(3));
+            continue;
+        }
+        app->enqueueChunk(std::string(buf, buf + n));
+    }
+}
+
+void TDotTalkApp::startCStdCapture() {
+    running_.store(true, std::memory_order_relaxed);
+
+    oldStdout_ = _dup(1);
+    oldStderr_ = _dup(2);
+
+    if (_pipe(pipeOut_, 64 * 1024, _O_TEXT) == 0) {
+        _dup2(pipeOut_[1], 1);
+        tOut_ = std::thread(&TDotTalkApp::readerThreadLoop, this, pipeOut_[0]);
+    }
+    if (_pipe(pipeErr_, 64 * 1024, _O_TEXT) == 0) {
+        _dup2(pipeErr_[1], 2);
+        tErr_ = std::thread(&TDotTalkApp::readerThreadLoop, this, pipeErr_[0]);
+    }
+}
+
+void TDotTalkApp::stopCStdCapture() {
+    running_.store(false, std::memory_order_relaxed);
+
+    if (oldStdout_ != -1) { _dup2(oldStdout_, 1); _close(oldStdout_); oldStdout_ = -1; }
+    if (oldStderr_ != -1) { _dup2(oldStderr_, 2); _close(oldStderr_); oldStderr_ = -1; }
+
+    if (pipeOut_[1] != -1) { _close(pipeOut_[1]); pipeOut_[1] = -1; }
+    if (pipeErr_[1] != -1) { _close(pipeErr_[1]); pipeErr_[1] = -1; }
+
+    if (tOut_.joinable()) tOut_.join();
+    if (tErr_.joinable()) tErr_.join();
+
+    if (pipeOut_[0] != -1) { _close(pipeOut_[0]); pipeOut_[0] = -1; }
+    if (pipeErr_[0] != -1) { _close(pipeErr_[0]); pipeErr_[0] = -1; }
+}
+#endif
+
+// ---- iostream buf -> queue implementation ----------------------------------
+void CoutRedirectBuf::flushBuffer() {
+    if (pptr() == pbase()) return;
+    std::string s(pbase(), pptr());
+    pbump(-(int)(pptr() - pbase()));
+
+    if (mode_ == OutputMode::ToWindow || mode_ == OutputMode::ToBoth) {
+        if (app_) app_->enqueueChunk(s);
+    }
+    if ((mode_ == OutputMode::ToConsole || mode_ == OutputMode::ToBoth) && original_) {
+        original_->sputn(s.data(), (std::streamsize)s.size());
+        original_->pubsync();
+    }
+}
+
+// ---- Entry point (command) --------------------------------------------------
+void cmd_FOXPRO(xbase::DbArea& area, std::istringstream& /*args*/) {
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
+    TDotTalkApp app;
+    app.setDbArea(&area);
+    std::cout << "Launching DotTalk FoxPro UI...\n";
+    app.run();
+#else
+    std::cout << "TVISION is not available in this build.\n";
+#endif
+}

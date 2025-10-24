@@ -1,0 +1,43 @@
+What’s inside
+
+include/dli/settings.hpp — settings singleton (DELETED/EXACT/TALK/SAFETY/EXCLUSIVE, etc.)
+
+src/cli/settings.cpp — implementation of dli::settings()
+
+include/dli/console.hpp — dli::clear_screen() decl
+
+src/cli/console_clear.cpp — cross-platform clear-screen
+
+include/dli/normalize.hpp — ALLTRIM() + optional UPPER() (EXACT respected)
+
+src/cli/cmd_wsreport.cpp — complete command (works with dli::api_*; fallbacks included)
+
+include/dli/shell_api_extras.hpp — decls for index-field names/values
+
+src/cli/shell_api_extras.cpp — stub impls (safe until you wire real access)
+
+include/dli/status_addon.hpp — plug-in helper to extend STATUS (ALL/SETTINGS/no-arg default)
+
+There’s a short README.txt in the zip that shows exactly where to include the status_addon.hpp and how to hook the clear-screen calls on startup and after BROWSE/BROWSETUI.
+
+Quick integrate (TL;DR)
+
+Copy include/dli/* → your include/dli/ and src/cli/* → your src/cli/.
+
+In cmd_status.cpp:
+
+#include "dli/status_addon.hpp"
+// ...
+// at the very top of cmd_STATUS(...)
+extern void cmd_STATUS(xbase::DbArea&, std::istringstream&);   // existing
+extern void cmd_WSREPORT(xbase::DbArea&, std::istringstream&); // new
+if (dli_status_predispatch(area, iss, &cmd_STATUS, &cmd_WSREPORT)) return;
+
+
+(Optional) In main.cpp before first prompt, call dli::clear_screen();
+
+(Optional) At the end of cmd_browse.cpp and cmd_browsetui.cpp, call dli::clear_screen();
+
+Reconfigure & build.
+
+If you want me to also generate a ready-made patch for cmd_status.cpp (full file), or wire real implementations for dli_api_get_index_fields/value, say the word and I’ll ship those too. 

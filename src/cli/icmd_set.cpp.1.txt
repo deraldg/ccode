@@ -1,0 +1,251 @@
+// src/cli/cmd_set.cpp
+//
+// DotTalk++ SET loop command with legacy adapter.
+// - New API: dottalk::cli::cmd_SET(args) and cmd_SET_line(line)
+// - Legacy adapter kept for shell linkage:
+//     void ::cmd_SET(xbase::DbArea&, std::istringstream&)
+//   (Adapter only forwards input; it does NOT change behavior.)
+//
+// No GOTOs. Wrapper exists solely to match the shell's expected symbol.
+// Safe stubs record intent; actual honoring will be wired later.
+
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
+// Forward declare to avoid include churn; shell only needs the symbol.
+namespace xbase { class DbArea; }
+
+namespace dottalk::cli {
+
+enum SetDispatchResult : int {
+    kOk = 0,
+    kBadUsage = 2,
+    kDelegateToExisting = 90
+};
+
+// ---------- helpers ----------
+static std::string to_upper(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
+    return s;
+}
+static bool iequals(std::string_view a, std::string_view b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::toupper(static_cast<unsigned char>(a[i])) !=
+            std::toupper(static_cast<unsigned char>(b[i]))) return false;
+    }
+    return true;
+}
+static bool istarts_with(std::string_view s, std::string_view prefix) {
+    if (s.size() < prefix.size()) return false;
+    for (size_t i = 0; i < prefix.size(); ++i) {
+        if (std::toupper(static_cast<unsigned char>(s[i])) !=
+            std::toupper(static_cast<unsigned char>(prefix[i]))) return false;
+    }
+    return true;
+}
+static std::vector<std::string> tokenize(const std::string& line) {
+    std::vector<std::string> out;
+    std::string cur;
+    enum { S_BASE, S_QUOTE } st = S_BASE;
+    for (char c : line) {
+        if (st == S_BASE) {
+            if (std::isspace(static_cast<unsigned char>(c))) {
+                if (!cur.empty()) { out.push_back(cur); cur.clear(); }
+            } else if (c == '"') {
+                st = S_QUOTE;
+            } else {
+                cur.push_back(c);
+            }
+        } else {
+            if (c == '"') { out.push_back(cur); cur.clear(); st = S_BASE; }
+            else { cur.push_back(c); }
+        }
+    }
+    if (!cur.empty()) out.push_back(cur);
+    return out;
+}
+
+// ---------- stub state ----------
+struct SetState { std::unordered_map<std::string, std::string> kv; };
+static SetState& set_state() { static SetState s; return s; }
+static void remember(std::string key, std::string value) {
+    set_state().kv[to_upper(std::move(key))] = std::move(value);
+}
+
+// Planned-but-disabled topics (recognized, no-op)
+static const std::vector<std::string> kPlannedTopics = {
+    "CENTURY","DATE","MESSAGE","FORMAT","PRINTER","CONFIRM","ESCAPE",
+    "MULTILOCKS","REPROCESS","LANGUAGE","COLLATE","AUTOSAVE","BLOCKSIZE",
+    "PROCEDURE","LIBRARY","CLASSLIB","CPDIALOG","CPCOMPILE","AUTOINCERROR",
+    "COVERAGE","STEP"
+};
+
+// ---------- core handler ----------
+static int handle_set_args(std::vector<std::string> args) {
+    if (args.empty()) return kBadUsage;
+
+    // Delegate prefixed commands like SETORDER, SETINDEX
+    if (istarts_with(args[0], "SET") && args[0].size() > 3) {
+        return kDelegateToExisting;
+    }
+
+    if (args.size() == 1) {
+        std::cout << "SET: usage: SET <topic> [TO] <value>\n";
+        return kBadUsage;
+    }
+
+    std::string topic = to_upper(args[1]);
+
+    if (istarts_with(topic, "SET") && topic.size() > 3) {
+        return kDelegateToExisting;
+    }
+
+    for (const auto& p : kPlannedTopics) {
+        if (iequals(topic, p)) {
+            std::cout << "SET " << p << ": recognized (in development); no changes applied.\n";
+            return kOk;
+        }
+    }
+
+    std::vector<std::string> tail;
+    if (args.size() > 2) tail.assign(args.begin() + 2, args.end());
+
+    auto drop_optional_TO = [](const std::vector<std::string>& v) -> std::vector<std::string> {
+        if (!v.empty() && (v[0] == "TO" || v[0] == "to" || v[0] == "To"))
+            return std::vector<std::string>(v.begin() + 1, v.end());
+        return v;
+    };
+    auto join = [](const std::vector<std::string>& v){
+        std::string j; for (size_t i=0;i<v.size();++i){ if(i) j.push_back(' '); j += v[i]; } return j;
+    };
+
+    if (iequals(topic, "DELETED")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET DELETED: expected ON|OFF.\n"; return kBadUsage; }
+        remember("DELETED", to_upper(v[0]));
+        std::cout << "SET DELETED " << v[0] << " (stub recorded; DELETE/PACK/LIST to honor later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "EXACT")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET EXACT: expected ON|OFF.\n"; return kBadUsage; }
+        remember("EXACT", to_upper(v[0]));
+        std::cout << "SET EXACT " << v[0] << " (stub recorded; FIND/LOCATE to honor later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "TALK")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET TALK: expected ON|OFF.\n"; return kBadUsage; }
+        remember("TALK", to_upper(v[0]));
+        std::cout << "SET TALK " << v[0] << " (stub recorded; echo toggle later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "SAFETY")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET SAFETY: expected ON|OFF.\n"; return kBadUsage; }
+        remember("SAFETY", to_upper(v[0]));
+        std::cout << "SET SAFETY " << v[0] << " (stub recorded; overwrite prompts later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "PATH")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET PATH TO <dir1;dir2;...>\n"; return kBadUsage; }
+        remember("PATH", join(v));
+        std::cout << "SET PATH TO " << join(v) << " (stub recorded; search paths later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "DEFAULT")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET DEFAULT TO <directory>\n"; return kBadUsage; }
+        remember("DEFAULT", join(v));
+        std::cout << "SET DEFAULT TO " << join(v) << " (stub recorded; working dir later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "RELATION")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET RELATION TO <expr> INTO <alias>\n"; return kBadUsage; }
+        remember("RELATION", join(v));
+        std::cout << "SET RELATION TO " << join(v) << " (stub recorded; parent/child later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "FILTER")) {
+        auto v = drop_optional_TO(tail);
+        // allow empty later for clearing; for now require something
+        if (v.empty()) { std::cout << "SET FILTER TO <predicate>\n"; return kBadUsage; }
+        remember("FILTER", join(v));
+        std::cout << "SET FILTER TO " << join(v) << " (stub recorded; global filter later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "UNIQUE")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET UNIQUE: expected ON|OFF.\n"; return kBadUsage; }
+        remember("UNIQUE", to_upper(v[0]));
+        std::cout << "SET UNIQUE " << v[0] << " (stub recorded; index builder later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "EXCLUSIVE")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET EXCLUSIVE: expected ON|OFF.\n"; return kBadUsage; }
+        remember("EXCLUSIVE", to_upper(v[0]));
+        std::cout << "SET EXCLUSIVE " << v[0] << " (stub recorded; open mode later).\n";
+        return kOk;
+    }
+    if (iequals(topic, "REFRESH")) {
+        auto v = drop_optional_TO(tail);
+        if (v.empty()) { std::cout << "SET REFRESH TO <n1>, <n2>\n"; return kBadUsage; }
+        remember("REFRESH", join(v));
+        std::cout << "SET REFRESH TO " << join(v) << " (stub recorded; caching later).\n";
+        return kOk;
+    }
+
+    std::cout << "SET " << topic << ": not recognized here. If this is an existing SET* command, dispatcher should handle it.\n";
+    return kDelegateToExisting;
+}
+
+// ---------- public entrypoints ----------
+int cmd_SET(const std::vector<std::string>& args) {
+    std::vector<std::string> copy = args;
+    if (copy.empty()) return kBadUsage;
+    if (iequals(copy[0], "SET")) copy[0] = "SET";
+    return handle_set_args(std::move(copy));
+}
+
+int cmd_SET_line(const std::string& line) {
+    auto tokens = tokenize(line);
+    if (tokens.empty()) return kBadUsage;
+    if (iequals(tokens[0], "SET")) tokens[0] = "SET";
+    return handle_set_args(std::move(tokens));
+}
+
+} // namespace dottalk::cli
+
+// ---------- LEGACY ADAPTER (for shell linkage) ----------
+// Matches the symbol your shell expects. It rebuilds a "SET ..." line
+// from the remaining stream text and forwards to the new handler.
+// Note: We intentionally do not depend on DbArea here yet; stubs are global.
+void cmd_SET(xbase::DbArea& /*area*/, std::istringstream& iss) {
+    std::string rest{ std::istreambuf_iterator<char>(iss), std::istreambuf_iterator<char>() };
+    // If the stream holds only args, prefix "SET " so the tokenizer sees canonical form.
+    std::string line = "SET";
+    if (!rest.empty() && !std::isspace(static_cast<unsigned char>(rest.front())))
+        line += ' ';
+    line += rest;
+
+    (void)dottalk::cli::cmd_SET_line(line);
+}
+
+// ----------------------- Planned topics (comment) -----------------------
+//   SET CENTURY / SET DATE / SET MESSAGE TO / SET FORMAT TO / SET PRINTER TO
+//   SET CONFIRM / SET ESCAPE / SET MULTILOCKS / SET REPROCESS
+//   SET LANGUAGE TO / SET COLLATE TO / SET AUTOSAVE / SET BLOCKSIZE
+//   SET PROCEDURE TO / SET LIBRARY TO / SET CLASSLIB TO
+//   SET CPDIALOG / SET CPCOMPILE TO / SET AUTOINCERROR / SET COVERAGE TO / SET STEP ON

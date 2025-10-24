@@ -1,0 +1,134 @@
+// src/xindex/cli_wrappers.cpp  (overlay addition, v4)
+// Provides legacy-style free functions that db_adapter.cpp expects, without
+// redefining introspection helpers already owned by dbarea_adapt.cpp.
+#include <string>
+#include <iostream>
+#include <cctype>
+#include "xbase.hpp"
+#include "xindex/attach.hpp"   // ensure_manager(DbArea&)
+#include "textio.hpp"          // ieq, trim
+
+namespace xindex {
+
+namespace {
+    thread_local bool g_eof = true;
+    thread_local std::string g_active_tag_cache;
+
+    inline int first_char_field_1based(xbase::DbArea& a) {
+        const auto& F = a.fields();
+        for (int i = 0; i < static_cast<int>(F.size()); ++i) {
+            if (F[i].type == 'C') return i + 1;
+        }
+        return 0;
+    }
+    inline int find_field_index_ci_1based(xbase::DbArea& a, const std::string& nameIn) {
+        const std::string name = textio::trim(nameIn);
+        const auto& F = a.fields();
+        for (int i = 0; i < static_cast<int>(F.size()); ++i) {
+            if (textio::ieq(textio::trim(F[i].name), name)) return i + 1;
+        }
+        return 0;
+    }
+}
+
+// --- Navigation / position --------------------------------------------------
+bool db_move_top(xbase::DbArea& a) { g_eof = false; return a.top(); }
+bool db_move_next(xbase::DbArea& a) {
+    if (g_eof) return false;
+    bool ok = a.skip(1);
+    if (!ok) g_eof = true;
+    return ok;
+}
+bool db_at_eof(const xbase::DbArea&) { return g_eof; }
+
+bool db_record_is_deleted(const xbase::DbArea& a) {
+    return const_cast<xbase::DbArea&>(a).isDeleted();
+}
+bool db_delete_current(xbase::DbArea& a) { return a.deleteCurrent(); }
+
+bool db_position_valid(const xbase::DbArea& a) {
+    auto& A = const_cast<xbase::DbArea&>(a);
+    const int rn = static_cast<int>(A.recno());
+    return rn > 0 && rn <= static_cast<int>(A.recCount());
+}
+
+void db_render_current(const xbase::DbArea& a) {
+    auto& A = const_cast<xbase::DbArea&>(a);
+    const int recno = static_cast<int>(A.recno());
+    const int fid   = first_char_field_1based(A);
+    const std::string preview = (fid > 0) ? A.get(fid) : std::string();
+    std::cout << recno << ": " << preview << "\n";
+}
+
+// --- Index / order management ----------------------------------------------
+bool db_index_has_active(const xbase::DbArea& a) {
+    return ensure_manager(const_cast<xbase::DbArea&>(a)).has_active();
+}
+bool db_seek_key(const std::string& key, bool /*soft*/, xbase::DbArea& a) {
+    if (!a.top()) return false;
+    int fid = first_char_field_1based(a);
+    if (fid <= 0) return false;
+    do {
+        if (a.get(fid) == key) return true;
+    } while (a.skip(1));
+    return false;
+}
+bool db_index_clear(xbase::DbArea& a) {
+    ensure_manager(a).clear_active();
+    g_active_tag_cache.clear();
+    return true;
+}
+bool db_index_load_file(const std::string& path, xbase::DbArea& a) {
+    return ensure_manager(a).load_json(path);
+}
+bool db_index_set_order(const std::string& tag, xbase::DbArea& a) {
+    g_active_tag_cache = tag;
+    return ensure_manager(a).set_active(tag);
+}
+int db_index_tag_count(const xbase::DbArea& a) {
+    auto& m = ensure_manager(const_cast<xbase::DbArea&>(a));
+    return static_cast<int>(m.listTags().size());
+}
+const char* db_index_active_tag(const xbase::DbArea& /*a*/) {
+    return g_active_tag_cache.empty() ? nullptr : g_active_tag_cache.c_str();
+}
+
+// --- Introspection ----------------------------------------------------------
+std::string db_current_table_path(const xbase::DbArea& a) {
+    return const_cast<xbase::DbArea&>(a).filename();
+}
+int  db_current_recno(const xbase::DbArea& a) { return static_cast<int>(const_cast<xbase::DbArea&>(a).recno()); }
+// NOTE: db_record_count() and db_record_length() are intentionally NOT defined here
+// because they are owned by xindex/dbarea_adapt.cpp to avoid duplicate symbols.
+
+bool db_order_descending(const xbase::DbArea& /*a*/) {
+    return false;
+}
+
+// --- Field-by-name getters --------------------------------------------------
+bool db_field_get_char(const std::string& name, std::string& out, const xbase::DbArea& a) {
+    auto& A = const_cast<xbase::DbArea&>(a);
+    int idx = find_field_index_ci_1based(A, name);
+    if (idx <= 0) return false;
+    out = A.get(idx);
+    return true;
+}
+bool db_field_get_numeric(const std::string& name, double& out, const xbase::DbArea& a) {
+    std::string s; if (!db_field_get_char(name, s, a)) return false;
+    try { out = std::stod(s); return true; } catch(...) { return false; }
+}
+bool db_field_get_logical(const std::string& name, bool& out, const xbase::DbArea& a) {
+    std::string s; if (!db_field_get_char(name, s, a)) return false;
+    if (s.empty()) { out = false; return true; }
+    unsigned char c = static_cast<unsigned char>(std::toupper(static_cast<unsigned char>(s[0])));
+    out = (c == 'T' || c == 'Y' || c == '1');
+    return true;
+}
+bool db_field_get_date_yyyymmdd(const std::string& name, std::string& out, const xbase::DbArea& a) {
+    std::string s; if (!db_field_get_char(name, s, a)) return false;
+    std::string digits; for (char ch : s) if (ch >= '0' && ch <= '9') digits.push_back(ch);
+    if (digits.size() >= 8) { out = digits.substr(0,8); return true; }
+    out.clear(); return false;
+}
+
+} // namespace xindex

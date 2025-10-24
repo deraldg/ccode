@@ -1,0 +1,98 @@
+#include "dli/browsetui_integration.hpp"
+#include "dli/screen.hpp"
+#include <algorithm>
+
+namespace dli {
+
+BrowsePaint::BrowsePaint(std::vector<int> cellXs, int width, int height, bool vt_capable)
+: m_cellXs(std::move(cellXs)), mW(width), mH(height), m_vt(vt_capable)
+{
+    mStatusY = std::max(0, height - 1);
+}
+
+void BrowsePaint::set_status_y(int y){ mStatusY = y; }
+
+void BrowsePaint::load_window(int topIndex, int visibleCount, const FetchRowByIndex& fetch){
+    m_topIndex = topIndex;
+    m_rows.assign(visibleCount, ViewRow{});
+    for (int i = 0; i < visibleCount; ++i){
+        fetch(topIndex + i, m_rows[i]);
+        render_row_line(i, m_rows[i], (i == m_highlightVisible) ? 0 : -1);
+    }
+}
+
+void BrowsePaint::redraw_all(){
+    for (int i = 0; i < (int)m_rows.size(); ++i){
+        render_row_line(i, m_rows[i], (i == m_highlightVisible) ? 0 : -1);
+    }
+}
+
+void BrowsePaint::move_highlight(int oldVisible, int newVisible){
+    // Redraw two lines only
+    if (oldVisible >= 0 && oldVisible < (int)m_rows.size()){
+        render_row_line(oldVisible, m_rows[oldVisible], /*highlightCol*/ -1);
+    }
+    m_highlightVisible = newVisible;
+    if (newVisible >= 0 && newVisible < (int)m_rows.size()){
+        render_row_line(newVisible, m_rows[newVisible], /*highlightCol*/ 0);
+    }
+}
+
+void BrowsePaint::patch_cell(int visibleRow, int col, std::string_view newText, bool highlighted){
+    if (visibleRow < 0 || visibleRow >= (int)m_rows.size()) return;
+    if (col < 0 || col >= (int)m_rows[visibleRow].cells.size()) return;
+    m_rows[visibleRow].cells[col] = std::string(newText);
+    int x = (col < (int)m_cellXs.size()) ? m_cellXs[col] : 0;
+    if (highlighted){
+        std::string inv = vt_inverse(newText, m_vt);
+        screen_write_span(x, visibleRow, inv);
+    } else {
+        screen_write_span(x, visibleRow, newText);
+    }
+}
+
+void BrowsePaint::set_status(std::string_view s){
+    screen_write_line(mStatusY, s);
+}
+
+void BrowsePaint::scroll(int delta, const FetchRowByIndex& fetch){
+    if (delta == 0 || m_rows.empty()) return;
+    int oldTop = m_topIndex;
+    m_topIndex += delta;
+    if (m_topIndex < 0) m_topIndex = 0; // clamp; real code should clamp to dataset size too
+
+    // Shift window and fetch only new rows
+    std::vector<ViewRow> newRows = m_rows;
+    if (delta > 0){
+        // Scrolling down
+        for (int i = 0; i < (int)m_rows.size()-delta; ++i) newRows[i] = m_rows[i+delta];
+        for (int i = (int)m_rows.size()-delta; i < (int)m_rows.size(); ++i){
+            fetch(m_topIndex + i, newRows[i]);
+        }
+    } else {
+        // Scrolling up
+        int k = -delta;
+        for (int i = (int)m_rows.size()-1; i >= k; --i) newRows[i] = m_rows[i-k];
+        for (int i = 0; i < k; ++i){
+            fetch(m_topIndex + i, newRows[i]);
+        }
+    }
+    m_rows.swap(newRows);
+    redraw_all();
+}
+
+void BrowsePaint::render_row_line(int visY, const ViewRow& row, int highlightCol){
+    // Compose by drawing each cell at its x position
+    for (int c = 0; c < (int)row.cells.size(); ++c){
+        int x = (c < (int)m_cellXs.size()) ? m_cellXs[c] : 0;
+        const std::string& t = row.cells[c];
+        if (highlightCol == c){
+            std::string inv = vt_inverse(t, m_vt);
+            screen_write_span(x, visY, inv);
+        } else {
+            screen_write_span(x, visY, t);
+        }
+    }
+}
+
+} // namespace dli

@@ -1,0 +1,24 @@
+# Normalize line endings per INI (auto), keep cross-platform files LF where needed
+*           text=auto
+
+# Windows scripts & MSVC project files -> CRLF
+*.ps1       text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.sln       text eol=crlf
+*.vcxproj   text eol=crlf
+*.props     text eol=crlf
+
+# Unixy files -> LF (to avoid CI/tooling issues)
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary files
+*.zip       binary
+*.exe       binary
+*.dll       binary
+*.lib       binary
+*.pdb       binary
+*.dbf       binary
+*.inx       binary

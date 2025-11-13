@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760">
+  <style>
+    .box { fill:#f7f7f7; stroke:#333; stroke-width:1.5; rx:8; ry:8; }
+    .title { font-family:Arial, Helvetica, sans-serif; font-size:20px; font-weight:bold; }
+    .text { font-family:Arial, Helvetica, sans-serif; font-size:14px; }
+    .arrow { stroke:#333; stroke-width:1.5; marker-end:url(#arrowhead); fill:none; }
+    .file { fill:#eaf3ff; }
+    .proc { fill:#eafaea; }
+    .stor { fill:#fff2cc; }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="600" y="40" text-anchor="middle" class="title">DotTalk++ Alpha v4.5 — Indexing Data Flow</text>
+
+  <!-- CLI Commands -->
+  <rect x="60" y="90" width="260" height="120" class="box proc"/>
+  <text x="190" y="120" text-anchor="middle" class="title">CLI</text>
+  <text x="190" y="145" text-anchor="middle" class="text">INDEX / SETINDEX / LIST</text>
+  <text x="190" y="165" text-anchor="middle" class="text">ASCEND / DESCEND / FIELDS</text>
+
+  <!-- DbArea / DBF -->
+  <rect x="420" y="90" width="300" height="120" class="box stor"/>
+  <text x="570" y="120" text-anchor="middle" class="title">xbase::DbArea</text>
+  <text x="570" y="145" text-anchor="middle" class="text">students.dbf (records, fields)</text>
+
+  <!-- Index Writer (INDEX) -->
+  <rect x="420" y="260" width="300" height="120" class="box proc"/>
+  <text x="570" y="290" text-anchor="middle" class="title">INDEX Writer</text>
+  <text x="570" y="315" text-anchor="middle" class="text">Build entries from field or #n</text>
+  <text x="570" y="335" text-anchor="middle" class="text">Sort (key asc, recno tie-break)</text>
+
+  <!-- INX file -->
+  <rect x="850" y="260" width="260" height="120" class="box file"/>
+  <text x="980" y="290" text-anchor="middle" class="title">.inx (1INX v1)</text>
+  <text x="980" y="315" text-anchor="middle" class="text">Header: magic, ver, name, count</text>
+  <text x="980" y="335" text-anchor="middle" class="text">Entries: keyLen, key, recno</text>
+
+  <!-- Order State -->
+  <rect x="850" y="90" width="260" height="120" class="box proc"/>
+  <text x="980" y="120" text-anchor="middle" class="title">orderstate</text>
+  <text x="980" y="145" text-anchor="middle" class="text">active index path + direction</text>
+
+  <!-- SimpleIndex Reader -->
+  <rect x="420" y="430" width="300" height="120" class="box proc"/>
+  <text x="570" y="460" text-anchor="middle" class="title">xindex::SimpleIndex</text>
+  <text x="570" y="485" text-anchor="middle" class="text">open(path) → entries()</text>
+
+  <!-- LIST -->
+  <rect x="60" y="430" width="260" height="120" class="box proc"/>
+  <text x="190" y="460" text-anchor="middle" class="title">LIST</text>
+  <text x="190" y="485" text-anchor="middle" class="text">Uses index if active;</text>
+  <text x="190" y="505" text-anchor="middle" class="text">falls back to physical order</text>
+
+  <!-- Arrows -->
+  <line x1="320" y1="150" x2="420" y2="150" class="arrow"/> <!-- CLI → DbArea -->
+  <line x1="320" y1="150" x2="850" y2="150" class="arrow"/> <!-- CLI → orderstate -->
+  <line x1="570" y1="210" x2="570" y2="260" class="arrow"/> <!-- DbArea → INDEX writer (reads fields/records) -->
+  <line x1="720" y1="320" x2="850" y2="320" class="arrow"/> <!-- INDEX writer → .inx -->
+  <line x1="980" y1="210" x2="980" y2="260" class="arrow"/> <!-- orderstate (path) → .inx (selection) -->
+  <line x1="980" y1="380" x2="720" y2="490" class="arrow"/> <!-- .inx → SimpleIndex -->
+  <line x1="420" y1="490" x2="320" y2="490" class="arrow"/> <!-- SimpleIndex → LIST -->
+  <line x1="420" y1="490" x2="420" y2="210" class="arrow"/> <!-- SimpleIndex → DbArea (gotoRec/read) -->
+</svg>

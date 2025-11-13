@@ -1,0 +1,13 @@
+C:/Users/deral/code/ccode/palette/build-msvc/CMakeFiles/fox_palette_core.dir
+C:/Users/deral/code/ccode/palette/build-msvc/CMakeFiles/fox_palette.dir
+C:/Users/deral/code/ccode/palette/build-msvc/CMakeFiles/fox_palette_plugin.dir
+C:/Users/deral/code/ccode/palette/build-msvc/CMakeFiles/INSTALL.dir
+C:/Users/deral/code/ccode/palette/build-msvc/CMakeFiles/ALL_BUILD.dir
+C:/Users/deral/code/ccode/palette/build-msvc/CMakeFiles/ZERO_CHECK.dir
+C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/CMakeFiles/INSTALL.dir
+C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/CMakeFiles/ALL_BUILD.dir
+C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/source/CMakeFiles/tvision.dir
+C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/source/CMakeFiles/INSTALL.dir
+C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/examples/CMakeFiles/INSTALL.dir
+C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/examples/avscolor/CMakeFiles/INSTALL.dir
+C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/test/CMakeFiles/INSTALL.dir

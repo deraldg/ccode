@@ -17,7 +17,7 @@ namespace xbase {
 // ---- Constants -------------------------------------------------------------
 constexpr int     MAX_FIELDS         = 128;
 constexpr int     MAX_INDEX          = 5;
-constexpr int     MAX_AREA           = 10;
+constexpr int     MAX_AREA           = 25;
 constexpr char    IS_DELETED         = '*';
 constexpr char    NOT_DELETED        = ' ';
 constexpr uint8_t HEADER_TERM_BYTE   = 0x0D;
@@ -51,6 +51,18 @@ struct FieldDef {
     uint8_t     decimals{};   // for 'N'
 };
 
+namespace {
+    static inline void clear() {
+    #ifdef _WIN32
+        std::system("cls");
+    #else
+        std::fputs("\x1b[2J\x1b[H", stdout);
+        std::fflush(stdout);
+    #endif
+    }
+}
+
+
 // ---- DbArea ----------------------------------------------------------------
 class DbArea {
 public:
@@ -82,9 +94,12 @@ public:
     bool deleteCurrent();
 
     // ---- Accessors expected by the rest of the app -------------------------
-    int         recordLength() const noexcept;    // bytes per record (from _hdr.cpr)
-    std::string filename() const;                 // full path or base name
-    void        setFilename(std::string path);    // helper to set on open/create
+    // Canonical: recLength()
+    int         recLength()   const noexcept { return _hdr.cpr; } // bytes per record
+    // Legacy alias: recordLength() retained for compatibility
+    int         recordLength() const noexcept;                    // defined in .cpp (compat)
+    std::string filename()     const;                             // full path or base name
+    void        setFilename(std::string path);                    // helper to set on open/create
 
     // Field access (1-based)
     const std::vector<FieldDef>& fields() const { return _fields; }
@@ -95,7 +110,7 @@ public:
     int32_t     recno()      const { return _crn; }
     int32_t     recCount()   const { return _hdr.num_of_recs; }
     int         fieldCount() const { return static_cast<int>(_fields.size()); }
-    int         cpr()        const { return _hdr.cpr; }   // same as recordLength()
+    int         cpr()        const noexcept { return recLength(); }   // prefer recLength()
     std::string name()       const { return _db_name; }
 
 private:

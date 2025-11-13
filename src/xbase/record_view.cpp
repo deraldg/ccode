@@ -1,11 +1,14 @@
 #include "xbase.hpp"
 #include "textio.hpp"
+
 #include <algorithm>
 #include <cstring>
-#include "xbase.hpp"
+#include <string>
+#include <vector>
 
 #if DOTTALK_WITH_INDEX
-  #include "xindex/key_codec.hpp"
+  #include "xindex/index_manager.hpp"
+  #include "xindex/key_codec.hpp"   // xindex::codec::encodeChar(...)
 #endif
 
 namespace xbase {
@@ -34,16 +37,17 @@ bool DbArea::writeCurrent() {
     _fp.write(_recbuf.data(), _recbuf.size());
     _fp.flush();
     bool ok = static_cast<bool>(_fp);
+
 #if DOTTALK_WITH_INDEX
-    if (ok && _idx) {
-        auto oldK = snapshotKey();
-        auto newK = currentKey();
-        if (oldK != newK) {
-            _idx->update(oldK, newK, _crn);
-        }
+    if (ok && _idx && _idx->has_active()) {
+        // If field values changed in a way that affects the key, notify manager.
+        // We used to compute old/new keys and call _idx->update(old,new,recno),
+        // but the current API exposes on_replace(recno) to recompute for the active tag.
+        _idx->on_replace(_crn);
         _fd_snapshot = _fd;
     }
 #endif
+
     return ok;
 }
 
@@ -92,7 +96,7 @@ std::string DbArea::rtrim(std::string s) {
     return s;
 }
 
-// ---- [INDEX PATCH] helpers ----
+// ---- [INDEX helpers] ----
 
 int DbArea::findFieldCI(const std::string& name) const {
     for (size_t i=0;i<_fields.size();++i) {
@@ -110,15 +114,20 @@ int DbArea::firstCharField() const {
 
 std::vector<uint8_t> DbArea::encodeKeyFrom(const std::vector<std::string>& vals) const {
 #if DOTTALK_WITH_INDEX
-    // Stage 1: single CHAR field key (case-insensitive, trimmed)
-    int idx = firstCharField();
+    // Simple single-character-field key using lexicographic encoding.
+    const int idx = firstCharField();
     if (idx <= 0) return {};
-    size_t n = static_cast<size_t>(idx - 1);
+    const size_t n = static_cast<size_t>(idx - 1);
     if (n >= vals.size()) return {};
-    xindex::KeyOptions opt;
-    opt.case_insensitive = true;
-    opt.trim_right_spaces = true;
-    return xindex::KeyCodec::encodeChar(vals[n], opt);
+
+    // Width: use the field length for the first char field.
+    const auto& f = _fields[idx - 1];
+    const std::size_t width = static_cast<std::size_t>(f.length);
+
+    // Uppercase compare to mimic case-insensitive order (or flip to false if you prefer).
+    const bool upper = true;
+
+    return xindex::codec::encodeChar(vals[n], width, upper);
 #else
     (void)vals;
     return {};

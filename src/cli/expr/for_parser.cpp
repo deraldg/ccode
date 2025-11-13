@@ -1,7 +1,8 @@
 #include "dottalk/expr/for_parser.hpp"
 #include <cctype>
+#include <string>
 
-using namespace dottalk::expr;
+namespace dottalk { namespace expr {
 
 static std::string up(std::string s) {
   for (auto& c: s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
@@ -22,3 +23,5 @@ bool extract_for_clause(std::istringstream& iss, std::string& out) {
   out = ltrim(rest);
   return true;
 }
+
+}} // namespace dottalk::expr

@@ -1,47 +1,48 @@
-#include "xbase.hpp"        // <-- Needed for DbArea
-#include "textio.hpp"
-#include "order_state.hpp"
+// src/cli/cmd_setindex.cpp — SET INDEX TO <file.inx[,more...]>
+// CNX note (alpha): do NOT open .cnx via SET INDEX.
+// Use: SETCNX [<table|path.cnx>] then SETORDER <tag>.
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
+#include <string>
 
-using namespace textio;
+#include "xbase.hpp"
+#include "order_state.hpp"
+
 namespace fs = std::filesystem;
 
-// SETINDEX <tag|path>
-void cmd_SETINDEX(xbase::DbArea& A, std::istringstream& in) {
-    std::string target;
-    if (!(in >> target)) { std::cout << "Usage: SETINDEX <tag>\n"; return; }
+static std::string to_upper(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return char(std::toupper(c)); });
+    return s;
+}
 
-/*
-void cmd_SETINDEX(DbArea& A, std::istringstream& in)
+void cmd_SETINDEX(xbase::DbArea& A, std::istringstream& args)
 {
-    std::string target;
-    if (!(in >> target)) {
-        std::cout << "Usage: SETINDEX <tag|path>\n";
+    std::string tok;
+    if (!(args >> tok)) {
+        std::cout << "SET INDEX: missing filename.\n";
         return;
     }
-*/
-    // Resolve <target> into a concrete .inx file path.
-    fs::path p = target;
-    if (!p.has_extension()) {
-        p.replace_extension(".inx");
-    }
-
-    // If no directory component was provided, assume current working directory.
-    if (p.parent_path().empty()) {
-        if (!fs::exists(p)) {
-            std::cout << "Index file not found: " << p.string() << "\n";
-            return;
-        }
-    } else {
-        if (!fs::exists(p)) {
-            std::cout << "Index file not found: " << p.string() << "\n";
+    if (to_upper(tok) == "TO") {
+        if (!(args >> tok)) {
+            std::cout << "SET INDEX: missing filename.\n";
             return;
         }
     }
 
-    // Activate the index for this area.
+    // Warn off CNX here.
+    if (tok.size() > 4 && to_upper(tok.substr(tok.size()-4)) == ".CNX") {
+        std::cout << "SET INDEX: '" << tok
+                  << "' looks like a CNX container. Use SETCNX and SETORDER instead.\n";
+        return;
+    }
+
+    fs::path p = tok;
+    if (!p.has_extension()) p.replace_extension(".inx");
+
     orderstate::setOrder(A, p.string());
-    std::cout << "Index set: " << p.string() << "\n";
+    std::cout << "Index set: " << p.filename().string() << "\n";
 }

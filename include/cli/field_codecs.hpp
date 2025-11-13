@@ -1,6 +1,7 @@
 #pragma once
 // Plan A: Strict DBF field codecs with predictable packing rules.
 // No file I/O; pure formatting functions.
+#include <cstdint> // Add this include
 #include <string>
 #include <string_view>
 #include <optional>

@@ -1,5 +1,6 @@
 #include "dottalk/expr/lexer.hpp"
 #include <cctype>
+#include <cstdlib>
 
 using namespace dottalk::expr;
 
@@ -7,7 +8,7 @@ static bool is_ident_start(char c) {
   return std::isalpha(static_cast<unsigned char>(c)) || c=='_';
 }
 static bool is_ident_part(char c) {
-  return std::isalnum(static_cast<unsigned char>(c)) || c=='_' ;
+  return std::isalnum(static_cast<unsigned char>(c)) || c=='_';
 }
 
 Lexer::Lexer(std::string src): m_src(std::move(src)) {}
@@ -16,6 +17,7 @@ void Lexer::skipSpace() {
   while (!eof()) {
     char c = cur();
     if (std::isspace(static_cast<unsigned char>(c))) { ++m_i; continue; }
+    // allow .AND. / .OR. / .NOT. forms
     if (c=='.' && std::isalpha(static_cast<unsigned char>(peekch()))) break;
     break;
   }
@@ -80,6 +82,7 @@ Token Lexer::next() {
   if (eof()) return Token{TokKind::End, ""};
 
   char c = cur();
+
   if (c=='.') {
     size_t start = m_i++;
     while (!eof() && cur()!='.') ++m_i;
@@ -99,13 +102,20 @@ Token Lexer::next() {
 
   if (c=='(') { ++m_i; return Token{TokKind::LParen, "("}; }
   if (c==')') { ++m_i; return Token{TokKind::RParen, ")"}; }
-  if (c=='=' && peekch()=='=') { m_i+=2; return Token{TokKind::EqEq, "=="}; }
-  if (c=='=') { ++m_i; return Token{TokKind::Eq, "="}; }
+  if (c=='=') {
+    if (peekch()=='=') { m_i+=2; return Token{TokKind::EqEq, "=="}; }
+    ++m_i; return Token{TokKind::Eq, "="};
+  }
   if (c=='!' && peekch()=='=') { m_i+=2; return Token{TokKind::Ne, "!="}; }
   if (c=='<' && peekch()=='=') { m_i+=2; return Token{TokKind::Le, "<="}; }
   if (c=='>' && peekch()=='=') { m_i+=2; return Token{TokKind::Ge, ">="}; }
   if (c=='<') { ++m_i; return Token{TokKind::Lt, "<"}; }
   if (c=='>') { ++m_i; return Token{TokKind::Gt, ">"}; }
+
+  if (c=='+') { ++m_i; return Token{TokKind::Plus,  "+"}; }
+  if (c=='-') { ++m_i; return Token{TokKind::Minus, "-"}; }
+  if (c=='*') { ++m_i; return Token{TokKind::Star,  "*"}; }
+  if (c=='/') { ++m_i; return Token{TokKind::Slash, "/"}; }
 
   ++m_i;
   return Token{TokKind::End, ""};

@@ -20,6 +20,7 @@ static std::string value_as_string(const RecordView& rv, const Expr* e) {
   }
   if (auto ls = dynamic_cast<const LitString*>(e)) return ls->v;
   if (auto ln = dynamic_cast<const LitNumber*>(e)) return std::to_string(ln->v);
+  // generic expr → stringify bool as "1"/"0"
   return e->eval(rv) ? "1" : "0";
 }
 
@@ -31,6 +32,7 @@ static std::optional<double> value_as_number(const RecordView& rv, const Expr* e
     return std::nullopt;
   }
   if (auto ls = dynamic_cast<const LitString*>(e)) return to_number(ls->v);
+  if (auto ar = dynamic_cast<const Arith*>(e))  return ar->evalNumber(rv);
   return std::nullopt;
 }
 
@@ -72,3 +74,20 @@ bool BoolBin::eval(const RecordView& rv) const {
 }
 
 bool Not::eval(const RecordView& rv) const { return !inner->eval(rv); }
+
+// ----- Arithmetic -----
+double Arith::evalNumber(const RecordView& rv) const {
+  auto L = value_as_number(rv, lhs.get()).value_or(0.0);
+  auto R = value_as_number(rv, rhs.get()).value_or(0.0);
+  switch (op) {
+    case ArithOp::Add: return L + R;
+    case ArithOp::Sub: return L - R;
+    case ArithOp::Mul: return L * R;
+    case ArithOp::Div: return (R==0.0 ? 0.0 : L / R);
+  }
+  return 0.0;
+}
+
+bool Arith::eval(const RecordView& rv) const {
+  return evalNumber(rv) != 0.0;
+}

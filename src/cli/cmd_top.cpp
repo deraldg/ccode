@@ -1,10 +1,14 @@
-#include <iostream>
 #include <sstream>
+#include <iostream>
 #include "xbase.hpp"
+#include "cli/settings.hpp"
 
-void cmd_TOP(xbase::DbArea& a, std::istringstream& iss) {
-    (void)iss;
-    if (!a.isOpen()) { std::cout << "No file open\n"; return; }
-    if (!a.top())    { std::cout << "Failed to go TOP\n"; return; }
-    std::cout << "Recno: " << a.recno() << "\n";
+using cli::Settings;
+
+void cmd_TOP(xbase::DbArea& A, std::istringstream&)
+{
+    if (!A.isOpen()) { std::cout << "TOP: no file open.\n"; return; }
+    if (!A.top())    { std::cout << "TOP: failed.\n"; return; }
+    if (Settings::instance().talk_on.load())
+        std::cout << "Recno: " << A.recno() << "\n";
 }

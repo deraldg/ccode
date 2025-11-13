@@ -61,7 +61,7 @@ static void wr_u32(std::ofstream& out, uint32_t v) {
     out.write(reinterpret_cast<const char*>(b), 4);
 }
 
-// Parse: INDEX ON <field|#n> TAG <name>
+// Parse: INDEX ON <field|#n> TAG <filename>
 static bool parse_args(std::istringstream& in, std::string& field, std::string& tag) {
     std::string onTok;
     if (!(in >> onTok)) return false;

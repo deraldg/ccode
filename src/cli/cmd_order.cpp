@@ -13,15 +13,10 @@
 #include <sstream>
 #include <iostream>
 
-// If you still have stub versions in this file, hide them when indexing is ON
-#if !DOTTALK_WITH_INDEX
-void cmd_ASCEND(xbase::DbArea&, std::istringstream&) {
-    std::cout << "ASCEND: acknowledged (no index support in this build).\n";
-}
-void cmd_DESCEND(xbase::DbArea&, std::istringstream&) {
-    std::cout << "DESCEND: acknowledged (no index support in this build).\n";
-}
-#endif
+// cmd_order.cpp  (top of file)
+void cmd_ASCEND(xbase::DbArea&, std::istringstream&);
+void cmd_DESCEND(xbase::DbArea&, std::istringstream&);
+
 
 
 using xbase::DbArea;

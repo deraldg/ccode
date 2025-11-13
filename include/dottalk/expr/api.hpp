@@ -13,4 +13,9 @@ struct CompileResult {
 
 CompileResult compile_where(const std::string& text);
 
-}} // namespace
+}} // namespace dottalk::expr
+
+// ---- Back-compat inline forwarder in global namespace ----
+inline dottalk::expr::CompileResult compile_where(const std::string& text) {
+  return dottalk::expr::compile_where(text);
+}

@@ -1,0 +1,13 @@
+# 1) Find VS installation path
+$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+  -latest -products * -requires Microsoft.Component.MSBuild `
+  -property installationPath
+
+if (-not $vs) { throw "Visual Studio not found. Install VS or Build Tools." }
+
+# 2) Import the DevShell module from VS (NOT SSMS)
+$devShell = Join-Path $vs 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
+Import-Module $devShell -ErrorAction Stop
+
+# 3) Enter the VS Dev Shell (x64 host & target)
+Enter-VsDevShell -VsInstallPath $vs -DevCmdArguments '-arch=x64 -host_arch=x64'

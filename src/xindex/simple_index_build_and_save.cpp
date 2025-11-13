@@ -1,40 +1,44 @@
 // src/xindex/simple_index_build_and_save.cpp
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <string>
-
-#include "xindex/simple_index.hpp"
-#include "xbase.hpp"
+#include "xindex/simple_index.hpp"   // declares xindex::SimpleIndex, IndexMeta
+#include "xbase.hpp"                 // for xbase::DbArea (adjust include if needed)
 
 namespace xindex {
 
-// EXACT signature the linker is asking for:
-// bool SimpleIndex::build_and_save(xbase::DbArea&,
-//                                  const IndexMeta&,
-//                                  const std::filesystem::path&,
-//                                  std::string*)
-// Minimal stub that just creates the output file with a tiny header.
-// Replace later with the real builder.
-bool SimpleIndex::build_and_save(xbase::DbArea& /*A*/,
-                                 const IndexMeta& /*meta*/,
+bool SimpleIndex::build_and_save(xbase::DbArea& area,
+                                 const IndexMeta& meta,
                                  const std::filesystem::path& outPath,
                                  std::string* err)
 {
+    // If 'area' or 'meta' are unused in this placeholder, silence warnings for now.
+    (void)area;
+    (void)meta;
+
     try {
-        std::error_code ec;
-        auto parent = outPath.parent_path();
-        if (!parent.empty()) {
-            std::filesystem::create_directories(parent, ec);
+        // Ensure the output directory exists.
+        if (!outPath.empty()) {
+            std::error_code ec;
+            std::filesystem::create_directories(outPath.parent_path(), ec);
         }
 
-        std::ofstream f(outPath, std::ios::binary | std::ios::trunc);
-        if (!f) {
-            if (err) *err = "open failed: " + outPath.string();
+        // Write a tiny header so the file is not empty (placeholder).
+        std::ofstream out(outPath, std::ios::binary);
+        if (!out) {
+            if (err) *err = std::string("cannot open index file: ") + outPath.string();
             return false;
         }
-        static const char kMagic[] = "XIDX0\n";
-        f.write(kMagic, sizeof(kMagic) - 1);
-        return static_cast<bool>(f);
+
+        static constexpr char kMagic[] = "DTI0"; // placeholder magic/version
+        out.write(kMagic, sizeof(kMagic) - 1);
+        out.flush();
+        if (!out.good()) {
+            if (err) *err = "write failed";
+            return false;
+        }
+
+        return true;
     } catch (const std::exception& ex) {
         if (err) *err = ex.what();
         return false;

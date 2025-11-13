@@ -1,0 +1,9 @@
+Patch: alpha-4.2 fix for cli_wrappers and build.ps1
+- src\xindex\cli_wrappers.cpp
+  * Replaced access to private DbArea methods (findFieldCI, firstCharField) with local helpers using public fields().
+  * Replaced access to removed member recNum with public accessor recno().
+  * Added namespace-local detail helpers: iequals_ascii, find_field_ci, first_char_field.
+
+- build.ps1
+  * Hardened the discovery of dottalkpp.exe by using Join-Path with explicit -Path/-ChildPath and added bin\$Config default.
+  * Ensures no trailing commas get passed to Join-Path parameters.

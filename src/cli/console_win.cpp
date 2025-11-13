@@ -17,12 +17,12 @@ static const char* kFrameStyle   = "\x1b[30;43m";   // black fg (30) on amber/ye
 static const char* kHeaderStyle  = "\x1b[1;32m";    // bold green (example; header text set by caller)
 
 // Frame glyphs
-static const char* kTL = kUseAsciiFrame ? "+" : u8"┌";
-static const char* kTR = kUseAsciiFrame ? "+" : u8"┐";
-static const char* kBL = kUseAsciiFrame ? "+" : u8"└";
-static const char* kBR = kUseAsciiFrame ? "+" : u8"┘";
-static const char* kHZ = kUseAsciiFrame ? "-" : u8"─";
-static const char* kVT = kUseAsciiFrame ? "|" : u8"│";
+static const char* kTL = kUseAsciiFrame ? "+" : "┌";
+static const char* kTR = kUseAsciiFrame ? "+" : "┐";
+static const char* kBL = kUseAsciiFrame ? "+" : "└";
+static const char* kBR = kUseAsciiFrame ? "+" : "┘";
+static const char* kHZ = kUseAsciiFrame ? "-" : "─";
+static const char* kVT = kUseAsciiFrame ? "|" : "│";
 // ==========================================================================
 
 struct WinConsole : Console {

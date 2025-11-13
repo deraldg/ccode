@@ -1,0 +1,12 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/deral/code/ccode/palette/build-msvc/cmake_install.cmake",
+		"C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/cmake_install.cmake",
+		"C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/source/cmake_install.cmake",
+		"C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/examples/cmake_install.cmake",
+		"C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/examples/avscolor/cmake_install.cmake",
+		"C:/Users/deral/code/ccode/palette/build-msvc/_tvision_local/test/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

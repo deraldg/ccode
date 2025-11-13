@@ -6,6 +6,10 @@ using namespace dottalk::expr;
 
 int Parser::lbp(const Token& t) const {
   switch (t.kind) {
+    case TokKind::Star:
+    case TokKind::Slash: return 60; // highest infix precedence
+    case TokKind::Plus:
+    case TokKind::Minus: return 50;
     case TokKind::Eq:
     case TokKind::EqEq:
     case TokKind::Ne:
@@ -37,6 +41,10 @@ std::unique_ptr<Expr> Parser::nud(Token t) {
       expect(TokKind::RParen, "Missing ')'");
       return e;
     }
+    case TokKind::Minus: { // unary minus: 0 - expr
+      auto rhs = expression(60);
+      return std::make_unique<Arith>(std::make_unique<LitNumber>(0.0), ArithOp::Sub, std::move(rhs));
+    }
     default:
       throw ParseError{"Unexpected token"};
   }
@@ -44,6 +52,18 @@ std::unique_ptr<Expr> Parser::nud(Token t) {
 
 std::unique_ptr<Expr> Parser::led(std::unique_ptr<Expr> left, Token op) {
   switch (op.kind) {
+    case TokKind::Star:
+    case TokKind::Slash:
+    case TokKind::Plus:
+    case TokKind::Minus: {
+      int bp = (op.kind==TokKind::Star || op.kind==TokKind::Slash) ? 60 : 50;
+      auto right = expression(bp);
+      ArithOp a = ArithOp::Add;
+      if (op.kind==TokKind::Minus) a = ArithOp::Sub;
+      else if (op.kind==TokKind::Star) a = ArithOp::Mul;
+      else if (op.kind==TokKind::Slash) a = ArithOp::Div;
+      return std::make_unique<Arith>(std::move(left), a, std::move(right));
+    }
     case TokKind::Eq:
     case TokKind::EqEq:
     case TokKind::Ne:

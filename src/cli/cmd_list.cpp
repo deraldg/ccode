@@ -242,9 +242,6 @@ void cmd_LIST(xbase::DbArea& a, std::istringstream& iss) {
     const int32_t total = a.recCount();
     if (total <= 0) { std::cout << "(empty)\n"; return; }
 
-    
-
-
     // If ALL, always start from the top; else from current (or top if unset)
     if (opt.all) a.top(); else if (a.recno() <= 0) a.top();
 
@@ -262,17 +259,34 @@ void cmd_LIST(xbase::DbArea& a, std::istringstream& iss) {
                       << " (" << err << ")\n";
             // fall through to physical order
         } else {
+            const bool asc = orderstate::isAscending(a); // ← NEW: honor ASCEND/DESCEND
             int printed = 0;
-            for (uint32_t rn : recnos) {
-                if (!a.gotoRec(static_cast<int32_t>(rn))) continue;
-                if (!a.readCurrent()) continue;
-                if (a.isDeleted() && !opt.all) continue;
-                if (opt.haveFilter && !predicates::eval(a, opt.fld, opt.op, opt.val))
-                    continue;
 
-                print_row(a, recw);
-                ++printed;
-                if (!opt.all && opt.limit > 0 && printed >= opt.limit) break;
+            if (asc) {
+                for (uint32_t rn : recnos) {
+                    if (!a.gotoRec(static_cast<int32_t>(rn))) continue;
+                    if (!a.readCurrent()) continue;
+                    if (a.isDeleted() && !opt.all) continue;
+                    if (opt.haveFilter && !predicates::eval(a, opt.fld, opt.op, opt.val))
+                        continue;
+
+                    print_row(a, recw);
+                    ++printed;
+                    if (!opt.all && opt.limit > 0 && printed >= opt.limit) break;
+                }
+            } else {
+                for (auto it = recnos.rbegin(); it != recnos.rend(); ++it) {
+                    uint32_t rn = *it;
+                    if (!a.gotoRec(static_cast<int32_t>(rn))) continue;
+                    if (!a.readCurrent()) continue;
+                    if (a.isDeleted() && !opt.all) continue;
+                    if (opt.haveFilter && !predicates::eval(a, opt.fld, opt.op, opt.val))
+                        continue;
+
+                    print_row(a, recw);
+                    ++printed;
+                    if (!opt.all && opt.limit > 0 && printed >= opt.limit) break;
+                }
             }
 
             if (!opt.all) {
@@ -283,10 +297,10 @@ void cmd_LIST(xbase::DbArea& a, std::istringstream& iss) {
             }
             return; // don't run the physical-order loop
         }
-        // change color back to save_color 
+        // change color back to save_color
     }
 
-    // Fallback: physical order
+    // Fallback: physical order (unchanged)
     int printed = 0;
     const int32_t start = opt.all ? 1 : a.recno();
     for (int32_t rn = start; rn <= total; ++rn) {

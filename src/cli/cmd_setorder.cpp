@@ -1,55 +1,67 @@
-// ===============================
-// File: src/cli/cmd_setorder.cpp  (DROP-IN)
-// ===============================
+// src/cli/cmd_setorder.cpp — SETORDER <0|stem|path.inx>
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
 
 #include "xbase.hpp"
-#include "textio.hpp"
-#include "xindex/index_manager.hpp"
-#include "xindex/attach.hpp"
+#include "order_state.hpp"
 
-static bool is_number(const std::string& s) {
-    if (s.empty()) return false;
-    for (unsigned char c : s) if (!std::isdigit(c)) return false;
-    return true;
+namespace fs = std::filesystem;
+
+static std::string to_upper(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return char(std::toupper(c)); });
+    return s;
+}
+static std::string read_arg(std::istringstream& args) {
+    std::string a;
+    if (!(args >> a)) return {};
+    if (to_upper(a) == "TO") {
+        if (!(args >> a)) return {};
+    }
+    return a;
 }
 
-void cmd_SETORDER(xbase::DbArea& a, std::istringstream& args) {
-    using std::cout; using std::endl; using std::string; using std::vector;
-
-    if (!a.isOpen()) { cout << "SET ORDER: no file open." << endl; return; }
-
-    string tok;
-    if (!(args >> tok)) { cout << "Usage: SETORDER <n|tag>" << endl; return; }
-
-    auto& mgr = xindex::ensure_manager(a);
-    vector<string> tags = mgr.listTags();
-    if (tags.empty()) { cout << "SET ORDER: no indexes loaded." << endl; return; }
-
-    string chosen;
-    if (is_number(tok)) {
-        std::sort(tags.begin(), tags.end());
-        int n = std::stoi(tok);
-        if (n < 1 || n > (int)tags.size()) {
-            cout << "SET ORDER: index not found: " << tok << endl; return;
-        }
-        chosen = tags[n-1];
-    } else {
-        // direct tag name
-        auto it = std::find(tags.begin(), tags.end(), tok);
-        if (it == tags.end()) { cout << "SET ORDER: index not found: " << tok << endl; return; }
-        chosen = tok;
+void cmd_SETORDER(xbase::DbArea& A, std::istringstream& args)
+{
+    std::string arg = read_arg(args);
+    if (arg.empty()) {
+        std::cout << "SET ORDER: missing argument. Use 0, a tag stem, or a .inx path.\n";
+        return;
     }
 
-    if (!mgr.set_active(chosen)) {
-        cout << "SET ORDER: failed to activate tag: " << chosen << endl; return;
+    // 0 => physical
+    if (arg == "0") {
+        orderstate::clearOrder(A);
+        std::cout << "SET ORDER: physical order (cleared).\n";
+        return;
     }
 
-    cout << "Order set: tag '" << chosen << "'" << endl;
+    // If explicit .CNX, steer user to container flow.
+    if (arg.size() > 4 && to_upper(arg.substr(arg.size()-4)) == ".CNX") {
+        std::cout << "SET ORDER: '" << arg
+                  << "' is a CNX container; use SETCNX and then SETORDER <tag>.\n";
+        return;
+    }
+
+    // If explicit .INX path
+    if (arg.size() > 4 && to_upper(arg.substr(arg.size()-4)) == ".INX") {
+        fs::path p = arg;
+        orderstate::setOrder(A, p.string());
+        std::cout << "SET ORDER: using index file '" << p.string() << "'.\n";
+        return;
+    }
+
+    // Treat as a stem: try <stem>.inx (relative or absolute as typed later).
+    {
+        fs::path p = arg;
+        p.replace_extension(".inx");
+        orderstate::setOrder(A, p.string());
+        std::cout << "SET ORDER: tried index file '" << p.string()
+                  << "'. (If not found, ensure path/cwd.)\n";
+        return;
+    }
 }
-

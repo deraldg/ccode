@@ -3,9 +3,25 @@
 #include <cstdint>
 #include <string>
 
+// NOTE:
+// This unit previously provided ad-hoc implementations of
+//   - int DbArea::recordCount() const
+//   - int DbArea::recordLength() const
+//   - std::string DbArea::filename() const
+// These conflicted with the standardized API:
+//   - recCount()  : canonical count accessor (inline in xbase.hpp)
+//   - recLength() : canonical record-length accessor (inline) and
+//                   legacy recordLength() defined once in dbarea.cpp
+//   - filename()  : defined once in dbarea.cpp
+// To maintain the agreed naming convention (rec* prefix) and avoid duplicate
+// definitions, those implementations were removed from this file.
+// If future introspection helpers are added, prefer free functions that
+// accept a DbArea& rather than redefining members.
+
 namespace {
 
 // Guard that restores the current record on destruction.
+// (Kept here for potential future probing helpers.)
 struct RecGuard {
     xbase::DbArea& a;
     int32_t saved;
@@ -16,40 +32,5 @@ struct RecGuard {
 } // namespace
 
 namespace xbase {
-
-int DbArea::recordCount() const {
-    // We keep this logically-const: we probe using gotoRec and restore.
-    auto& self = *const_cast<DbArea*>(this);
-    RecGuard guard(self);
-
-    // Exponential search to find an upper bound
-    int32_t lo = 0;
-    int32_t hi = 1;
-    while (self.gotoRec(hi)) {
-        lo = hi;
-        if (hi >= (1 << 30)) break;   // hard safety cap
-        hi <<= 1;
-    }
-
-    // Binary search in (lo, hi)
-    int32_t best = lo;
-    int32_t L = lo + 1, R = hi - 1;
-    while (L <= R) {
-        const int32_t mid = L + (R - L) / 2;
-        if (self.gotoRec(mid)) { best = mid; L = mid + 1; }
-        else                   { R = mid - 1; }
-    }
-    return static_cast<int>(best);
-}
-
-int DbArea::recordLength() const {
-    // TODO: wire to real header once exposed
-    return -1;
-}
-
-std::string DbArea::filename() const {
-    // TODO: wire to real filename/path once exposed
-    return std::string{};
-}
-
+// Intentionally empty: see note above.
 } // namespace xbase

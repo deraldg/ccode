@@ -1,0 +1,10 @@
+^C:\USERS\DERAL\CODE\CCODE\PALETTE\BUILD-MSVC\CMAKEFILES\917FFB125091385822D3F57ACB21B98C\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/deral/code/ccode/palette -BC:/Users/deral/code/ccode/palette/build-msvc --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/deral/code/ccode/palette/build-msvc/fox_palette_demo.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

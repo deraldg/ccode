@@ -59,4 +59,16 @@ struct Not : Expr {
   bool eval(const RecordView& rv) const override;
 };
 
+// ---------- Arithmetic ----------
+enum class ArithOp { Add, Sub, Mul, Div };
+
+struct Arith : Expr {
+  std::unique_ptr<Expr> lhs, rhs;
+  ArithOp op;
+  Arith(std::unique_ptr<Expr> L, ArithOp O, std::unique_ptr<Expr> R)
+    : lhs(std::move(L)), rhs(std::move(R)), op(O) {}
+  bool   eval(const RecordView& rv) const override;   // truthy if numeric != 0
+  double evalNumber(const RecordView& rv) const;      // numeric value
+};
+
 }} // namespace

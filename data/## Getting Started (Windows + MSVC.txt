@@ -1,0 +1,21 @@
+## Getting Started (Windows + MSVC + vcpkg)
+
+**Prereqs**
+- Visual Studio 2022 (Desktop development with C++)
+- Git
+- (Optional) PowerShell 7 (`pwsh`)
+
+**Build**
+```powershell
+# From the repo root
+# 1) Bootstrap a local vcpkg (no admin required)
+git clone https://github.com/microsoft/vcpkg $env:TEMP\vcpkg
+& $env:TEMP\vcpkg\bootstrap-vcpkg.bat
+
+# 2) Configure + build (MSVC, x64)
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_TOOLCHAIN_FILE="$env:TEMP\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+  -DDOTTALK_WITH_TV=ON -DDOTTALK_WITH_INDEX=ON -DBUILD_PYDOTTALK=OFF
+
+cmake --build build --config Release --target dottalkpp

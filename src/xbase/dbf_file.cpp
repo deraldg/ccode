@@ -1,5 +1,4 @@
 #include "xbase.hpp"
-//#include "xindex/index_manager.hpp"  // <-- add this line
 // NOTE: removed "utils.hpp" include to avoid current header parser issue
 #include <algorithm>
 #include <cctype>
@@ -8,12 +7,8 @@
 #include <fstream>
 
 #if DOTTALK_WITH_INDEX
-  // xindex scaffold headers (include only in .cpp)
   #include "xindex/index_manager.hpp"
-  #include "xindex/index_backend.hpp"
-  #include "xindex/key_codec.hpp"
-  // Use explicit path so it doesn't depend on include_directories order:
-  #include "xindex_scaffold/backends/bpt_backend.hpp"
+  // keep includes lean; the manager + your CLI commands will handle tag creation
 #endif
 
 namespace xbase {
@@ -62,12 +57,10 @@ void DbArea::open(const std::string& filename) {
     gotoRec(1);
 
 #if DOTTALK_WITH_INDEX
-    // Initialize an in-memory index tag for staging
+    // Construct the manager bound to this area.
+    // Tag creation/activation is handled by CLI commands (INDEX/SET INDEX/SET ORDER).
     if (!_idx) {
-        _idx = std::make_unique<xindex::IndexManager>();
-        auto be = std::make_unique<xindex::BptBackend>(); // in-memory demo backend
-        _idx->addTag("TAG1", "<memory>", std::move(be));
-        _idx->setActive("TAG1");
+        _idx = std::make_unique<xindex::IndexManager>(*this);
     }
 #endif
 }
@@ -136,9 +129,10 @@ bool DbArea::appendBlank() {
 
     bool ok = gotoRec(_hdr.num_of_recs);
 #if DOTTALK_WITH_INDEX
-    if (ok && _idx) {
-        _fd_snapshot = _fd;
-        _idx->insert(currentKey(), _hdr.num_of_recs);
+    if (ok && _idx && _idx->has_active()) {
+        // let the manager compute the key from the active spec
+        _fd_snapshot = _fd; // keep, if you use snapshot elsewhere
+        _idx->on_append(_hdr.num_of_recs);
     }
 #endif
     return ok;
@@ -149,8 +143,8 @@ bool DbArea::deleteCurrent() {
     _del = IS_DELETED;
     bool ok = writeCurrent();
 #if DOTTALK_WITH_INDEX
-    if (ok && _idx) {
-        _idx->erase(snapshotKey(), _crn);
+    if (ok && _idx && _idx->has_active()) {
+        _idx->on_delete(_crn);
     }
 #endif
     return ok;
@@ -160,16 +154,7 @@ XBaseEngine::XBaseEngine() {
     for (auto& p : _areas) p = std::make_unique<DbArea>();
 }
 
-#if DOTTALK_WITH_INDEX
-void DbArea::rebuildActiveIndex() {
-    if (!_idx) return;
-    int32_t saved = recno();
-    if (!top()) return;
-    do {
-        _idx->insert(currentKey(), recno());
-    } while (skip(1));
-    if (saved > 0) gotoRec(saved);
-}
-#endif
+// NOTE: no rebuildActiveIndex() here; if you need it, declare it in xbase.hpp
+// and implement it using _idx->on_replace(recno()) over all records.
 
 } // namespace xbase

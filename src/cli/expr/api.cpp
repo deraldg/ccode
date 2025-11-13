@@ -1,7 +1,7 @@
 #include "dottalk/expr/api.hpp"
 #include "dottalk/expr/parser.hpp"
 
-using namespace dottalk::expr;
+namespace dottalk { namespace expr {
 
 CompileResult compile_where(const std::string& text) {
   try {
@@ -14,3 +14,5 @@ CompileResult compile_where(const std::string& text) {
     return CompileResult{ nullptr, "Unknown parse error" };
   }
 }
+
+}} // namespace dottalk::expr

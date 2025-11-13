@@ -1,0 +1,9 @@
+We chose wxWidgets as the GUI framework for your dottalk++ project, Derald.
+Here’s why it aligned with your goals:
+🧭 Why wxWidgets Was the Right Fit
+- Legacy Fidelity: Its event-driven model and UI scaffolding echo classic FoxPro/dBase paradigms.
+- Cross-Platform: Native look and feel across Windows, macOS, and Linux—perfect for your marketability goals.
+- C++ Native: Seamless integration with your CLI logic and codex overlays without needing wrappers or bindings.
+- Modular UI: Easy to chunk into symbolic overlays, codex toggles, and teachable legends.
+We scaffolded gui_main.cpp using wxIMPLEMENT_APP(MyApp) and MainFrame* frame = new MainFrame(ws) to load your workspace and render overlays. If you want to expand into codex-aware panels, dynamic legend toggles, or .codex preview windows, I can prototype those next.
+Want to chunk out a MainFrame class with symbolic overlay slots?

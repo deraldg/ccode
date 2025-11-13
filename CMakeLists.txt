@@ -1,137 +1,156 @@
-cmake_minimum_required(VERSION 3.16)
-project(dottalkpp VERSION 0.3.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.21)
 
-# ---- Options ---------------------------------------------------------------
-option(DOTTALK_WITH_INDEX "Build CLI with indexing features and verbs" ON)
-
-# ---- Toolchain / Defaults --------------------------------------------------
-set(CMAKE_CXX_STANDARD 17)
+# -------------------- Project --------------------
+project(DotTalkpp VERSION 0.6 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(MSVC)
-  add_compile_options(/W4 /permissive- /MP /utf-8)
-else()
-  add_compile_options(-Wall -Wextra -Wpedantic)
+# Prefer modern behavior so *_ROOT hints are honored consistently.
+if(POLICY CMP0144)
+  cmake_policy(SET CMP0144 NEW)
 endif()
 
-# ---- Paths -----------------------------------------------------------------
-set(CCODE_ROOT "${CMAKE_SOURCE_DIR}")
-set(CCODE_INC  "${CCODE_ROOT}/include")
-set(CCODE_SRC  "${CCODE_ROOT}/src")
-set(CCODE_XI   "${CCODE_SRC}/xindex")
-set(CCODE_CLI  "${CCODE_SRC}/cli")
-set(CCODE_XB   "${CCODE_SRC}/xbase")
-set(CCODE_MEMO "${CCODE_SRC}/memo")
+# Default build type for single-config generators (e.g., Ninja)
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
 
-# =========================
-#  Libraries (xindex/xbase)
-# =========================
+# -------------------- Options --------------------
+option(DOTTALK_WITH_TV      "Enable Turbo Vision features" ON)
+option(DOTTALK_TV_TESTS     "Build Turbo Vision probe tests" ON)
+option(DOTTALK_WITH_INDEX   "Enable xindex (indexing) support" ON)
+option(BUILD_PYDOTTALK      "Build Python bindings" OFF)
 
-# ---- xindex library --------------------------------------------------------
-file(GLOB XI_SOURCES "${CCODE_XI}/*.cpp")
-# Exclude legacy implementation that targets the old DbArea API
-list(FILTER XI_SOURCES EXCLUDE REGEX ".*/simple_index\\.cpp$")
+# Paths (adjustable from -D)
+set(TVISION_ROOT "C:/Users/deral/code/tvision" CACHE PATH "Local Turbo Vision source tree")
+set(VCPKG_ROOT   "C:/Users/deral/vcpkg"       CACHE PATH "vcpkg root (hint)")
 
-add_library(xindex STATIC ${XI_SOURCES})
-target_include_directories(xindex PUBLIC "${CCODE_INC}")
+# ---- Turbo Vision wiring (root-level) ----
+option(DOTTALK_WITH_TV "Enable Turbo Vision features" ON)
 
-# ---- xbase library ---------------------------------------------------------
-file(GLOB_RECURSE XBASE_SOURCES "${CCODE_XB}/*.cpp")
-if(NOT XBASE_SOURCES)
-  file(GLOB XBASE_FALLBACK "${CCODE_SRC}/*.cpp")
-  if(XBASE_FALLBACK)
-    list(FILTER XBASE_FALLBACK EXCLUDE REGEX "/(cli|xindex)/")
-    set(XBASE_SOURCES "${XBASE_FALLBACK}")
+# New insertion for color changes
+if (DOTTALK_WITH_TV)
+  # If you build with vcpkg, the toolchain/manifest will expose this package.
+  find_package(tvision CONFIG REQUIRED)
+endif()
+
+# Allow finding packages installed via local vcpkg manifest builds
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows")
+
+# Nice-to-have Windows defines
+if (MSVC)
+  add_compile_definitions(NOMINMAX _CRT_SECURE_NO_WARNINGS)
+endif()
+
+# -------------------- Code & Targets --------------------
+# All libraries/apps live under src/ (this will add xbase/xindex if present)
+add_subdirectory(src)
+
+# Python binding helper (added AFTER code targets exist so it can link to them)
+include(cmake/AddPydotTalkIfPresent.cmake OPTIONAL)
+
+# -------------------- Turbo Vision detection --------------------
+set(_tvision_found OFF)
+set(_tvision_origin "none")
+
+if (DOTTALK_WITH_TV)
+  # 1) Prefer a config package (vcpkg)
+  find_package(tvision CONFIG QUIET)
+
+  # Normalize to 'tvision' alias if port exports tvision::tvision
+  if (TARGET tvision::tvision AND NOT TARGET tvision)
+    add_library(tvision INTERFACE IMPORTED)
+    target_link_libraries(tvision INTERFACE tvision::tvision)
+  endif()
+
+  if (TARGET tvision)
+    set(_tvision_found ON)
+    set(_tvision_origin "vcpkg/config")
+  endif()
+
+  # 2) Fallback to local source tree
+  if (NOT _tvision_found AND EXISTS "${TVISION_ROOT}/CMakeLists.txt")
+    message(STATUS "Turbo Vision: using local source at ${TVISION_ROOT}")
+    add_subdirectory("${TVISION_ROOT}" _tvision_local EXCLUDE_FROM_ALL)
+    if (TARGET tvision)
+      set(_tvision_found ON)
+      set(_tvision_origin "local")
+    endif()
+  endif()
+
+  # 3) If user passed -Dtvision_DIR=...
+  if (NOT _tvision_found AND DEFINED tvision_DIR)
+    find_package(tvision CONFIG REQUIRED)
+    if (TARGET tvision::tvision AND NOT TARGET tvision)
+      add_library(tvision INTERFACE IMPORTED)
+      target_link_libraries(tvision INTERFACE tvision::tvision)
+    endif()
+    if (TARGET tvision)
+      set(_tvision_found ON)
+      set(_tvision_origin "explicit-dir")
+    endif()
+  endif()
+
+  # Apply to main target
+  if (TARGET dottalkpp)
+    if (_tvision_found)
+      target_link_libraries(dottalkpp PRIVATE tvision)
+      target_compile_definitions(dottalkpp PRIVATE DOTTALK_TV_AVAILABLE=1)
+      message(STATUS "Turbo Vision ENABLED for 'dottalkpp' via ${_tvision_origin}.")
+    else()
+      target_compile_definitions(dottalkpp PRIVATE DOTTALK_TV_AVAILABLE=0)
+      message(WARNING "Turbo Vision NOT found; 'dottalkpp' will build WITHOUT TV.")
+    endif()
+  else()
+    message(WARNING "Target 'dottalkpp' not defined yet; TV wiring deferred.")
+  endif()
+else()
+  if (TARGET dottalkpp)
+    target_compile_definitions(dottalkpp PRIVATE DOTTALK_TV_AVAILABLE=0)
+  endif()
+  message(STATUS "Turbo Vision explicitly disabled (DOTTALK_WITH_TV=OFF).")
+endif()
+
+# -------------------- Indexing wiring (global) --------------------
+# Apply compile-defs + link xindex (when available) to CLI and binding.
+if (TARGET dottalkpp)
+  if (DOTTALK_WITH_INDEX)
+    target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=1)
+    if (TARGET xindex)
+      target_link_libraries(dottalkpp PRIVATE xindex)
+    endif()
+    message(STATUS "Indexing ENABLED for 'dottalkpp'.")
+  else()
+    target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=0)
+    message(STATUS "Indexing DISABLED for 'dottalkpp'.")
   endif()
 endif()
 
-if(NOT XBASE_SOURCES)
-  message(FATAL_ERROR "No xbase sources found under ${CCODE_XB} or fallback in ${CCODE_SRC}.")
+if (BUILD_PYDOTTALK AND TARGET pydottalk)
+  if (DOTTALK_WITH_INDEX)
+    target_compile_definitions(pydottalk PRIVATE DOTTALK_WITH_INDEX=1)
+    if (TARGET xindex)
+      target_link_libraries(pydottalk PRIVATE xindex)
+    endif()
+    message(STATUS "Indexing ENABLED for 'pydottalk'.")
+  else()
+    target_compile_definitions(pydottalk PRIVATE DOTTALK_WITH_INDEX=0)
+    message(STATUS "Indexing DISABLED for 'pydottalk'.")
+  endif()
 endif()
 
-# Explicitly exclude experimental file if present
-list(FILTER XBASE_SOURCES EXCLUDE REGEX ".*/dbarea_introspection\\.cpp$")
-
-add_library(xbase STATIC ${XBASE_SOURCES})
-target_include_directories(xbase PUBLIC "${CCODE_INC}")
-
-# ==========================================================
-#  Memo sidecar library (.dtx)
-# ==========================================================
-file(GLOB MEMO_SOURCES "${CCODE_MEMO}/*.cpp")
-if(MEMO_SOURCES)
-  add_library(memo STATIC ${MEMO_SOURCES})
-  target_include_directories(memo PUBLIC "${CCODE_INC}")
-  set(MEMO_ENABLED TRUE)
-else()
-  message(STATUS "No memo sources found under ${CCODE_MEMO} (memo sidecar disabled).")
-  set(MEMO_ENABLED FALSE)
+# -------------------- Tests (ctest) --------------------
+include(CTest)
+if (BUILD_TESTING AND DOTTALK_TV_TESTS AND TARGET tvision)
+  add_subdirectory(tests)
 endif()
 
-# ===================
-#  Executable (CLI)
-# ===================
-file(GLOB CLI_SOURCES "${CCODE_CLI}/*.cpp")
-if(NOT CLI_SOURCES)
-  message(FATAL_ERROR "No CLI sources found in ${CCODE_CLI}")
-endif()
-
-# Belt-and-suspenders: exclude any accidental file named src_cli_cmd_status.cpp
-list(FILTER CLI_SOURCES EXCLUDE REGEX ".*/src_cli_cmd_status\\.cpp$")
-
-add_executable(dottalkpp ${CLI_SOURCES})
-
-# Make headers available to the CLI:
-#  - ${CCODE_INC} for public headers (include/…)
-#  - ${CCODE_SRC} so includes like "cli/replace_multi.hpp" resolve
-target_include_directories(dottalkpp PRIVATE
-  "${CCODE_INC}"
-  "${CCODE_SRC}"
-)
-
-# Ensure utf8_init.cpp is compiled into the exe (fixes LNK2019 on dottalk::init_utf8)
-target_sources(dottalkpp PRIVATE
-  ${CCODE_CLI}/utf8_init.cpp
-)
-
-# Link only at the executable level to avoid circular deps. Include memo if present.
-if(MEMO_ENABLED)
-  target_link_libraries(dottalkpp PRIVATE xbase xindex memo)
-else()
-  target_link_libraries(dottalkpp PRIVATE xbase xindex)
-endif()
-
-# ---- DotTalk++ Expr sources (keep as-is) -----------------------------------
-set(DOTTALK_EXPR_SOURCES
-  src/cli/expr/lexer.cpp
-  src/cli/expr/parser.cpp
-  src/cli/expr/eval.cpp
-  src/cli/expr/api.cpp
-  src/cli/expr/for_parser.cpp
-)
-target_sources(dottalkpp PRIVATE ${DOTTALK_EXPR_SOURCES})
-
-# ---- Compile-time feature flags --------------------------------------------
-if(DOTTALK_WITH_INDEX)
-  target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=1)
-else()
-  target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_INDEX=0)
-endif()
-
-target_compile_definitions(dottalkpp PRIVATE
-  XINDEX_ADAPT_HAS_RECLEN
-  XINDEX_ADAPT_HAS_FILENAME
-)
-
-# ---- Status banner ---------------------------------------------------------
-message(STATUS "================ CMake Config ================")
-message(STATUS "Source dir : ${CCODE_ROOT}")
-message(STATUS "Build dir  : ${CMAKE_BINARY_DIR}")
-message(STATUS "CLI dir    : ${CCODE_CLI}")
-message(STATUS "Indexing   : ${DOTTALK_WITH_INDEX}")
-message(STATUS "xindex src : ${CCODE_XI}")
-message(STATUS "xbase  src : ${CCODE_XB}")
-message(STATUS "Memo src   : ${CCODE_MEMO}")
-message(STATUS "Memo sidecar enabled: ${MEMO_ENABLED}")
-message(STATUS "=============================================")
+# -------------------- Summary --------------------
+message(STATUS "==== DotTalk++ / Build summary ====")
+message(STATUS "  DOTTALK_WITH_TV     : ${DOTTALK_WITH_TV}")
+message(STATUS "  DOTTALK_TV_TESTS    : ${DOTTALK_TV_TESTS}")
+message(STATUS "  DOTTALK_WITH_INDEX  : ${DOTTALK_WITH_INDEX}")
+message(STATUS "  TVISION_ROOT        : ${TVISION_ROOT}")
+message(STATUS "  tvision origin      : ${_tvision_origin}")
+message(STATUS "===============================")

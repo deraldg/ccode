@@ -1,0 +1,6 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckIncludeFile.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckIncludeFileCXX.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckTypeSize.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/TestBigEndian.cmake
+C:/Users/deral/code/tvision/source/CMakeLists.txt

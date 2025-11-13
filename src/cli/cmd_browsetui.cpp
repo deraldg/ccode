@@ -713,6 +713,7 @@ void cmd_BROWSETUI(xbase::DbArea& area, std::istringstream& iss) {
             status = "Leaving BROWSE.";
             render(status);
             std::cout << "\n";
+            std::system("cls");
             break;
         }
 

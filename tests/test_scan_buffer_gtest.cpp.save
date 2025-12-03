@@ -1,0 +1,189 @@
+// tests/test_scan_buffer_gtest.cpp
+// Build: link with GoogleTest. This file is self-contained and mirrors your SCAN join logic.
+
+#include <gtest/gtest.h>
+#include <string>
+#include <vector>
+#include <cctype>
+#include <optional>
+
+namespace testscan {
+
+static inline std::string ltrim(std::string s) {
+    size_t i = 0; while (i < s.size() && std::isspace((unsigned char)s[i])) ++i;
+    return s.substr(i);
+}
+static inline std::string rtrim(std::string s) {
+    size_t i = s.size(); while (i > 0 && std::isspace((unsigned char)s[i-1])) --i;
+    s.resize(i); return s;
+}
+static inline std::string trim(std::string s) { return rtrim(ltrim(std::move(s))); }
+
+// Quote-aware `&&` stripping (why: emulate FoxPro-style inline comments)
+static std::string strip_inline_comment(std::string s) {
+    bool in_s=false, in_d=false;
+    for (size_t i=0; i+1<s.size(); ++i) {
+        const char c=s[i], n=s[i+1];
+        if (!in_s && c=='"')  { in_d = !in_d; continue; }
+        if (!in_d && c=='\'') { in_s = !in_s; continue; }
+        if (!in_s && !in_d && c=='&' && n=='&') { s.erase(i); break; }
+    }
+    return rtrim(s);
+}
+
+// Detect terminal continuation marker (`;`, `\`, `&`) outside quotes
+static bool ends_with_cont_marker_outside_quotes(const std::string& s, size_t& marker_pos) {
+    bool in_s=false, in_d=false;
+    size_t i = s.size();
+    while (i>0 && std::isspace((unsigned char)s[i-1])) --i;
+    if (i==0) return false;
+    for (size_t k=0; k<i; ++k) {
+        const char c = s[k];
+        if (!in_s && c=='"')  { in_d = !in_d; continue; }
+        if (!in_d && c=='\'') { in_s = !in_s; continue; }
+    }
+    if (in_s || in_d) return false;
+    const char last = s[i-1];
+    if (last==';' || last=='\\' || last=='&') { marker_pos = i-1; return true; }
+    return false;
+}
+
+class ScanBuffer {
+public:
+    void pushLine(const std::string& raw) {
+        std::string line = strip_inline_comment(raw);
+        if (line.empty() && !joining_) return;
+        size_t pos = std::string::npos;
+        const bool cont = ends_with_cont_marker_outside_quotes(line, pos);
+        if (cont) line = rtrim(line.substr(0, pos));
+        if (!buf_.empty() && !line.empty()) buf_.push_back(' ');
+        buf_ += line;
+        joining_ = cont;
+        if (!joining_) finalize_current();
+    }
+    void flush() { // simulate ENDSCAN
+        if (!buf_.empty()) finalize_current();
+    }
+    const std::vector<std::string>& lines() const { return out_; }
+    void clear() { out_.clear(); buf_.clear(); joining_=false; }
+
+private:
+    void finalize_current() {
+        std::string fin = trim(buf_);
+        if (!fin.empty()) out_.push_back(std::move(fin));
+        buf_.clear();
+    }
+    std::string buf_;
+    bool joining_{false};
+    std::vector<std::string> out_;
+};
+
+} // namespace testscan
+
+using namespace testscan;
+
+TEST(ScanBufferTests, SingleLinePassthrough) {
+    ScanBuffer sb;
+    sb.pushLine("REPLACE name WITH 'A'");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE name WITH 'A'");
+}
+
+TEST(ScanBufferTests, SemicolonContinuationTwoLines) {
+    ScanBuffer sb;
+    sb.pushLine("REPLACE ;");
+    sb.pushLine("name WITH 'A'");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE name WITH 'A'");
+}
+
+TEST(ScanBufferTests, SemicolonContinuationThreeLines) {
+    ScanBuffer sb;
+    sb.pushLine("UPDATE ;");
+    sb.pushLine("SET city = ;");
+    sb.pushLine("'NYC'");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "UPDATE SET city = 'NYC'");
+}
+
+TEST(ScanBufferTests, BackslashContinuation) {
+    ScanBuffer sb;
+    sb.pushLine("REPLACE \\");
+    sb.pushLine("name WITH 'B'");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE name WITH 'B'");
+}
+
+TEST(ScanBufferTests, AmpersandContinuation) {
+    ScanBuffer sb;
+    sb.pushLine("APPEND FROM &");
+    sb.pushLine("'file.csv' TYPE CSV");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "APPEND FROM 'file.csv' TYPE CSV");
+}
+
+TEST(ScanBufferTests, QuotesProtectContinuationAndComments) {
+    ScanBuffer sb;
+    sb.pushLine("REPLACE note WITH 'semi;colon && not a comment' ;");
+    sb.pushLine("FOR id=1 && real comment here");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE note WITH 'semi;colon && not a comment' FOR id=1");
+}
+
+TEST(ScanBufferTests, CommentsStrippedOutsideQuotesOnly) {
+    ScanBuffer sb;
+    sb.pushLine("REPLACE x WITH 1 && drop");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE x WITH 1");
+
+    sb.clear();
+    sb.pushLine("REPLACE x WITH '1 && keep'");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE x WITH '1 && keep'");
+}
+
+TEST(ScanBufferTests, TrailingWhitespaceAndEmptyLines) {
+    ScanBuffer sb;
+    sb.pushLine("REPLACE x WITH 1   ;   ");
+    sb.pushLine("    ");           // empty continuation chunk
+    sb.pushLine("  AND y WITH 2  ");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE x WITH 1 AND y WITH 2");
+}
+
+TEST(ScanBufferTests, MixedContinuationAndComment) {
+    ScanBuffer sb;
+    sb.pushLine("REPLACE ; && comment here");
+    sb.pushLine("x WITH 'v' && another");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "REPLACE x WITH 'v'");
+}
+
+TEST(ScanBufferTests, DanglingFlushActsLikeEndscan) {
+    ScanBuffer sb;
+    sb.pushLine("SET FILTER TO ;");
+    sb.pushLine("name = 'A'");
+    // no more lines; flush simulates ENDSCAN
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "SET FILTER TO name = 'A'");
+}
+
+TEST(ScanBufferTests, NoAccidentalTokenGluingAcrossChunks) {
+    ScanBuffer sb;
+    sb.pushLine("DO myproc ;");
+    sb.pushLine("WITH x, y");
+    sb.flush();
+    ASSERT_EQ(sb.lines().size(), 1u);
+    EXPECT_EQ(sb.lines()[0], "DO myproc WITH x, y");
+}

@@ -1,0 +1,23 @@
+SCHEMA OPEN
+select 9
+set relation to SID into ENROLL
+display
+select ENROLL
+DISPLAY
+TUPLE *
+SELECT 9
+TUPLE *
+TUPLE                  
+TUPLE #11.*                
+TUPLE #9.*,#11.LNAME       
+TUPLE STUDENTS.SID
+BOTTOM
+DISPLAY
+SELECT ENROLL
+TUPLE *
+TUPLE                  
+TUPLE #11.*                
+TUPLE #9.*,#11.LNAME       
+TUPLE ENROLL.SID
+SELECT 
+

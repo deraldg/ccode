@@ -1,0 +1,5 @@
+USE students
+FIELDS
+LIST 5
+COUNT
+QUIT

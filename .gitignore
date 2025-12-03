@@ -1,42 +1,51 @@
-﻿# Build trees
-/build/
-/out/
-/dist/
-/bin/
-/obj/
-/CMakeCache.txt
-/CMakeFiles/
-/cmake-build-*/
-/.vs/
-*.vcxproj.user
-*.VC.db
+﻿# ============================
+# Derald Custom: DotTalk++ repo
+# ============================
 
-# Compiled artifacts
-*.exe
-*.dll
-*.lib
-*.pdb
-*.obj
-*.ilk
-*.exp
-*.pch
+# vcpkg generated content
+vcpkg_installed/
+vcpkg/
+*.vcpkg-log
 
-# CMake generators
-*.sln
-*.vcxproj
-*.vcxproj.filters
+# CMake out-of-tree builds
+build*/
+*/build*/
+palette/build*/
+palette/build-msvc/
+build-wsl/
+build-tests/
+build-legacy/
 
-# Logs, temps
-*.log
-*.tmp
-*.cache
+# Ninja + MSVC intermediate
+*.tlog/
+*.tlog
+*.recipe
+*.lastbuildstate
 
-# Python helpers
-__pycache__/
-*.pyc
+# Zip exports & bundles
+_bundles/
+_artifacts/
+_drops/
+*.zip
 
-# PowerShell transcript
-*.ps1xml
+# Workspace notes / scratch
+flatten/
+src.bak/
+include.bak/
 
-# Test results
-/results/
+# FoxApp / FoxCLI shells
+FoxApp/
+FoxAppShell_mtv/
+foxcli/
+tvtv/
+tv_test/
+
+# DTS runs
+*.dts
+*.dts_results
+dts_results.txt
+
+# Misc generated reporting
+*.lnk
+*.ico
+*.html

@@ -1,5 +1,5 @@
-// dli/demo_main.cpp — optional minimal demo (build only if DLI_DEMO_MAIN defined)
-// Shows windowed vs full-screen toggle with F6. No DBF access—just fake fields.
+// dli/demo_main.cpp ? optional minimal demo (build only if DLI_DEMO_MAIN defined)
+// Shows windowed vs full-screen toggle with F6. No DBF access?just fake fields.
 #ifdef DLI_DEMO_MAIN
 
 #include "dli/screen.hpp"
@@ -88,3 +88,6 @@ int main(){
 }
 
 #endif // DLI_DEMO_MAIN
+
+
+

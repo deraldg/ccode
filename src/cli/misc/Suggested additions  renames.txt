@@ -1,0 +1,11 @@
+// Suggested additions / renames
+bool isCnx(const DbArea&) → maybe rename to isConcentric(...) or keep for compatibility
+bool isCdx(const DbArea&);           // new
+std::string indexTypeName(const DbArea&);  // optional helper: "CNX", "CDX", etc.
+
+// In implementation:
+bool isCdx(const DbArea& area) {
+    if (!hasOrder(area)) return false;
+    const std::string& p = orderPath(area);
+    return ends_with_iex(p, "CDX");   // reuse or copy the helper
+}

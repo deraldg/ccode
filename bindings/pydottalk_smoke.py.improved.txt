@@ -1,0 +1,223 @@
+# pydottalk_smoke.py  (ASCII only)
+# Read-only smoke test for pydottalk + xbase DbArea.
+#
+# Usage (PowerShell):
+#   $py12 = "D:\code\ccode\build\vcpkg_installed\x64-windows\tools\python3\python.exe"
+#   & $py12 D:\code\ccode\bindings\pydottalk_smoke.py
+
+import os
+import sys
+from pathlib import Path
+
+_MISSING = object()
+
+def _sys_path_prepend(p: str) -> None:
+    if p and p not in sys.path:
+        sys.path.insert(0, p)
+
+def _call_any(obj, names, *args, default=_MISSING):
+    """
+    Try a list of attribute names; if callable, call it; else return value.
+    """
+    for name in names:
+        if hasattr(obj, name):
+            v = getattr(obj, name)
+            return v(*args) if callable(v) else v
+    if default is not _MISSING:
+        return default
+    raise AttributeError(f"None of these exist on {type(obj).__name__}: {names}")
+
+def _repo_root_from_here() -> Path:
+    # expected: <repo>\bindings\pydottalk_smoke.py
+    here = Path(__file__).resolve()
+    return here.parent.parent
+
+def _looks_like_mapping(x) -> bool:
+    return hasattr(x, "keys") and hasattr(x, "get")
+
+def _fielddef_get(f, key, default=None):
+    # dict / mapping first (your current binding looks like this)
+    if isinstance(f, dict):
+        return f.get(key, default)
+    if _looks_like_mapping(f):
+        try:
+            return f.get(key, default)
+        except TypeError:
+            pass
+
+    # __getitem__ (string keys)
+    try:
+        return f[key]
+    except Exception:
+        pass
+
+    # attribute
+    return getattr(f, key, default)
+
+def _fielddef_decode(f):
+    """
+    Return (name, type, length, decimals, note) for a FieldDef-like object.
+    note is a short hint when we couldn't decode cleanly.
+    """
+    # tuple/list shape
+    if isinstance(f, (list, tuple)):
+        nm = f[0] if len(f) > 0 else None
+        ty = f[1] if len(f) > 1 else None
+        ln = f[2] if len(f) > 2 else None
+        dc = f[3] if len(f) > 3 else None
+        return nm, ty, ln, dc, "(tuple/list)"
+
+    # object or mapping shape
+    nm = _fielddef_get(f, "name", None)
+    ty = _fielddef_get(f, "type", None)
+
+    # tolerate alternate key spellings
+    ln = _fielddef_get(f, "length", None)
+    if ln is None:
+        ln = _fielddef_get(f, "len", None)
+    if ln is None:
+        ln = _fielddef_get(f, "field_length", None)
+
+    dc = _fielddef_get(f, "decimals", None)
+    if dc is None:
+        dc = _fielddef_get(f, "dec", None)
+    if dc is None:
+        dc = _fielddef_get(f, "decimal_places", None)
+
+    if nm is None and ty is None and ln is None and dc is None:
+        # last-resort: show keys/public surface so you can fix the binding
+        if isinstance(f, dict):
+            return None, None, None, None, f"(dict keys={list(f.keys())})"
+        if _looks_like_mapping(f):
+            try:
+                return None, None, None, None, f"(mapping keys={list(f.keys())})"
+            except Exception:
+                pass
+        pub = [n for n in dir(f) if not n.startswith("_")]
+        return None, None, None, None, f"(no exposed members; public={pub})"
+
+    return nm, ty, ln, dc, ""
+
+def main() -> int:
+    repo = _repo_root_from_here()
+
+    print("PY:", sys.version.replace("\n", " "))
+    print("EXE:", sys.executable)
+
+    # 1) ensure the built extension directory is first on sys.path
+    rel_dir = os.environ.get("PYDOTTALK_BIN") or str(repo / "build" / "bindings" / "pydottalk" / "Release")
+    _sys_path_prepend(rel_dir)
+
+    # 2) import
+    try:
+        import pydottalk
+    except Exception as e:
+        print("FAIL: import pydottalk:", repr(e))
+        print("  Hint: this .pyd is CP312; run with Python 3.12 (e.g., your vcpkg python).")
+        print("  Also ensure Release dir is on sys.path first:")
+        print(f"    {rel_dir}")
+        return 2
+
+    print("OK: imported pydottalk")
+    print("  file   :", getattr(pydottalk, "__file__", None))
+    print("  ping   :", pydottalk.ping() if hasattr(pydottalk, "ping") else "(no ping)")
+    print("  version:", pydottalk.version() if hasattr(pydottalk, "version") else "(no version)")
+
+    # 3) locate DBF directory
+    dbf_dir = Path(os.environ.get("DOTTALK_DBF_DIR", str(repo / "dottalkpp" / "data" / "dbf")))
+    print("  dbf_dir:", str(dbf_dir))
+
+    # 4) list dbfs (signature may be list_dbf() or list_dbf(path))
+    dbfs = []
+    if hasattr(pydottalk, "list_dbf"):
+        try:
+            dbfs = pydottalk.list_dbf(str(dbf_dir))
+        except TypeError:
+            dbfs = pydottalk.list_dbf()
+    print("  list_dbf count:", len(dbfs))
+    for p in dbfs[:25]:
+        print("   -", p)
+
+    students = dbf_dir / "STUDENTS.dbf"
+    if not students.exists():
+        cand = dbf_dir / "STUDENTS.DBF"
+        if cand.exists():
+            students = cand
+
+    if not students.exists():
+        print("FAIL: cannot find STUDENTS.dbf/.DBF in:", str(dbf_dir))
+        return 3
+
+    # 5) open + basic navigation
+    if not hasattr(pydottalk, "xbase"):
+        print("FAIL: pydottalk.xbase is missing (binding not built with xbase).")
+        return 4
+
+    area = pydottalk.xbase.DbArea()
+    print("  opening:", str(students))
+    area.open(str(students))
+
+    # Contract probes (canonical names first)
+    is_open = _call_any(area, ["isOpen"], default=None)
+    if is_open is None:
+        is_open = _call_any(area, ["is_open"], default="(unknown)")
+    print("  isOpen  :", is_open)
+
+    rec_count = _call_any(area, ["recCount", "rec_count", "recordCount", "record_count"])
+    recno     = _call_any(area, ["recno", "recNo", "rec_no"], default=None)
+    fld_count = _call_any(area, ["fieldCount", "field_count"], default=None)
+
+    print("  recCount:", rec_count)
+    if recno is not None:
+        print("  recno   :", recno)
+    if fld_count is not None:
+        print("  fields  :", fld_count)
+
+    # Optional xbase.hpp contract extras (skip if not bound)
+    for label, names in [
+        ("  filename    :", ["filename"]),
+        ("  dbfDir      :", ["dbfDir"]),
+        ("  dbfBasename :", ["dbfBasename"]),
+        ("  logicalName :", ["logicalName"]),
+        ("  recLength   :", ["recLength", "recordLength", "cpr"]),
+    ]:
+        v = _call_any(area, names, default=None)
+        if v is not None:
+            print(label, v)
+
+    # top + readCurrent (if required by your implementation)
+    _call_any(area, ["top"], default=None)
+    _call_any(area, ["readCurrent", "read_current"], default=None)
+
+    fields = _call_any(area, ["fields"], default=[])
+    if fields:
+        print("  FieldDef sample:")
+        for f in fields[:5]:
+            nm, ty, ln, dc, note = _fielddef_decode(f)
+            if note:
+                print("   -", "FieldDef", note)
+            else:
+                print("   -", nm, ty, ln, dc)
+
+    # if fieldCount not exposed, infer
+    if fld_count is None:
+        fld_count = len(fields) if fields else 0
+
+    print("  First record values (first up to 6 fields):")
+    for i in range(1, min(6, int(fld_count) if fld_count else 6) + 1):
+        try:
+            v = area.get(i)  # 1-based per xbase.hpp
+        except Exception as e:
+            v = f"(get({i}) failed: {e})"
+        print(f"   [{i}] {v}")
+
+    # bottom + close
+    _call_any(area, ["bottom"], default=None)
+    _call_any(area, ["readCurrent", "read_current"], default=None)
+    _call_any(area, ["close"], default=None)
+
+    print("OK: smoke test completed (read-only).")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

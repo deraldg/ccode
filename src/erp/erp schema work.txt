@@ -1,0 +1,288 @@
+Here you go, Derald — a **clean, canonical tag list** for every ERP table plus the **relationship map** in the exact codex‑style you prefer.  
+This is the version you would use for:
+
+- `SET RELATION TO … INTO …`
+- index tag creation (`INDEX ON … TAG …`)
+- CLI navigation
+- relationship‑aware browsing in your x64base engine
+
+No browser tab content is relevant here, so I’m answering directly.
+
+---
+
+# 🏷️ **TAG LIST (INDEX TAGS) FOR EACH ERP TABLE**
+
+These are the **canonical, stable, production‑ready** tags for each table.
+
+## **ITEMS_x64**
+```
+TAG ITEMID     ON ITEMID
+TAG ITEMCODE   ON ITEMCODE
+TAG ITEMTYPE   ON ITEMTYPE
+```
+
+---
+
+## **BOM_H_x64**
+```
+TAG BOMID      ON BOMID
+TAG PARENTID   ON PARENTID
+TAG REVISION   ON REVISION
+```
+
+---
+
+## **BOM_D_x64**
+```
+TAG BOMDID     ON BOMDID
+TAG BOMID      ON BOMID
+TAG COMPID     ON COMPID
+```
+
+---
+
+## **ROUTE_H_x64**
+```
+TAG ROUTEID    ON ROUTEID
+TAG ITEMID     ON ITEMID
+```
+
+---
+
+## **ROUTE_O_x64**
+```
+TAG OPNID      ON OPNID
+TAG ROUTEID    ON ROUTEID
+TAG SEQ        ON SEQ
+```
+
+---
+
+## **WORKCTR_x64**
+```
+TAG WCID       ON WCID
+TAG NAME       ON NAME
+```
+
+---
+
+## **WHSE_x64**
+```
+TAG WHID       ON WHID
+TAG NAME       ON NAME
+```
+
+---
+
+## **INV_x64**
+```
+TAG INVID      ON INVID
+TAG ITEMID     ON ITEMID
+TAG WHID       ON WHID
+```
+
+---
+
+## **INVTRN_x64**
+```
+TAG TRNID      ON TRNID
+TAG ITEMID     ON ITEMID
+TAG WHID       ON WHID
+TAG STAMP      ON STAMP
+```
+
+---
+
+## **WO_x64**
+```
+TAG WOID       ON WOID
+TAG ITEMID     ON ITEMID
+TAG DUEDATE    ON DUEDATE
+```
+
+---
+
+## **WO_OP_x64**
+```
+TAG WOOPID     ON WOOPID
+TAG WOID       ON WOID
+TAG OPNID      ON OPNID
+TAG SEQ        ON SEQ
+```
+
+---
+
+## **LABOR_x64**
+```
+TAG LABID      ON LABID
+TAG WOOPID     ON WOOPID
+TAG EMPID      ON EMPID
+TAG STAMP      ON STAMP
+```
+
+---
+
+## **VENDOR_x64**
+```
+TAG VENDORID   ON VENDORID
+TAG NAME       ON NAME
+```
+
+---
+
+## **PO_x64**
+```
+TAG POID       ON POID
+TAG VENDORID   ON VENDORID
+TAG ORDERDATE  ON ORDERDATE
+```
+
+---
+
+## **PO_LINE_x64**
+```
+TAG POLINEID   ON POLINEID
+TAG POID       ON POID
+TAG ITEMID     ON ITEMID
+```
+
+---
+
+## **CUSTOMER_x64**
+```
+TAG CUSTID     ON CUSTID
+TAG NAME       ON NAME
+```
+
+---
+
+## **SO_x64**
+```
+TAG SOID       ON SOID
+TAG CUSTID     ON CUSTID
+TAG ORDERDATE  ON ORDERDATE
+```
+
+---
+
+## **SO_LINE_x64**
+```
+TAG SOLINEID   ON SOLINEID
+TAG SOID       ON SOID
+TAG ITEMID     ON ITEMID
+```
+
+---
+
+## **GL_ACCT_x64**
+```
+TAG ACCTID     ON ACCTID
+TAG ACCTNO     ON ACCTNO
+```
+
+---
+
+## **GL_TRN_x64**
+```
+TAG GLTRNID    ON GLTRNID
+TAG ACCTID     ON ACCTID
+TAG STAMP      ON STAMP
+```
+
+---
+
+## **EMP_x64**
+```
+TAG EMPID      ON EMPID
+TAG NAME       ON NAME
+```
+
+---
+
+# 🔗 **RELATIONSHIP MAP (SET RELATION TO)**  
+This is the **canonical ERP relationship tree** for your x64base engine.
+
+---
+
+## **MASTER DATA**
+```
+ITEMS_x64.ITEMID        → BOM_H_x64.PARENTID
+ITEMS_x64.ITEMID        → ROUTE_H_x64.ITEMID
+ITEMS_x64.ITEMID        → INV_x64.ITEMID
+ITEMS_x64.ITEMID        → INVTRN_x64.ITEMID
+ITEMS_x64.ITEMID        → WO_x64.ITEMID
+ITEMS_x64.ITEMID        → PO_LINE_x64.ITEMID
+ITEMS_x64.ITEMID        → SO_LINE_x64.ITEMID
+```
+
+---
+
+## **BILL OF MATERIALS**
+```
+BOM_H_x64.BOMID         → BOM_D_x64.BOMID
+BOM_D_x64.COMPID        → ITEMS_x64.ITEMID
+```
+
+---
+
+## **ROUTING**
+```
+ROUTE_H_x64.ROUTEID     → ROUTE_O_x64.ROUTEID
+ROUTE_O_x64.WCID        → WORKCTR_x64.WCID
+```
+
+---
+
+## **INVENTORY**
+```
+INV_x64.WHID            → WHSE_x64.WHID
+INVTRN_x64.WHID         → WHSE_x64.WHID
+INVTRN_x64.ITEMID       → ITEMS_x64.ITEMID
+```
+
+---
+
+## **PRODUCTION**
+```
+WO_x64.WOID             → WO_OP_x64.WOID
+WO_OP_x64.OPNID         → ROUTE_O_x64.OPNID
+LABOR_x64.WOOPID        → WO_OP_x64.WOOPID
+LABOR_x64.EMPID         → EMP_x64.EMPID
+```
+
+---
+
+## **PURCHASING**
+```
+PO_x64.VENDORID         → VENDOR_x64.VENDORID
+PO_LINE_x64.POID        → PO_x64.POID
+PO_LINE_x64.ITEMID      → ITEMS_x64.ITEMID
+```
+
+---
+
+## **SALES**
+```
+SO_x64.CUSTID           → CUSTOMER_x64.CUSTID
+SO_LINE_x64.SOID        → SO_x64.SOID
+SO_LINE_x64.ITEMID      → ITEMS_x64.ITEMID
+```
+
+---
+
+## **FINANCE**
+```
+GL_TRN_x64.ACCTID       → GL_ACCT_x64.ACCTID
+GL_TRN_x64.SRCDOCID     → (WOID / POID / SOID / TRNID)   && polymorphic
+```
+
+---
+
+# ⭐ If you want, I can now generate:
+- A **full SET RELATION script** for your CLI  
+- A **canonical index creation script** (`INDEX ON … TAG …`)  
+- A **visual ASCII ERD**  
+- A **codex‑style documentation block** for your help system  
+- A **navigation map** (parent→child→grandchild) for teaching database principles  
+
+Just tell me which one you want next.

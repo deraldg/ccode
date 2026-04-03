@@ -11,7 +11,7 @@ using xbase::FieldDef;
 
 namespace {
 
-// compute the width in digits for numbering column (“#”)
+// compute the width in digits for numbering column (?#?)
 static int digits(std::size_t n) {
     int d = 1;
     while (n >= 10) { n /= 10; ++d; }
@@ -33,7 +33,7 @@ void cmd_FIELDS(DbArea& area, std::istringstream& /*unused*/)
     }
 
     // Column widths
-    int w_idx  = std::max(1, digits(n));               // '#'
+    int w_idx  = std::max(1, digits(n));                // '#'
     int w_name = 4;                                     // 'Name'
     int w_type = 4;                                     // 'Type'
     int w_len  = 3;
@@ -71,3 +71,6 @@ void cmd_FIELDS(DbArea& area, std::istringstream& /*unused*/)
             << "\n";
     }
 }
+
+
+

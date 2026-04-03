@@ -1,0 +1,689 @@
+// src/cli/cmd_schemas.cpp
+//
+// SCHEMAS (legacy DBF areas)
+//
+// Commands:
+//   SCHEMAS                                   : List open areas.
+//   SCHEMAS OPEN [<dir>]                      : Open all .dbf in <dir> (non-recursive).
+//   SCHEMAS OPEN <dir> recursive              : (STUB) Accepts 'recursive'; falls back to non-recursive.
+//   SCHEMAS OPEN <file.dbf>                   : Open a single .dbf into the CURRENT area.
+//
+//   SCHEMAS OPEN <target> CNX [FALLBACK] [recursive] [TABLE]
+//   SCHEMAS OPEN <target> INX [FALLBACK] [recursive] [TABLE]
+//
+//   NOTE (per requirement):
+//   - If CNX/INX is NOT specified, SCHEMAS OPEN will NOT attach/open indexes.
+//     (DBF sidecars like memo are handled by the DBF open path, not by SCHEMAS.)
+//   - TABLE flag will TABLE-ON each opened workarea (open DBF areas only).
+//
+//   SCHEMAS CLOSE                             : Close all.
+//   SCHEMAS CLOSE <n> [m ...]                 : Close by area index(es).
+//   SCHEMAS CLOSE <name|file|stem|alias>[,...]: Close by name(s)/alias(es); case-insensitive.
+//   SCHEMAS SAVE <file.dtschema>              : Save layout (+relations if available).
+//   SCHEMAS LOAD <file.dtschema>              : Close all, load layout (+relations), resolve relative paths vs DATA root.
+//
+// Notes (why):
+// - filename() is treated as "open" truth; we set it on open so LIST/CLOSE work uniformly.
+// - Alias is optional; we only read/write/set it if DbArea exposes the API.
+// - OPEN resolves indexes like LOAD: sibling first, then INDEXES slot.
+// - CNX resolves .cnx first, then .cdx for compatibility.
+// - Relations integration is optional and zero-cost when headers absent.
+//
+// IMPORTANT SYNTAX RULE (per user):
+// - The directory/target is always the first argument after OPEN.
+//   Examples:
+//     SCHEMAS OPEN dbf TABLE
+//     SCHEMAS OPEN dbf CNX TABLE
+//     SCHEMAS OPEN table TABLE
+//     SCHEMAS OPEN DBF CNX TABLE
+//
+#include <algorithm>
+#include <cctype>
+#include <climits>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <type_traits>
+#include <unordered_set>
+#include <vector>
+
+#include "xbase.hpp"
+#include "cli/dirty_prompt.hpp"
+#include "cli/order_state.hpp"
+
+#if __has_include("set_relations.hpp")
+  #include "set_relations.hpp"
+  #define HAVE_RELATIONS 1
+#else
+  #define HAVE_RELATIONS 0
+#endif
+
+#if __has_include("cli/path_resolver.hpp") && __has_include("cli/cmd_setpath.hpp")
+  #include "cli/path_resolver.hpp"
+  #include "cli/cmd_setpath.hpp"
+  #define HAVE_PATHS 1
+#else
+  #define HAVE_PATHS 0
+#endif
+
+#if __has_include("cli/table_state.hpp")
+  #include "cli/table_state.hpp"
+  #define HAVE_TABLE 1
+#else
+  #define HAVE_TABLE 0
+#endif
+
+namespace fs = std::filesystem;
+using std::string;
+
+// CNX (compound) extensions
+static constexpr const char* kCnxPrimaryExt = ".cnx";
+static constexpr const char* kCnxCompatExt  = ".cdx";
+
+// --------- Utilities --------------------------------------------------------
+
+static inline string trim_copy(string s) {
+    auto is_space = [](unsigned char ch){ return std::isspace(ch) != 0; };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c){ return !is_space(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c){ return !is_space(c); }).base(), s.end());
+    return s;
+}
+static inline string to_lower(string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
+    return s;
+}
+static inline bool ci_equal(const string& a, const string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) return false;
+    return true;
+}
+static inline std::string s8(const fs::path& p) {
+#if defined(_WIN32)
+    auto u = p.u8string(); return std::string(u.begin(), u.end());
+#else
+    return p.string();
+#endif
+}
+
+// Split tokens (space/tab), respecting simple quotes "..." and '...'
+static std::vector<string> split_tokens(const string& line) {
+    std::vector<string> out;
+    string cur;
+    bool in_squote = false;
+    bool in_dquote = false;
+
+    for (size_t i = 0; i < line.size(); ++i) {
+        const char ch = line[i];
+        if (in_squote) {
+            if (ch == '\'') { in_squote = false; }
+            else cur.push_back(ch);
+            continue;
+        }
+        if (in_dquote) {
+            if (ch == '"') { in_dquote = false; }
+            else cur.push_back(ch);
+            continue;
+        }
+
+        if (ch == '\'') { in_squote = true; continue; }
+        if (ch == '"')  { in_dquote = true; continue; }
+
+        if (std::isspace(static_cast<unsigned char>(ch))) {
+            if (!cur.empty()) {
+                out.push_back(cur);
+                cur.clear();
+            }
+            continue;
+        }
+
+        cur.push_back(ch);
+    }
+
+    if (!cur.empty()) out.push_back(cur);
+    return out;
+}
+
+static inline bool is_dbf_ext(const fs::path& p) {
+    auto ext = to_lower(p.extension().string());
+    return (ext == ".dbf");
+}
+
+static inline bool is_dtschema_ext(const fs::path& p) {
+    auto ext = to_lower(p.extension().string());
+    return (ext == ".dtschema");
+}
+
+static inline bool is_digits(const string& s) {
+    if (s.empty()) return false;
+    for (unsigned char c : s) if (!std::isdigit(c)) return false;
+    return true;
+}
+
+static inline bool is_flag(const string& s, const char* f) {
+    return ci_equal(to_lower(s), to_lower(string(f)));
+}
+
+static inline bool is_recursive_flag(const string& s) {
+    return is_flag(s, "recursive") || is_flag(s, "-r") || is_flag(s, "--recursive");
+}
+
+static inline bool is_table_flag(const string& s) {
+    return is_flag(s, "table");
+}
+
+static inline bool is_fallback_flag(const string& s) {
+    return is_flag(s, "fallback");
+}
+
+static inline bool is_inx_flag(const string& s) {
+    return is_flag(s, "inx") || is_flag(s, "idx");
+}
+
+static inline bool is_cnx_flag(const string& s) {
+    return is_flag(s, "cnx") || is_flag(s, "cdx");
+}
+
+static inline fs::path ensure_ext(fs::path p, const char* ext) {
+    if (p.extension().empty()) p.replace_extension(ext);
+    return p;
+}
+
+static inline fs::path as_abs(const fs::path& p) {
+    std::error_code ec{};
+    auto a = fs::absolute(p, ec);
+    return ec ? p : a;
+}
+
+static inline bool path_exists(const fs::path& p) {
+    std::error_code ec{};
+    return fs::exists(p, ec);
+}
+
+static inline bool is_dir(const fs::path& p) {
+    std::error_code ec{};
+    return fs::is_directory(p, ec);
+}
+
+// Minimal: detect INDEXES root if HAVE_PATHS
+static fs::path get_indexes_root_fallback() {
+#if HAVE_PATHS
+    // resolve_index("__probe__.inx") is used elsewhere as an anchor
+    fs::path probe = dottalk::paths::resolve_index("__probe__.inx");
+    return probe.parent_path();
+#else
+    return fs::path("indexes");
+#endif
+}
+
+static fs::path get_dbf_root_fallback() {
+#if HAVE_PATHS
+    fs::path probe = dottalk::paths::resolve_dbf("__probe__.dbf");
+    return probe.parent_path();
+#else
+    return fs::path("dbf");
+#endif
+}
+
+// Find index file for a dbf:
+//  - sibling: <dbfdir>/<stem>.cnx or .cdx or .inx
+//  - else: INDEXES root/<stem>.cnx/.cdx/.inx
+static std::optional<fs::path> find_index_for_dbf(const fs::path& dbf_path, bool want_cnx, bool want_inx, bool fallback) {
+    const auto stem = dbf_path.stem().string();
+    const fs::path sibling_dir = dbf_path.parent_path();
+    const fs::path idx_root = get_indexes_root_fallback();
+
+    std::vector<fs::path> candidates;
+
+    if (want_cnx) {
+        candidates.push_back(sibling_dir / (stem + kCnxPrimaryExt));
+        candidates.push_back(sibling_dir / (stem + kCnxCompatExt));
+        candidates.push_back(idx_root / (stem + kCnxPrimaryExt));
+        candidates.push_back(idx_root / (stem + kCnxCompatExt));
+        if (fallback) {
+            candidates.push_back(sibling_dir / (stem + ".inx"));
+            candidates.push_back(idx_root / (stem + ".inx"));
+        }
+    } else if (want_inx) {
+        candidates.push_back(sibling_dir / (stem + ".inx"));
+        candidates.push_back(idx_root / (stem + ".inx"));
+        if (fallback) {
+            candidates.push_back(sibling_dir / (stem + kCnxPrimaryExt));
+            candidates.push_back(sibling_dir / (stem + kCnxCompatExt));
+            candidates.push_back(idx_root / (stem + kCnxPrimaryExt));
+            candidates.push_back(idx_root / (stem + kCnxCompatExt));
+        }
+    }
+
+    for (const auto& c : candidates) {
+        if (path_exists(c)) return c;
+    }
+
+    return std::nullopt;
+}
+
+static void print_list_open_areas() {
+    auto& wa = xbase::WorkAreas::instance();
+    const int max_area = wa.maxAreas();
+
+    std::cout << "Workspace\n";
+    std::cout << "----------------------------------------\n";
+    std::cout << "  Slot  Name\n";
+    std::cout << "  ----- --------\n";
+
+    for (int i = 0; i < max_area; ++i) {
+        auto* a = wa.area(i);
+        if (!a) continue;
+
+        std::string shown = a->filename();
+        if (shown.empty()) {
+            // Some slots might be empty, keep them blank
+            continue;
+        }
+        std::cout << "  " << std::setw(4) << i << "  " << shown << "\n";
+    }
+}
+
+static bool open_single_dbf_into_area(xbase::DbArea& current, const fs::path& dbf_abs) {
+    // Current area already references the desired slot.
+    // We open the DBF here and rely on DbArea to set filename() etc.
+    // Many repos expose: current.open(dbf_abs.string()) or open_dbf(dbf_abs).
+    // Your xbase.hpp in this bundle uses openDbf().
+    return current.openDbf(s8(dbf_abs));
+}
+
+static void close_all_areas() {
+    auto& wa = xbase::WorkAreas::instance();
+    const int max_area = wa.maxAreas();
+    for (int i = 0; i < max_area; ++i) {
+        auto* a = wa.area(i);
+        if (!a) continue;
+        if (!a->filename().empty()) {
+            a->close();
+        }
+    }
+#if HAVE_RELATIONS
+    rel::clear_all();
+#endif
+}
+
+static void close_area_index(int idx) {
+    auto& wa = xbase::WorkAreas::instance();
+    auto* a = wa.area(idx);
+    if (!a) return;
+    if (!a->filename().empty()) {
+        a->close();
+    }
+}
+
+static void close_area_by_name(const std::string& name) {
+    auto& wa = xbase::WorkAreas::instance();
+    const int max_area = wa.maxAreas();
+
+    std::string needle = to_lower(trim_copy(name));
+    if (needle.empty()) return;
+
+    for (int i = 0; i < max_area; ++i) {
+        auto* a = wa.area(i);
+        if (!a) continue;
+
+        // Try filename(), logicalName(), dbfBasename(), alias() when available
+        std::string fn = to_lower(a->filename());
+        std::string bn = to_lower(a->dbfBasename());
+        std::string ln = to_lower(a->logicalName());
+
+        bool match = false;
+        if (!fn.empty() && fn.find(needle) != std::string::npos) match = true;
+        if (!match && !bn.empty() && bn == needle) match = true;
+        if (!match && !ln.empty() && ln == needle) match = true;
+
+#if __has_include("xbase_area_alias.hpp")
+        if (!match) {
+            std::string al = to_lower(a->alias());
+            if (!al.empty() && al == needle) match = true;
+        }
+#endif
+
+        if (match) {
+            if (!a->filename().empty()) a->close();
+        }
+    }
+}
+
+// --------- SAVE/LOAD (layout) ----------------------------------------------
+// Kept minimal; if your repo has a richer schema format, adjust here.
+// In this bundle, SAVE/LOAD is present; we keep it working but conservative.
+
+static void cmd_save_layout(const string& file_arg) {
+    fs::path outp = file_arg.empty() ? fs::path("layout.dtschema") : fs::path(file_arg);
+    if (outp.extension().empty()) outp.replace_extension(".dtschema");
+
+    std::ofstream f(outp, std::ios::binary);
+    if (!f) {
+        std::cout << "SCHEMAS SAVE: unable to write: " << s8(outp) << "\n";
+        return;
+    }
+
+    auto& wa = xbase::WorkAreas::instance();
+    const int max_area = wa.maxAreas();
+
+    // Very simple line format:
+    //   AREA <n> <abs_dbf_path>
+    // Relations section omitted unless HAVE_RELATIONS and you want to serialize.
+
+    for (int i = 0; i < max_area; ++i) {
+        auto* a = wa.area(i);
+        if (!a) continue;
+        if (a->filename().empty()) continue;
+        f << "AREA " << i << " " << a->filename() << "\n";
+    }
+
+#if HAVE_RELATIONS
+    // Optional future: serialize rel map
+#endif
+
+    std::cout << "SCHEMAS SAVE: wrote " << s8(outp) << "\n";
+}
+
+static void cmd_load_layout(xbase::DbArea& current, const string& file_arg) {
+    fs::path inp = file_arg.empty() ? fs::path("layout.dtschema") : fs::path(file_arg);
+    if (inp.extension().empty()) inp.replace_extension(".dtschema");
+
+    std::ifstream f(inp, std::ios::binary);
+    if (!f) {
+        std::cout << "SCHEMAS LOAD: unable to read: " << s8(inp) << "\n";
+        return;
+    }
+
+    // Close everything first
+    close_all_areas();
+
+    auto& wa = xbase::WorkAreas::instance();
+
+    string line;
+    while (std::getline(f, line)) {
+        line = trim_copy(line);
+        if (line.empty()) continue;
+        auto toks = split_tokens(line);
+        if (toks.size() >= 3 && ci_equal(to_lower(toks[0]), "area") && is_digits(toks[1])) {
+            int idx = std::atoi(toks[1].c_str());
+            fs::path dbf = toks[2];
+            fs::path dbf_abs = as_abs(dbf);
+
+            auto* a = wa.area(idx);
+            if (!a) continue;
+
+            // Open directly on that slot
+            a->openDbf(s8(dbf_abs));
+        }
+    }
+
+    // Current area left as-is; caller can SELECT afterward.
+    (void)current;
+    std::cout << "SCHEMAS LOAD: loaded " << s8(inp) << "\n";
+}
+
+// --------- OPEN Implementation ---------------------------------------------
+
+static void cmd_open_impl(xbase::DbArea& current,
+                          const std::vector<string>& toks,
+                          bool want_cnx,
+                          bool want_inx,
+                          bool fallback,
+                          bool recursive,
+                          bool table_on)
+{
+    (void)recursive; // currently non-recursive per header comment
+
+    // target is ALWAYS first token
+    fs::path target = toks.empty() ? fs::current_path() : fs::path(toks[0]);
+
+    // If target looks like DBF stem, resolve under DBF root.
+    // If target has extension, respect it.
+    fs::path dbf_root = get_dbf_root_fallback();
+
+    std::error_code ec{};
+    fs::path resolved_target = target;
+
+    if (resolved_target.is_relative()) {
+        // If they pass "dbf" (directory keyword), treat it as DBF root.
+        if (ci_equal(to_lower(resolved_target.string()), "dbf")) {
+            resolved_target = dbf_root;
+        } else {
+            // If a relative file/dir, try:
+            //  1) relative to current_path
+            //  2) under DBF root
+            fs::path cand1 = fs::current_path() / resolved_target;
+            fs::path cand2 = dbf_root / resolved_target;
+
+            if (fs::exists(cand1, ec)) resolved_target = cand1;
+            else resolved_target = cand2;
+        }
+    }
+
+    resolved_target = as_abs(resolved_target);
+
+    // Directory: open all .dbf in it (non-recursive)
+    if (fs::exists(resolved_target, ec) && fs::is_directory(resolved_target, ec)) {
+        std::vector<fs::path> dbfs;
+
+        for (auto& ent : fs::directory_iterator(resolved_target, ec)) {
+            if (ec) break;
+            if (!ent.is_regular_file()) continue;
+            auto p = ent.path();
+            if (is_dbf_ext(p)) dbfs.push_back(as_abs(p));
+        }
+
+        std::sort(dbfs.begin(), dbfs.end());
+
+        if (dbfs.empty()) {
+            std::cout << "SCHEMAS OPEN: no .dbf in: " << s8(resolved_target) << "\n";
+            return;
+        }
+
+        // Open sequentially into areas starting at 0
+        auto& wa = xbase::WorkAreas::instance();
+        int slot = 0;
+
+        for (auto& dbf_abs : dbfs) {
+            if (slot >= wa.maxAreas()) break;
+            auto* a = wa.area(slot);
+            if (!a) { ++slot; continue; }
+
+            a->close();
+            bool ok = a->openDbf(s8(dbf_abs));
+            if (!ok) {
+                std::cout << "SCHEMAS OPEN: failed: " << s8(dbf_abs) << "\n";
+                ++slot;
+                continue;
+            }
+
+#if HAVE_TABLE
+            if (table_on) table_state::set_table_on(*a, true);
+#endif
+
+            // Attach index if requested
+            if (want_cnx || want_inx) {
+                auto idx = find_index_for_dbf(dbf_abs, want_cnx, want_inx, fallback);
+                if (idx.has_value()) {
+                    orderstate::setOrder(*a, s8(idx.value()));
+                    if (want_cnx) {
+                        // best effort; activeTag remains whatever previously set
+                    }
+                }
+            }
+
+            ++slot;
+        }
+
+        std::cout << "SCHEMAS OPEN: opened " << (int)dbfs.size() << " file(s) from: " << s8(resolved_target) << "\n";
+        return;
+    }
+
+    // File: if no .dbf extension, treat as stem in DBF root
+    fs::path dbf_path = resolved_target;
+    if (dbf_path.extension().empty()) {
+        dbf_path = dbf_root / (dbf_path.string() + ".dbf");
+        dbf_path = as_abs(dbf_path);
+    }
+
+    if (!fs::exists(dbf_path, ec)) {
+        std::cout << "SCHEMAS OPEN: not found: " << s8(dbf_path) << "\n";
+        return;
+    }
+
+    // Open single dbf into CURRENT area
+    current.close();
+    bool ok = current.openDbf(s8(dbf_path));
+    if (!ok) {
+        std::cout << "SCHEMAS OPEN: failed: " << s8(dbf_path) << "\n";
+        return;
+    }
+
+#if HAVE_TABLE
+    if (table_on) table_state::set_table_on(current, true);
+#endif
+
+    if (want_cnx || want_inx) {
+        auto idx = find_index_for_dbf(dbf_path, want_cnx, want_inx, fallback);
+        if (idx.has_value()) {
+            orderstate::setOrder(current, s8(idx.value()));
+        } else {
+            std::cout << "SCHEMAS OPEN: index not found for: " << s8(dbf_path) << "\n";
+        }
+    }
+
+    std::cout << "SCHEMAS OPEN: opened '" << s8(dbf_path) << "'\n";
+}
+
+// --------- Command Entry ----------------------------------------------------
+
+void cmd_SCHEMAS(xbase::DbArea& current, std::istringstream& in) {
+
+    string arg_line; std::getline(in, arg_line);
+    string args = trim_copy(arg_line);
+
+    string sub_command, rest_of_args;
+    auto first_space = args.find_first_of(" \t");
+    if (first_space == string::npos) { sub_command = args; rest_of_args = ""; }
+    else { sub_command = args.substr(0, first_space); rest_of_args = trim_copy(args.substr(first_space)); }
+    sub_command = to_lower(sub_command);
+
+    try {
+        if (sub_command.empty()) {
+            print_list_open_areas();
+            return;
+        }
+
+        if (sub_command == "open") {
+
+            // Parse tokens: target is ALWAYS first after OPEN (per requirement)
+            auto toks = split_tokens(rest_of_args);
+
+            // Back-compat guard: old prefix syntax is no longer supported.
+            if (!toks.empty() && (ci_equal(toks[0], "cnx") || ci_equal(toks[0], "inx") || ci_equal(toks[0], "idx"))) {
+                std::cout << "SCHEMAS OPEN: target must come first.\n";
+                std::cout << "  Use: SCHEMAS OPEN <target> CNX|INX [FALLBACK] [recursive] [TABLE]\n";
+                return;
+            }
+
+            bool want_cnx = false;
+            bool want_inx = false;
+            bool fallback = false;
+            bool recursive = false;
+            bool table_on = false;
+
+            // scan remaining tokens (after target)
+            for (size_t i = 1; i < toks.size(); ++i) {
+                if (is_cnx_flag(toks[i])) want_cnx = true;
+                else if (is_inx_flag(toks[i])) want_inx = true;
+                else if (is_fallback_flag(toks[i])) fallback = true;
+                else if (is_recursive_flag(toks[i])) recursive = true;
+                else if (is_table_flag(toks[i])) table_on = true;
+            }
+
+            if (want_cnx && want_inx) {
+                // Prefer explicit; but if both present, CNX wins.
+                want_inx = false;
+            }
+
+            cmd_open_impl(current, toks, want_cnx, want_inx, fallback, recursive, table_on);
+            return;
+        }
+
+        if (sub_command == "close") {
+            auto toks = split_tokens(rest_of_args);
+
+            if (toks.empty()) {
+                close_all_areas();
+                std::cout << "SCHEMAS CLOSE: Closing all work areas...\n";
+                std::cout << "SCHEMAS: 0 area(s) closed.\n";
+                return;
+            }
+
+            // numeric list => close specific slots
+            bool any_numeric = false;
+            for (auto& t : toks) {
+                if (is_digits(t)) {
+                    any_numeric = true;
+                    int idx = std::atoi(t.c_str());
+                    close_area_index(idx);
+                }
+            }
+            if (any_numeric) {
+                std::cout << "SCHEMAS CLOSE: done.\n";
+                return;
+            }
+
+            // otherwise: close by name(s) comma-separated or tokens
+            // allow "a,b,c" in one token
+            for (auto& t : toks) {
+                size_t pos = 0;
+                while (pos < t.size()) {
+                    size_t comma = t.find(',', pos);
+                    string part = (comma == string::npos) ? t.substr(pos) : t.substr(pos, comma - pos);
+                    part = trim_copy(part);
+                    if (!part.empty()) close_area_by_name(part);
+                    if (comma == string::npos) break;
+                    pos = comma + 1;
+                }
+            }
+
+            std::cout << "SCHEMAS CLOSE: done.\n";
+            return;
+        }
+
+        if (sub_command == "save") {
+            auto toks = split_tokens(rest_of_args);
+            cmd_save_layout(toks.empty() ? "" : toks[0]);
+            return;
+        }
+
+        if (sub_command == "load") {
+            auto toks = split_tokens(rest_of_args);
+            cmd_load_layout(current, toks.empty() ? "" : toks[0]);
+            return;
+        }
+
+        std::cout << "SCHEMAS: unknown subcommand: " << sub_command << "\n";
+        std::cout << "Usage:\n";
+        std::cout << "  SCHEMAS\n";
+        std::cout << "  SCHEMAS OPEN <target> [CNX|INX] [FALLBACK] [recursive] [TABLE]\n";
+        std::cout << "  SCHEMAS CLOSE [<n>|<name> ...]\n";
+        std::cout << "  SCHEMAS SAVE <file.dtschema>\n";
+        std::cout << "  SCHEMAS LOAD <file.dtschema>\n";
+        return;
+
+    } catch (const std::exception& e) {
+        std::cout << "SCHEMAS: error: " << e.what() << "\n";
+        return;
+    } catch (...) {
+        std::cout << "SCHEMAS: error.\n";
+        return;
+    }
+}

@@ -1,0 +1,40 @@
+cat > ~/wsl_build_dottalkpp.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SRC="/mnt/d/code/ccode"
+BROOT="$HOME/wsl-build/ccode"
+BUILD="$BROOT/build-wsl"
+
+OUTDIR="$SRC/dottalkpp/bin-wsl"
+OUTBIN="$OUTDIR/dottalkpp"
+
+mkdir -p "$BROOT"
+rm -rf "$BUILD"
+
+cmake -S "$SRC" -B "$BUILD" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DDOTTALK_WITH_TV=OFF \
+  -DDOTTALK_WITH_INDEX=ON \
+  -DBUILD_PYDOTTALK=OFF \
+  -DDOTTALK_FOXPRO_PALETTE=ON
+
+cmake --build "$BUILD" -j
+
+mkdir -p "$OUTDIR"
+cp -f "$BUILD/dottalkpp" "$OUTBIN"
+chmod +x "$OUTBIN"
+
+echo
+echo "Built:  $BUILD/dottalkpp"
+echo "Copied: $OUTBIN"
+EOF
+
+chmod +x ~/wsl_build_dottalkpp.sh
+~/wsl_build_dottalkpp.sh
+
+
+cd /mnt/d/code/ccode/dottalkpp/data
+../bin-wsl/dottalkpp
+cd /mnt/d/code/ccode
+

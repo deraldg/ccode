@@ -1,0 +1,605 @@
+Below is the **matching contracted builder API** for ERSATZ.
+
+This is the tight version to pin against the renderer contract.
+
+---
+
+# ERSATZ Builder Contract
+
+## 1. Scope
+
+The builder layer is responsible for producing a complete `BrowserSnapshot` or `WalkSnapshot`.
+
+It may:
+
+* inspect workareas
+* read field metadata
+* resolve aliases
+* inspect active relations
+* infer path and default columns
+* build tuple rows
+* apply movement
+
+It must **not**:
+
+* print console output
+* format final report text
+* rely on renderer helpers
+* scrape command output from `TUP`, `REL LIST`, or `REL ENUM`
+
+The builder must consume or reuse **data-producing logic**, not text output.
+
+---
+
+## 2. Public API
+
+```cpp
+// include/browser/browser_builders.hpp
+#pragma once
+
+#include <string>
+#include <vector>
+#include "xbase.hpp"
+#include "browser/browser_snapshot.hpp"
+
+namespace browser
+{
+    bool build_browser_snapshot(xbase::DbArea& current_area,
+                                const BrowserRequest& req,
+                                BrowserSnapshot& out);
+
+    bool build_walk_snapshot(xbase::DbArea& current_area,
+                             const BrowserRequest& req,
+                             WalkSnapshot& out);
+}
+```
+
+That is the full required public builder surface for phase 1.
+
+Everything else may remain private to the `.cpp` file unless later reuse proves otherwise.
+
+---
+
+## 3. Builder success contract
+
+### `build_browser_snapshot(...)`
+
+Returns `true` if a usable snapshot was built.
+
+A usable snapshot means:
+
+* `out.root` is initialized, or a visible warning/status explains why not
+* `out.status` is set
+* `out.limit` is set
+* `out.rows_shown` matches `out.rows.size()`
+
+It may still return `true` with warnings.
+
+It returns `false` only when the snapshot cannot be meaningfully built at all.
+
+### `build_walk_snapshot(...)`
+
+Returns `true` if at least one frame was built or a valid empty walk result was constructed.
+
+---
+
+# 4. Request contract
+
+The builder accepts a parsed `BrowserRequest`.
+
+```cpp
+struct BrowserRequest
+{
+    std::string root_alias;
+    std::vector<std::string> path_aliases;
+    std::vector<std::string> column_exprs;
+    int limit = 10;
+
+    bool move_next = false;
+    bool move_prev = false;
+    bool move_top = false;
+    bool move_bottom = false;
+    bool refresh_only = false;
+
+    bool walk_mode = false;
+    int walk_count = 0;
+    int walk_limit = 10;
+};
+```
+
+## Rules
+
+* `root_alias` blank means use current area
+* `path_aliases` blank means infer default path
+* `column_exprs` blank means infer default columns
+* `limit <= 0` must be normalized to a safe default
+* only one of `move_next/move_prev/move_top/move_bottom` should be honored in a single request
+* `refresh_only` means no movement
+* if `walk_mode == true`, `walk_count` governs frame count and `walk_limit` governs tuple row limit per frame
+
+---
+
+# 5. Output contract
+
+The builder fills:
+
+```cpp
+struct BrowserSnapshot
+{
+    std::string command_name = "ERSATZ";
+
+    RecordSnapshot root;
+    RelationTreeSnapshot relation_tree;
+    DescendantSummary descendant_summary;
+    OrderSnapshot order;
+
+    std::vector<std::string> path_aliases;
+    std::vector<TupleColumnMeta> columns;
+    std::vector<TupleRow> rows;
+
+    int limit = 10;
+    int rows_shown = 0;
+
+    std::vector<std::string> warnings;
+    std::string status = "OK";
+};
+```
+
+and:
+
+```cpp
+struct WalkSnapshot
+{
+    std::vector<BrowserSnapshot> frames;
+    std::vector<std::string> warnings;
+    std::string status = "OK";
+};
+```
+
+---
+
+# 6. Required invariants
+
+These are hard rules.
+
+## BrowserSnapshot invariants
+
+```cpp
+root.fields.size() == root.values.size()
+rows_shown == static_cast<int>(rows.size())
+rows_shown <= limit
+```
+
+## Tuple row invariant
+
+For every row:
+
+```cpp
+row.cells.size() == columns.size()
+```
+
+## Path invariant
+
+If `path_aliases` is non-empty, it must validate against the relation tree used to build the snapshot.
+
+If it cannot be validated, builder must either:
+
+* clear it and warn, or
+* fail with status `ERROR`
+
+For phase 1, failing cleanly is better than silently inventing behavior.
+
+---
+
+# 7. Internal build sequence contract
+
+`build_browser_snapshot(...)` must perform work in this order:
+
+1. initialize output
+2. resolve root area
+3. apply movement
+4. build root snapshot
+5. build order snapshot
+6. build relation tree
+7. resolve path
+8. resolve columns
+9. build tuple rows
+10. build descendant summary
+11. finalize counts/status
+
+This sequence is fixed for phase 1.
+
+---
+
+# 8. Root area resolution contract
+
+The builder must resolve the effective root area from:
+
+* `req.root_alias`, if provided
+* otherwise the passed-in `current_area`
+
+### Rules
+
+* alias lookup is case-insensitive
+* first exact alias match wins
+* if no alias match is found, builder fails with:
+
+  * warning entry
+  * `status = "ERROR"`
+  * `false` return
+
+### Temporary rule
+
+Root resolution may scan open workareas directly.
+
+No schema-level alias indirection is required for phase 1.
+
+---
+
+# 9. Movement contract
+
+Movement is applied **after** root area resolution and **before** snapshot construction.
+
+### Supported movement
+
+* next
+* prev
+* top
+* bottom
+* refresh
+
+### Rules
+
+* `refresh_only` performs no movement
+* if multiple movement flags are set, first recognized movement wins and builder adds a warning
+* movement errors must not crash the builder
+
+### Minimum requirement
+
+After movement, builder must use the resulting current record as the root record.
+
+---
+
+# 10. Root snapshot contract
+
+The builder must fill `RecordSnapshot` from the effective root area.
+
+### Required fields
+
+* alias
+* dbf path, if available
+* recno
+* bof/eof/deleted
+* `fields`
+* `values`
+
+### Field metadata rule
+
+Field metadata must use fallback type mapping for now.
+
+That means:
+
+* type code resolved from actual field definition if available
+* translated into `TypeMeta`
+* not hard-coded as raw display text
+
+### Failure handling
+
+If field definitions are unavailable:
+
+* add warning
+* set `status = "ERROR"` or `"WARN"` as appropriate
+* return `false` if no usable root block can be built
+
+---
+
+# 11. Order snapshot contract
+
+The builder must capture current order state for the root area.
+
+### Required fields
+
+* `has_order`
+* `container_path`
+* `tag_name`
+* `direction`
+* `physical_fallback`
+
+### Rules
+
+* if no order is active, set `has_order = false`
+* if order metadata is partial, keep what is known and warn
+* renderer must not infer order; builder must provide it
+
+---
+
+# 12. Relation tree contract
+
+The builder must construct a structured relation tree rooted at `root.alias`.
+
+### Rules
+
+* tree reflects currently active relations only
+* tree is structural data, not formatted text
+* traversal order must be stable
+
+### Empty case
+
+If no active relations exist from the root:
+
+* tree is valid but empty
+* builder adds no error
+* browser may still render parent-only view
+
+---
+
+# 13. Path resolution contract
+
+The builder must determine the effective descendant path.
+
+### If `req.path_aliases` is non-empty
+
+* validate it against the relation tree
+* if invalid, fail cleanly
+
+### If `req.path_aliases` is empty
+
+* infer a default path
+
+### Default inference rule for phase 1
+
+Use the longest reachable descendant chain from the root.
+
+### Empty path case
+
+If no path is reachable:
+
+* `out.path_aliases` remains empty
+* browser is still valid
+* tuple grid and summary may be empty
+
+---
+
+# 14. Column resolution contract
+
+The builder must determine `out.columns`.
+
+### If `req.column_exprs` is non-empty
+
+Resolve those expressions into `TupleColumnMeta`.
+
+### If `req.column_exprs` is empty
+
+Infer default columns.
+
+### Phase 1 default column policy
+
+Use stable heuristic selection:
+
+* root alias: up to 3 useful fields
+* each descendant alias: up to 2 useful fields
+
+### Column metadata requirements
+
+Each `TupleColumnMeta` must include:
+
+* source alias
+* expression
+* label
+* fallback-mapped type
+* width
+* decimals
+
+### Duplicate rule
+
+Exact duplicate expressions must not be emitted twice.
+
+---
+
+# 15. Tuple row build contract
+
+The builder must populate `out.rows` using the resolved path and columns.
+
+### Rules
+
+* rows represent enumerated descendant tuples rooted at the current root record
+* row count must not exceed `out.limit`
+* each row must match `out.columns.size()`
+
+### Empty case
+
+If no descendant rows exist:
+
+* `out.rows` may be empty
+* snapshot is still valid
+
+### Critical rule
+
+This function is the structured equivalent of `REL ENUM ... TUPLE ...`, not a text scrape of it.
+
+---
+
+# 16. Descendant summary contract
+
+The builder must produce per-alias descendant counts for the current root.
+
+### Rules
+
+* counts are root-relative, not global table totals
+* alias order must be stable
+* renderer will not sort or recompute
+
+### Phase 1 shortcut allowed
+
+The summary may be derived from tuple row results if that is cheaper and sufficiently accurate for green.
+
+That is acceptable for phase 1.
+
+---
+
+# 17. Fallback type mapping contract
+
+Until the `importsql` type-item mechanism is located, the builder must use fallback mapping.
+
+### Minimum recognized codes
+
+* `C`
+* `N`
+* `F`
+* `D`
+* `L`
+* `M`
+* `I`
+* `Y`
+* `T`
+* `B`
+
+### Unknown type rule
+
+Unknown type codes map to text-like fallback:
+
+* code preserved if possible
+* name defaults safely
+* no crash
+
+This mapping lives in the builder layer, not the renderer.
+
+---
+
+# 18. Status contract
+
+The builder owns `status`.
+
+### Allowed phase 1 values
+
+* `OK`
+* `WARN`
+* `ERROR`
+
+### Rules
+
+* `OK` means no significant issues
+* `WARN` means usable snapshot with issues
+* `ERROR` means snapshot incomplete or invalid
+* renderer only prints status; it does not interpret it
+
+---
+
+# 19. Warning contract
+
+The builder owns warning generation.
+
+### Rules
+
+* warnings append in discovery order
+* warnings are plain user-visible strings
+* renderer prints them as-is
+* builder may continue after warning unless it cannot build a usable snapshot
+
+---
+
+# 20. Walk build contract
+
+`build_walk_snapshot(...)` must:
+
+1. resolve effective root area
+2. normalize walk count and walk limit
+3. build one `BrowserSnapshot` per step
+4. advance root record between frames
+5. preserve frame order
+
+### Rules
+
+* each frame is built as if a normal ERSATZ snapshot were requested
+* walk uses `walk_limit` for per-frame tuple rows
+* if a later frame fails, builder may stop and warn rather than crashing
+
+### Empty walk case
+
+If `walk_count <= 0`, builder returns a valid empty walk snapshot with warning or normalized default behavior.
+
+---
+
+# 21. Private helper contract
+
+These helpers may remain internal to the `.cpp` file.
+
+```cpp
+static xbase::DbArea* resolve_root_area(xbase::DbArea& current_area,
+                                        const BrowserRequest& req,
+                                        std::vector<std::string>& warnings,
+                                        std::string& status);
+
+static bool apply_browser_movement(xbase::DbArea& area,
+                                   const BrowserRequest& req,
+                                   std::vector<std::string>& warnings,
+                                   std::string& status);
+
+static bool build_root_snapshot(xbase::DbArea& area,
+                                RecordSnapshot& out,
+                                std::vector<std::string>& warnings,
+                                std::string& status);
+
+static bool build_order_snapshot(xbase::DbArea& area,
+                                 OrderSnapshot& out,
+                                 std::vector<std::string>& warnings,
+                                 std::string& status);
+
+static bool build_relation_tree(const std::string& root_alias,
+                                RelationTreeSnapshot& out,
+                                std::vector<std::string>& warnings,
+                                std::string& status);
+
+static bool resolve_browser_path(const BrowserRequest& req,
+                                 const RelationTreeSnapshot& tree,
+                                 std::vector<std::string>& resolved_path,
+                                 std::vector<std::string>& warnings,
+                                 std::string& status);
+
+static bool resolve_tuple_columns(xbase::DbArea& root_area,
+                                  const std::vector<std::string>& path_aliases,
+                                  const BrowserRequest& req,
+                                  std::vector<TupleColumnMeta>& out_columns,
+                                  std::vector<std::string>& warnings,
+                                  std::string& status);
+
+static bool build_tuple_rows(xbase::DbArea& root_area,
+                             const std::vector<std::string>& path_aliases,
+                             const std::vector<TupleColumnMeta>& columns,
+                             int limit,
+                             std::vector<TupleRow>& out_rows,
+                             std::vector<std::string>& warnings,
+                             std::string& status);
+
+static bool build_descendant_summary(xbase::DbArea& root_area,
+                                     const std::vector<std::string>& path_aliases,
+                                     const std::vector<TupleRow>& rows,
+                                     DescendantSummary& out,
+                                     std::vector<std::string>& warnings,
+                                     std::string& status);
+```
+
+These are implementation details, not public contract.
+
+---
+
+# 22. Definition of done
+
+The builder contract is satisfied when:
+
+* a normal ERSATZ request produces a valid `BrowserSnapshot`
+* a walk request produces a valid `WalkSnapshot`
+* warnings and status are builder-owned
+* no text scraping is used
+* fallback type mapping works
+* the renderer can fully operate without touching the engine
+
+---
+
+# 23. Pinned contract summary
+
+In one sentence:
+
+> The ERSATZ builder is the engine-facing layer that resolves root context, movement, relations, path, columns, rows, summary, order, warnings, and status into a fully self-contained browser snapshot, with fallback type mapping and no dependence on renderer logic.
+
+The next practical step is to pin the **exact snapshot header** and the two public headers side by side so the contract is physically stable in code.

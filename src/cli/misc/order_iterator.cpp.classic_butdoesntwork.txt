@@ -1,0 +1,165 @@
+// src/cli/order_iterator.cpp
+#include "cli/order_iterator.hpp"
+
+#include "cli/order_state.hpp"
+#include "textio.hpp"
+#include "xbase.hpp"
+
+// existing helpers you already use in LIST/SMARTLIST
+#include "cli/order_nav.hpp"      // for INX loader detail if that’s where it lives
+
+// LMDB/CDX backends (names may differ in your tree)
+#include "xindex/lmdb_backend.hpp"
+#include "xindex/cdx_backend.hpp"
+
+#include <algorithm>
+#include <cctype>
+
+namespace {
+
+static inline bool ends_with_ci(std::string s, const char* suf) {
+    auto lower = [](unsigned char c){ return (char)std::tolower(c); };
+    for (auto& c : s) c = lower((unsigned char)c);
+    std::string t(suf);
+    for (auto& c : t) c = lower((unsigned char)c);
+    if (s.size() < t.size()) return false;
+    return s.compare(s.size() - t.size(), t.size(), t) == 0;
+}
+
+// Derive the LMDB env directory path from the active CDX path.
+// Current pinned behavior: "<root>.cdx.d" next to the CDX file.
+// Later you can swap to "<root>.cdx" without changing callers.
+static inline std::string derive_lmdb_envdir_from_cdx(const std::string& cdx_path) {
+    // Example: ".../indexes/TEACHERS.cdx" -> ".../indexes/TEACHERS.cdx.d"
+    return cdx_path + ".d";
+}
+
+} // namespace
+
+namespace cli {
+
+bool order_collect_recnos_asc(xbase::DbArea& area,
+                              std::vector<uint32_t>& out,
+                              OrderIterSpec* out_spec,
+                              std::string* out_err)
+{
+    out.clear();
+
+    OrderIterSpec spec{};
+    if (!orderstate::hasOrder(area)) {
+        spec.backend = OrderBackend::Natural;
+        spec.ascending = true;
+        if (out_spec) *out_spec = spec;
+
+        const int32_t n = area.recCount();
+        out.reserve((size_t)std::max<int32_t>(0, n));
+        for (int32_t rn = 1; rn <= n; ++rn) out.push_back((uint32_t)rn);
+        return true;
+    }
+
+    spec.container_path = orderstate::orderName(area);
+    spec.tag            = orderstate::activeTag(area);
+    spec.ascending      = orderstate::isAscending(area);
+
+    const std::string& p = spec.container_path;
+
+    // 1) CNX
+    if (ends_with_ci(p, ".cnx")) {
+        spec.backend = OrderBackend::Cnx;
+        if (out_spec) *out_spec = spec;
+
+        // If you have a real CNX recno loader, call it here.
+        // Otherwise keep your current stopgap DB-derived ordering.
+        // TODO: plug in existing cnx loader.
+        if (out_err) *out_err = "CNX recno loader not wired in OrderIterator yet";
+        return false;
+    }
+
+    // 2) CDX -> prefer LMDB mirror
+    if (ends_with_ci(p, ".cdx")) {
+        // If a tag is not selected, this is “no order” for traversal purposes.
+        if (spec.tag.empty()) {
+            spec.backend = OrderBackend::Cdx;
+            if (out_spec) *out_spec = spec;
+
+            if (out_err) *out_err = "CDX active but no TAG selected";
+            return false;
+        }
+
+        const std::string envdir = derive_lmdb_envdir_from_cdx(p);
+
+        // Attempt LMDB first
+        {
+            std::vector<uint32_t> recnos;
+            std::string lmdb_err;
+
+            // Expected function contract:
+            // lmdb_backend::load_tag_recnos_asc(envdir, tag, recCount, out, err)
+            //  
+            // You may already have something similar; adapt here.
+            if (xindex::lmdb_backend::load_tag_recnos_asc(envdir, spec.tag, area.recCount(), recnos, &lmdb_err)) {
+                spec.backend = OrderBackend::LmdbMirror;
+                if (out_spec) *out_spec = spec;
+                out.swap(recnos);
+                return true;
+            }
+            // else fall through to CDX read
+        }
+
+        // Fallback to CDX persisted ordering (RUN1 / root_page_off), if you have it
+        {
+            std::vector<uint32_t> recnos;
+            std::string cdx_err;
+
+            // Expected function contract:
+            //   cdx_backend::load_tag_recnos_asc(cdx_path, tag, recCount, out, err)
+            if (xindex::cdx_backend::load_tag_recnos_asc(p, spec.tag, area.recCount(), recnos, &cdx_err)) {
+                spec.backend = OrderBackend::Cdx;
+                if (out_spec) *out_spec = spec;
+                out.swap(recnos);
+                return true;
+            }
+
+            if (out_err) {
+                *out_err = "CDX read failed; LMDB mirror not available. "
+                           "cdx_err=" + cdx_err;
+            }
+            return false;
+        }
+    }
+
+    // 3) INX (or other single-tag legacy)
+    spec.backend = OrderBackend::Inx;
+    if (out_spec) *out_spec = spec;
+
+    // Your existing loader used by cmd_list.cpp:
+    //   order_nav_detail::load_inx_recnos(path, recCount, out)
+    if (!order_nav_detail::load_inx_recnos(p, area.recCount(), out)) {
+        if (out_err) *out_err = "INX read failed: " + p;
+        return false;
+    }
+    return true;
+}
+
+bool order_iterate_recnos(xbase::DbArea& area,
+                          const std::function<bool(uint32_t recno)>& visitor,
+                          OrderIterSpec* out_spec,
+                          std::string* out_err)
+{
+    std::vector<uint32_t> recnos;
+    if (!order_collect_recnos_asc(area, recnos, out_spec, out_err)) return false;
+
+    const bool asc = out_spec ? out_spec->ascending : orderstate::isAscending(area);
+    if (asc) {
+        for (uint32_t rn : recnos) {
+            if (!visitor(rn)) break;
+        }
+    } else {
+        for (auto it = recnos.rbegin(); it != recnos.rend(); ++it) {
+            if (!visitor(*it)) break;
+        }
+    }
+    return true;
+}
+
+} // namespace cli

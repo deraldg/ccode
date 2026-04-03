@@ -1,222 +1,435 @@
-// src/cli/cmd_wsreport.cpp — WSREPORT [ALL]
-// Workspace status with explicit area number + datafile line.
-// - WSREPORT           : current area only (prints "(no file open)" if closed)
-// - WSREPORT ALL       : lists OPEN areas only (skips empty/closed slots)
-//
-// Output per open area:
-//   Current area: <slot>
-//   Datafile: <full-path-or-name>  (<filename>)  Recs: N  Recno: R
-//   Order       : PHYSICAL | ASCEND | DESCEND
-//   Index file  : (none | <inx path>)
-//   Active tag  : (none | <expr-or-stem>)
-//
-// Depends on public headers:
-//   workareas.hpp  : workareas::current_slot(), workareas::count(), workareas::at(i)
-//   xbase.hpp      : xbase::DbArea (name(), fields(), recCount(), recno(), isOpen())
-//   order_state.hpp: orderstate::{hasOrder,isAscending,orderName}
+// ================================
+// FILE: src/cli/cmd_wsreport.cpp
+// ================================
 
-#include "xbase.hpp"
-#include "workareas.hpp"
-#include "order_state.hpp"
+// WSREPORT (workspace + index summary + environment/settings/output routing + path state)
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
-#include <fstream>
+#include <iomanip>
 #include <iostream>
-#include <optional>
+#include <sstream>
 #include <string>
-#include <string_view>
 #include <vector>
 
-namespace fs = std::filesystem;
-using xbase::DbArea;
+#include "xbase.hpp"
+#include "xindex/index_manager.hpp"
+#include "workareas.hpp"
+#include "workspace/workarea_utils.hpp"
+#include "index_summary.hpp"
+#include "cli/order_report.hpp"
+#include "cli/settings.hpp"
+#include "cli/output_router.hpp"
+#include "cli/path_resolver.hpp"
 
-// ---------- small string/file utils ----------
-static std::string to_upper_copy(std::string s) {
+// Path state (SETPATH) — provides dottalk::paths::dump()
+#include "cli/cmd_setpath.hpp"
+
+using dottalk::IndexSummary;
+
+namespace {
+
+static std::string upper_copy(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c){ return (char)std::toupper(c); });
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     return s;
 }
 
-static std::string basename_no_ext(const std::string& p) {
-    fs::path ph(p);
-    return ph.stem().string();
+static bool has_token(const std::string& hay, const char* tok) {
+    return hay.find(tok) != std::string::npos;
 }
 
-static std::string filename_only(const std::string& p) {
-    fs::path ph(p);
-    return ph.filename().string();
+static std::string basename_of(const std::string& path) {
+    try { return std::filesystem::path(path).filename().string(); }
+    catch (...) { return path; }
 }
 
-static std::string only_printable(std::string_view sv) {
-    std::string out; out.reserve(sv.size());
-    for (unsigned char c : sv) {
-        if ((c >= 32 && c <= 126) || c == '\n' || c == '\r' || c == '\t') out.push_back((char)c);
-    }
-    return out;
+static const char* env_cstr(const char* key) {
+    if (!key || !*key) return nullptr;
+    return std::getenv(key);
 }
 
-static bool is_word_boundary(char c) {
-    return !std::isalnum((unsigned char)c) && c != '_';
+static void print_kv(std::ostream& os, const char* k, const std::string& v, int w = 18) {
+    os << "  " << std::left << std::setw(w) << k << ": " << v << "\n";
+}
+static void print_kv(std::ostream& os, const char* k, const char* v, int w = 18) {
+    os << "  " << std::left << std::setw(w) << k << ": " << (v ? v : "(not set)") << "\n";
+}
+static void print_kv(std::ostream& os, const char* k, bool v, int w = 18) {
+    os << "  " << std::left << std::setw(w) << k << ": " << (v ? "ON" : "OFF") << "\n";
+}
+static void print_kv(std::ostream& os, const char* k, int v, int w = 18) {
+    os << "  " << std::left << std::setw(w) << k << ": " << v << "\n";
 }
 
-static std::optional<std::string> parse_expr_token_after(std::string_view sv, size_t start) {
-    while (start < sv.size() && std::isspace((unsigned char)sv[start])) ++start;
-    if (start >= sv.size()) return std::nullopt;
-
-    size_t i = start;
-    auto is_expr_char = [](unsigned char c){
-        return std::isalnum(c) || c == '_' || c == '#';
-    };
-    while (i < sv.size() && is_expr_char((unsigned char)sv[i])) ++i;
-
-    if (i == start) return std::nullopt;
-    return std::string(sv.substr(start, i - start));
+static std::string nz(const std::string& s, const char* empty_text = "(none)") {
+    return s.empty() ? std::string(empty_text) : s;
 }
 
-// Sniff index expression from .inx:
-// 1) "expr:" token, 2) whole-word schema field, 3) none.
-static std::optional<std::string> sniff_expr_from_inx(const DbArea& A, const std::string& inx_path) {
-    std::error_code ec;
-    if (!fs::exists(inx_path, ec)) return std::nullopt;
-
-    constexpr size_t MAX_SCAN = 64 * 1024;
-    std::ifstream f(inx_path, std::ios::binary);
-    if (!f) return std::nullopt;
-
-    std::string buf; buf.resize(MAX_SCAN);
-    f.read(&buf[0], (std::streamsize)buf.size());
-    size_t n = (size_t)f.gcount();
-    buf.resize(n);
-    if (buf.empty()) return std::nullopt;
-
-    std::string hay = only_printable(buf);
-    if (hay.empty()) return std::nullopt;
-
-    std::string H = to_upper_copy(hay);
-    const std::string needle = "EXPR:";
-    size_t pos = H.find(needle);
-    if (pos != std::string::npos) {
-        size_t orig_pos = pos + needle.size();
-        if (auto tok = parse_expr_token_after(std::string_view(hay), orig_pos)) {
-            return to_upper_copy(*tok);
-        }
-    }
-
-    std::vector<std::string> fieldsU;
-    for (const auto& fd : A.fields()) {
-        if (!fd.name.empty()) fieldsU.push_back(to_upper_copy(fd.name));
-    }
-
-    for (const auto& u : fieldsU) {
-        size_t p = H.find(u);
-        while (p != std::string::npos) {
-            bool left_ok  = (p == 0) || is_word_boundary(H[p - 1]);
-            size_t r = p + u.size();
-            bool right_ok = (r >= H.size()) || is_word_boundary(H[r]);
-            if (left_ok && right_ok) {
-                return u;
-            }
-            p = H.find(u, p + 1);
-        }
-    }
-
-    return std::nullopt;
+static std::string safe_area_filename(const workareas::WorkArea& wa) {
+    try { return wa.file_name(); } catch (...) { return {}; }
 }
 
-// Consider an area "open-ish" only if isOpen() is true AND the name is non-empty.
-static bool is_openish(DbArea* A) {
-    if (!A) return false;
-    if (!A->isOpen()) return false;
-    const std::string nm = A->name();
-    return !nm.empty();
+static std::string safe_area_label(const workareas::WorkArea& wa) {
+    try { return wa.label(); } catch (...) { return {}; }
 }
 
-// Print a single open area block.
-static void print_open_area(size_t slot, DbArea& A) {
-    std::cout << "Current area: " << slot << "\n";
+static bool same_slot(const workareas::WorkArea& a, const workareas::WorkArea& b) noexcept {
+    return a.slot() == b.slot();
+}
 
-    const std::string full = A.name();
-    const std::string file = filename_only(full);
-    std::cout << "Datafile: " << full
-              << "  (" << file << ")"
-              << "  Recs: " << A.recCount()
-              << "  Recno: " << A.recno() << "\n";
-
-    bool has = false, asc = true;
-    std::string orderName;
-    try {
-        has = orderstate::hasOrder(A);
-        if (has) {
-            asc = orderstate::isAscending(A);
-            orderName = orderstate::orderName(A);
-        }
-    } catch (...) { has = false; }
-
-    std::cout << "  Order       : " << (has ? (asc ? "ASCEND" : "DESCEND") : "PHYSICAL") << "\n";
-
-    if (has && !orderName.empty()) {
-        std::cout << "  Index file  : " << orderName << "\n";
-        if (auto expr = sniff_expr_from_inx(A, orderName)) {
-            std::cout << "  Active tag  : " << *expr << "\n";
-        } else {
-            std::cout << "  Active tag  : " << basename_no_ext(orderName) << "\n";
-        }
+static std::string capacity_desc() {
+    std::ostringstream out;
+    const std::size_t n = workareas::count();
+    if (n == 0) {
+        out << "{}";
     } else {
-        std::cout << "  Index file  : (none)\n";
-        std::cout << "  Active tag  : (none)\n";
+        out << "{0.." << (n - 1) << "}";
+    }
+    return out.str();
+}
+
+static void print_workspace_block(std::ostream& os) {
+    const auto areas = workareas::all();
+    const auto cur   = areas.current();
+
+    os << "Workspace\n";
+    os << "----------------------------------------\n";
+    os << "  Occupied: " << workareas::occupied_desc() << "\n";
+    os << "  Open     : " << workareas::open_count() << "\n";
+    os << "  Capacity : " << capacity_desc() << "\n";
+    os << "  Current  : "
+       << ((cur.valid() && cur.is_open()) ? std::to_string(cur.slot()) : "(none)")
+       << "\n\n";
+
+    os << "  Slot  Cur  Name                         File\n";
+    os << "  ----- ---- ---------------------------- ------------------------------\n";
+
+    bool any = false;
+
+    for (std::size_t i = 0; i < areas.count(); ++i) {
+        const auto wa = areas[i];
+        if (!wa.is_open()) continue;
+
+        any = true;
+
+        const std::string label = nz(safe_area_label(wa), "(unnamed)");
+        const std::string file  = nz(basename_of(safe_area_filename(wa)));
+
+        os << "  "
+           << std::right << std::setw(5) << wa.slot() << " "
+           << std::setw(4) << (same_slot(wa, cur) ? "*" : "")
+           << " "
+           << std::left << std::setw(28) << label
+           << " "
+           << file
+           << "\n";
+    }
+
+    if (!any) {
+        os << "  (no open work areas)\n";
+    }
+
+    os << "\n";
+}
+
+static void print_lmdb_block(std::ostream& os) {
+    os << "LMDB (per-area)\n";
+    os << "----------------------------------------\n";
+
+    bool any = false;
+
+    const auto areas = workareas::all();
+    const auto cur   = areas.current();
+
+    for (std::size_t i = 0; i < areas.count(); ++i) {
+        const auto wa = areas[i];
+        if (!wa.is_open()) continue;
+
+        xbase::DbArea* A = wa.db();
+        if (!A) continue;
+
+        const auto* im = A->indexManagerPtr();
+        if (!im || !im->hasBackend() || !im->isCdx()) continue;
+
+        any = true;
+
+        os << "Area " << wa.slot();
+        if (same_slot(wa, cur)) os << " [current]";
+        os << ": " << nz(safe_area_label(wa), "(unnamed)") << "\n";
+
+        const std::string envdir = im->containerPath().empty()
+            ? std::string()
+            : dottalk::paths::resolve_lmdb_env_for_cdx(im->containerPath()).string();
+
+        print_kv(os, "STATE",  "OPEN");
+        print_kv(os, "FILE",   nz(safe_area_filename(wa)));
+        print_kv(os, "ENVDIR", nz(envdir, "(unknown)"));
+        print_kv(os, "TAG",    nz(im->activeTag()));
+        os << "\n";
+    }
+
+    if (!any) {
+        print_kv(os, "STATE", "NONE");
+        os << "\n";
     }
 }
 
-// Print a closed/empty area block (used only for single-area WSREPORT).
-static void print_closed_area(size_t slot) {
-    std::cout << "Current area: " << slot << "\n";
-    std::cout << "Datafile: (no file open)\n";
-    std::cout << "  Order       : PHYSICAL\n";
-    std::cout << "  Index file  : (none)\n";
-    std::cout << "  Active tag  : (none)\n";
+static void print_env_block(std::ostream& os, bool verbose) {
+    os << "Environment\n";
+    os << "----------------------------------------\n";
+
+    print_kv(os, "CWD", std::filesystem::current_path().string());
+#ifdef _WIN32
+    print_kv(os, "OS", "Windows");
+#else
+    print_kv(os, "OS", "Unix");
+#endif
+    print_kv(os, "USER", env_cstr("USERNAME") ? env_cstr("USERNAME") : env_cstr("USER"));
+    print_kv(os, "HOME", env_cstr("USERPROFILE") ? env_cstr("USERPROFILE") : env_cstr("HOME"));
+    print_kv(os, "TEMP", env_cstr("TEMP") ? env_cstr("TEMP") : env_cstr("TMPDIR"));
+
+    os << "\nDotTalk / Build variables\n";
+    os << "----------------------------------------\n";
+
+    const char* keys[] = {
+        "DOTTALK_DATA",
+        "DOTTALK_DBF",
+        "DOTTALK_INDEXES",
+        "DOTTALK_SCHEMAS",
+        "DOTTALK_SCRIPTS",
+        "DOTTALK_TESTS",
+        "DOTTALK_HELP",
+        "DOTTALK_LOGS",
+        "DOTTALK_TMP",
+        "TVISION_ROOT",
+        "VCPKG_ROOT",
+        "VCPKG_DEFAULT_TRIPLET",
+        "CMAKE_GENERATOR",
+        "CMAKE_TOOLCHAIN_FILE"
+    };
+    for (const char* k : keys) {
+        print_kv(os, k, env_cstr(k));
+    }
+
+    if (verbose) {
+        os << "\nPATH (verbose)\n";
+        os << "----------------------------------------\n";
+        print_kv(os, "PATH", env_cstr("PATH"));
+    }
+
+    os << "\n";
 }
 
-void cmd_WSREPORT(DbArea&, std::istringstream& args) {
-    std::string tok;
-    if (!(args >> tok)) {
-        // Current area only (print even if closed, but clearly)
-        size_t cur = workareas::current_slot();
-        DbArea* A = workareas::at(cur);
-        std::cout << "DotTalk Status Report\n\n";
-        if (!is_openish(A)) {
-            print_closed_area(cur);
+static void print_paths_block(std::ostream& os) {
+    os << "Paths (SETPATH)\n";
+    os << "----------------------------------------\n";
+
+    try {
+        const std::string dump = dottalk::paths::dump();
+        if (dump.empty()) {
+            os << "(unavailable)\n\n";
             return;
         }
-        print_open_area(cur, *A);
-        return;
+        os << dump;
+        if (dump.back() != '\n') os << "\n";
+        os << "\n";
+    } catch (...) {
+        os << "(unavailable)\n\n";
     }
+}
 
-    std::string tokU = to_upper_copy(tok);
-    if (tokU == "ALL") {
-        // List open areas only; skip closed/empty slots to avoid clutter.
-        std::cout << "DotTalk Status Report (ALL)\n\n";
-        size_t n = workareas::count();
-        bool any = false;
-        for (size_t i = 0; i < n; ++i) {
-            DbArea* A = workareas::at(i);
-            if (!is_openish(A)) continue;
-            if (any) std::cout << "\n";
-            print_open_area(i, *A);
-            any = true;
+static void print_settings_block(std::ostream& os) {
+    const auto& S = cli::Settings::instance();
+
+    os << "SET / Runtime Settings\n";
+    os << "----------------------------------------\n";
+
+    print_kv(os, "SET TALK",    S.talk_on.load());
+    print_kv(os, "STATUS",      S.status_on.load());
+    print_kv(os, "TIME",        S.time_on.load());
+    print_kv(os, "CLOCK",       S.clock_on.load());
+    print_kv(os, "CONSOLE",     S.console_on.load());
+    print_kv(os, "BELL",        S.bell_on.load());
+
+    os << "\n";
+
+    print_kv(os, "SAFETY",      S.safety_on.load());
+    print_kv(os, "DELETED",     S.deleted_on.load());
+    print_kv(os, "EXACT",       S.exact_on.load());
+    print_kv(os, "ESCAPE",      S.escape_on.load());
+    print_kv(os, "CARRY",       S.carry_on.load());
+    print_kv(os, "CONFIRM",     S.confirm_on.load());
+    print_kv(os, "EXCLUSIVE",   S.exclusive_on.load());
+    print_kv(os, "MULTILOCKS",  S.multilocks_on.load());
+
+    os << "\n";
+
+    print_kv(os, "CENTURY",     S.century_on.load());
+    print_kv(os, "DATE",        S.date_format);
+    print_kv(os, "DECIMALS",    static_cast<int>(S.decimals));
+    print_kv(os, "FIXED",       S.fixed_on.load());
+    print_kv(os, "MEMOWIDTH",   static_cast<int>(S.memo_width));
+    print_kv(os, "MEMOERROR",   S.memo_error_on.load());
+
+    os << "\n";
+
+    print_kv(os, "DEFAULT",     nz(S.default_dir));
+    print_kv(os, "PATH",        nz(S.path_list));
+
+    os << "\n";
+}
+
+static void print_output_router_block(std::ostream& os) {
+    auto& R = cli::OutputRouter::instance();
+
+    os << "Output Routing\n";
+    os << "----------------------------------------\n";
+    print_kv(os, "CONSOLE",        R.console_on());
+    print_kv(os, "PRINT",          R.print_on());
+    print_kv(os, "ALTERNATE",      R.alternate_on());
+    print_kv(os, "ROUTER TALK",    R.talk_on());
+    print_kv(os, "ECHO",           R.echo_on());
+
+    print_kv(os, "PRINT TO",       nz(R.print_to_path()));
+    print_kv(os, "ALTERNATE TO",   nz(R.alternate_to_path()));
+
+    os << "\n";
+}
+
+static void print_area_index_block(std::ostream& os,
+                                   const workareas::WorkArea& wa,
+                                   bool isCurrent,
+                                   bool verbose) {
+    xbase::DbArea* A = wa.db();
+    if (!A) return;
+
+    const std::string file  = safe_area_filename(wa);
+    const std::string base  = basename_of(file);
+    const std::string label = nz(safe_area_label(wa), "(unnamed)");
+
+    os << "Area " << wa.slot();
+    if (isCurrent) os << " [current]";
+    os << ": " << label << "\n";
+
+    print_kv(os, "FILE", nz(file));
+    print_kv(os, "BASENAME", nz(base));
+    os << "\n";
+
+    os << "Index / Order\n";
+    os << "----------------------------------------\n";
+
+    orderreport::print_status_block(os, *A);
+
+    const IndexSummary S = dottalk::summarize_index(*A);
+
+    if (S.tags.empty()) {
+        print_kv(os, "Tags", "(none)");
+    } else if (!verbose) {
+        std::ostringstream tag_line;
+        bool first = true;
+        for (const auto& t : S.tags) {
+            if (!first) tag_line << ", ";
+            tag_line << (t.tagName.empty() ? t.fieldName : t.tagName);
+            first = false;
         }
-        if (!any) std::cout << "No open areas.\n";
-        return;
+        print_kv(os, "Tags", tag_line.str());
+    } else {
+        os << "  Tags              :\n\n";
+        os << "  " << std::left << std::setw(14) << "Field Name"
+           << std::setw(10) << "Type"
+           << std::setw(6)  << "Len"
+           << std::setw(6)  << "Dec"
+           << "Dir\n";
+        os << "  ------------ ----- ------ ------ ----\n";
+        for (const auto& T : S.tags) {
+            const std::string field_name = !T.fieldName.empty() ? T.fieldName : T.tagName;
+            os << "  " << std::left << std::setw(14) << field_name
+               << std::setw(10) << (T.type.empty() ? "" : T.type)
+               << std::setw(6)  << T.len
+               << std::setw(6)  << T.dec
+               << (T.asc ? "ASC" : "DESC") << "\n";
+        }
     }
 
-    // Unknown switch -> treat like current area.
-    size_t cur = workareas::current_slot();
-    DbArea* A = workareas::at(cur);
-    std::cout << "DotTalk Status Report\n\n";
-    if (!is_openish(A)) {
-        print_closed_area(cur);
-        return;
+    print_kv(os, "Records",    static_cast<int>(A->recCount()));
+    print_kv(os, "Recno",      static_cast<int>(A->recno()));
+    print_kv(os, "Record len", static_cast<int>(A->recLength()));
+    print_kv(os, "Fields",     static_cast<int>(A->fieldCount()));
+    os << "\n";
+}
+
+} // namespace
+
+// WSREPORT [ALL] [VERBOSE] [ENV] [PATHS] [SET] [ROUTE]
+void cmd_WSREPORT(xbase::DbArea& /*A*/, std::istringstream& args) {
+    auto& out = cli::OutputRouter::instance().out();
+
+    const std::string raw = upper_copy(args.str());
+
+    const bool wantAll     = has_token(raw, "ALL");
+    const bool wantVerbose = has_token(raw, "VERBOSE") || has_token(raw, "INDEX");
+
+    const bool wantEnvOnly   = has_token(raw, "ENV");
+    const bool wantPathsOnly = has_token(raw, "PATHS");
+    const bool wantSetOnly   = has_token(raw, "SET");
+    const bool wantRouteOnly = has_token(raw, "ROUTE");
+
+    const bool anyExplicit = wantEnvOnly || wantPathsOnly || wantSetOnly || wantRouteOnly;
+
+    const bool showEnv   = anyExplicit ? wantEnvOnly   : true;
+    const bool showPaths = anyExplicit ? wantPathsOnly : true;
+    const bool showSet   = anyExplicit ? wantSetOnly   : true;
+    const bool showRoute = anyExplicit ? wantRouteOnly : true;
+
+    const auto areas = workareas::all();
+    const auto cur   = areas.current();
+
+    out << "DotTalk Status Report\n\n";
+
+    print_workspace_block(out);
+    print_lmdb_block(out);
+
+    if (showEnv)   print_env_block(out, wantVerbose);
+    if (showPaths) print_paths_block(out);
+    if (showSet)   print_settings_block(out);
+    if (showRoute) print_output_router_block(out);
+
+    out << "Areas / Index Summary\n";
+    out << "----------------------------------------\n";
+
+    if (wantAll) {
+        bool anyOpen = false;
+        for (std::size_t i = 0; i < areas.count(); ++i) {
+            const auto wa = areas[i];
+            if (!wa.is_open()) continue;
+            anyOpen = true;
+            print_area_index_block(out, wa, same_slot(wa, cur), wantVerbose);
+        }
+        if (!anyOpen) {
+            out << "(no open work areas)\n\n";
+        }
+    } else {
+        if (cur.valid() && cur.is_open()) {
+            print_area_index_block(out, cur, true, wantVerbose);
+        } else {
+            out << "Area (none)\n";
+            out << "\nIndex / Order\n";
+            out << "----------------------------------------\n";
+            print_kv(out, "Order", "PHYSICAL");
+            print_kv(out, "Index file", "(none)");
+            print_kv(out, "Active tag", "(none)");
+            print_kv(out, "Sort", "(none)");
+            print_kv(out, "Tags", "(none)");
+            print_kv(out, "Records", 0);
+            print_kv(out, "Recno", 0);
+            print_kv(out, "Record len", 0);
+            print_kv(out, "Fields", 0);
+            out << "\n";
+        }
     }
-    print_open_area(cur, *A);
+
+    out.flush();
 }

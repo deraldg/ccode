@@ -1,0 +1,137 @@
+Key takeaways from this shake-down: **core DBF open/close, area selection, STRUCT/COUNT/LIST/TUP, LOCATE, and CALCWRITE updates are working**. The run also exposes **two clear regressions/holes in date arithmetic and string builtins**, plus a small encoding issue in HELP output.
+
+## What’s solid / passed
+
+### 1) Work-area + schema lifecycle
+
+* `SCHEMAS CLOSE` followed by `SCHEMAS OPEN DBF` cleanly opens **13 tables into areas 0..12** and `SCHEMAS` reports them correctly.
+* Shutdown sequence looks clean: `SCHEMAS CLOSE` closes 13, then `QUIT` runs shutdown tasks without errors.
+
+### 2) Core navigation and inspection
+
+Across multiple tables (BUILDING, ROOMS, DEPT, MAJORS, TERMS, COURSES, TEACHERS, CLASSES, STUDENTS, ENROLL, STUD_MAJ, TASSIGN):
+
+* `SELECT <table>` resolves to the right area.
+* `AREA` prints correct metadata (abs path, logical name, NATURAL order).
+* `STRUCT` prints correct field dictionaries.
+* `COUNT` matches expected record counts.
+* `LIST 5` prints rows sensibly.
+* `TUP` prints tuple lines and the comment-form `; TUPLE: ...` summary.
+
+### 3) Date functions (basic)
+
+* `DATE()`, `TODAY()`, `TIME()`, `NOW()`, `DATETIME()` all return **expected numeric formats**:
+
+  * DATE/TODAY: `20260123`
+  * TIME: `112129`
+  * NOW/DATETIME: `20260123112129`
+* `CTOD(...)` works for `2000-01-01`, `"2000/01/01"`, and `20000101`.
+
+### 4) Predicates and LOCATE
+
+* `BOOLEAN` works for `>` and `<` and for compound expressions.
+* `LOCATE FOR LNAME = DAVIS` and `= TAYLOR` both succeed and move the record pointer as expected.
+
+### 5) Write path (CALCWRITE)
+
+Your reversible write test passes:
+
+* `TUP GPA` shows 2.88
+* `CALC GPA = GPA + 0.01` writes 2.89
+* `CALC GPA = GPA - 0.01` restores 2.88
+  So: **expression evaluation → assignment → record writeback pipeline is working** at least for numeric fields.
+
+---
+
+## Problems / regressions revealed
+
+### A) Date arithmetic is only partially implemented (or typed incorrectly)
+
+You have **two conflicting behaviors**:
+
+1. Field date arithmetic works:
+
+* `CALC DOB + 1` → `19990103` ✅
+* `DATEADD(DOB, 30)` → `19990201` ✅
+* `DATEDIFF(DATE(), DOB)` → `9883` ✅
+
+2. But system date arithmetic does *not*:
+
+* `CALC DATE() + 2` → `20260123` ❌ (should be `20260125`)
+* `CALC DATE() - 2` → `20260123` ❌ (should be `20260121`)
+* `CALC DATE() + 30` → `20260123` ❌ (should be `20260222`)
+* `CALC DATE() - 30` → `20260123` ❌ (should be `20251224`)
+* `CALC DATE() - DOB` → `20260123` ❌ (should be a day count, like DATEDIFF)
+
+**Interpretation:** `DATE()` is being treated as a “special” expression node that returns a date-typed value, but the `+/-` operator path is likely:
+
+* refusing to do date+int when the LHS is a function call result (DATE()) but allowing it when LHS is a field (DOB), **or**
+* converting the `DATE()` result to a “string-ish / non-date scalar” too early so the operator returns the left operand unchanged, **or**
+* falling through to a “unsupported op → return LHS” behavior rather than raising an error.
+
+The fact that `DATEADD(DOB, 30)` works suggests your date math helpers are good; what’s missing is **operator dispatch** consistency for:
+
+* `date + integer`
+* `date - integer`
+* `date - date` (should be integer days, matching your DATEDIFF)
+
+### B) String builtins are broken in CALC/TUPLE context
+
+You flagged it yourself in the script, and the run confirms it:
+
+* `CALC TUPLE UPPER(LNAME)` outputs blank ❌
+* `CALC TUPLE LOWER(LNAME)` blank ❌
+* `CALC TUPLE PROPER(LNAME)` blank ❌
+* `CALC TUPLE LEFT(LNAME, 3)` returns `.F.` ❌ (wrong type entirely)
+* `CALC TUPLE RIGHT(FNAME, 2)` returns `.F.` ❌
+* `CALC TUPLE ALLTRIM(EMAIL)` blank ❌
+
+**Interpretation:** the “TUPLE expression mode” inside CALC is not receiving/returning string values correctly. The `.F.` results strongly suggest the evaluator is:
+
+* treating function calls as predicate/boolean nodes in that context, or
+* failing argument evaluation (undefined/empty) and defaulting to false, or
+* returning a variant type that prints as blank unless it is numeric/boolean.
+
+Given that `TUP` prints string fields fine, and boolean expressions work, the failure is likely localized to the **CALC expression engine’s string-function registration or value printing path** in “TUPLE …” mode.
+
+### C) Encoding/locale glitch in HELP output
+
+You’ve got:
+
+* `HELP â€” Unified Help Router`
+
+That `â€”` is classic “UTF-8 em-dash displayed as CP1252/ANSI” (or similar mismatch). Not fatal, but it’s a real paper-cut for the shell’s perceived stability.
+
+---
+
+## Data/consistency observations (not engine failures, but worth noting)
+
+* In `STRUCT` output, none of the tables show index attachments (“Index file: (none)”). That’s fine for this shake-down, but it means you didn’t exercise **auto-attach INX/CNX** behavior here.
+* STUDENTS record #1 has `GPA 5.01` which is intentionally “weird” (since many schools cap at 4.0). Not an engine issue, but it’s a good test for numeric formatting and constraints (if you ever add them).
+
+---
+
+## What this shake-down *proved* about DotTalk++ “as is”
+
+1. You can treat `.DTS` scripts as a legitimate regression harness:
+
+   * deterministic setup (`SCHEMAS CLOSE/OPEN`)
+   * table-by-table smoke tests
+   * writeback verification (GPA tweak)
+   * clean shutdown
+2. The system is strong on:
+
+   * DBF I/O, field access, display formatting
+   * selection and work-area model
+   * basic expression evaluation (numeric + boolean)
+   * date functions and DATEADD/DATEDIFF helpers
+3. The next two fixes that matter most (based on this run) are:
+
+   * **operator semantics for DATE() results and date-date subtraction**
+   * **string builtin evaluation/printing in CALC TUPLE mode**
+
+If you want, paste the current implementations of:
+
+* the part that evaluates `DATE()` and applies `+/-`, and
+* the string function registration / dispatch (fn_string / evaluator printing),
+  and I’ll pinpoint exactly where the behavior is diverging (without writing code unless you explicitly ask).

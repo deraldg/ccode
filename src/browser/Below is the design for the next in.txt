@@ -1,0 +1,651 @@
+Below is the design for the **next integration phase**: wiring ERSATZ to the real relation subsystem.
+
+The target is to stop treating relation tree and tuple rows as placeholders and make them first-class data products.
+
+---
+
+# 1. Phase objective
+
+Replace these temporary seams:
+
+* `resolve_area_by_alias(...)`
+* `build_relation_tree(...)`
+* `build_tuple_rows(...)`
+* `build_descendant_summary(...)`
+
+with real adapters over your existing relation system.
+
+Do **not** build a second relation engine for ERSATZ.
+
+ERSATZ should consume:
+
+* workspace/area state
+* active relation graph
+* relation enumeration results
+
+and then render them.
+
+---
+
+# 2. Architectural rule
+
+There should be one relation truth source.
+
+ERSATZ must sit **on top of**:
+
+* the active relation registry / graph
+* the same traversal semantics used by `REL LIST`, `REL LIST ALL`, and `REL ENUM`
+
+Not parallel code.
+
+So the design should be:
+
+```text
+Relation subsystem
+   -> graph snapshot API
+   -> enumeration API
+ERSATZ builder
+   -> BrowserSnapshot
+Renderer
+   -> console output
+```
+
+---
+
+# 3. New adapter layer
+
+I recommend introducing one small adapter boundary for browser use.
+
+## New internal header
+
+```cpp
+// include/browser/browser_relation_adapter.hpp
+#pragma once
+
+#include <string>
+#include <vector>
+#include "browser/browser_snapshot.hpp"
+#include "xbase.hpp"
+
+namespace browser
+{
+    struct EnumRequest
+    {
+        std::string root_alias;
+        std::vector<std::string> path_aliases;
+        std::vector<TupleColumnMeta> columns;
+        int limit = 10;
+    };
+
+    struct EnumRow
+    {
+        std::vector<std::string> cells;
+    };
+
+    struct EnumResult
+    {
+        std::vector<EnumRow> rows;
+        std::vector<DescendantCount> counts;
+        std::vector<std::string> warnings;
+        std::string status = "OK";
+    };
+
+    bool relation_build_tree(const std::string& root_alias,
+                             RelationTreeSnapshot& out_tree,
+                             std::vector<std::string>& warnings,
+                             std::string& status);
+
+    bool relation_enumerate(xbase::DbArea& root_area,
+                            const EnumRequest& req,
+                            EnumResult& out);
+}
+```
+
+## Why this is the right seam
+
+It isolates ERSATZ from:
+
+* raw relation registry structures
+* command parser details
+* command output formatting
+* `REL ENUM` textual semantics
+
+ERSATZ only cares about:
+
+* tree
+* rows
+* counts
+
+---
+
+# 4. `resolve_area_by_alias(...)` design
+
+This should become a workspace utility, not browser-specific logic.
+
+## Desired contract
+
+```cpp
+static xbase::DbArea* resolve_area_by_alias(const std::string& alias);
+```
+
+or, if you prefer to keep current-area context available:
+
+```cpp
+static xbase::DbArea* resolve_area_by_alias(xbase::DbArea& current_area,
+                                            const std::string& alias);
+```
+
+## Required behavior
+
+* case-insensitive alias comparison
+* exact alias match
+* search all open workareas
+* return first exact match
+* return `nullptr` if not found
+
+## Non-goals for phase 1
+
+* schema alias remapping
+* fuzzy matching
+* path/file matching
+* opening areas implicitly
+
+## Likely implementation source
+
+Whatever currently backs:
+
+* `SELECT <alias>`
+* `AREA`
+* relation creation by alias
+* schema-aware area references
+
+If there is already one canonical workspace lookup function, ERSATZ should call that instead of inventing its own.
+
+---
+
+# 5. `build_relation_tree(...)` design
+
+This should be a structural snapshot of the active relation graph rooted at one alias.
+
+## Builder contract
+
+Input:
+
+* `root_alias`
+
+Output:
+
+* `RelationTreeSnapshot`
+
+## Rule
+
+Use the **active relation registry** as-is.
+
+Do not reconstruct the graph by probing tables.
+
+---
+
+## 5.1 Source data ERSATZ needs
+
+For each relation edge:
+
+* parent alias
+* child alias
+* ON expression text or normalized relation clause
+* child edges
+
+That maps cleanly to:
+
+```cpp
+struct RelationNode
+{
+    std::string parent_alias;
+    std::string child_alias;
+    std::string on_expr;
+    std::vector<RelationNode> children;
+};
+```
+
+---
+
+## 5.2 Internal design
+
+The relation subsystem probably already has either:
+
+* a flat relation list
+* parent/child relation entries
+* graph-like schema relation objects
+
+ERSATZ needs a conversion pass:
+
+### Step A
+
+Gather all active relation entries involving the current root tree.
+
+### Step B
+
+Build adjacency:
+
+```text
+parent_alias -> [relation entries...]
+```
+
+### Step C
+
+Recursively materialize `RelationNode.children`
+
+---
+
+## 5.3 Stable order rule
+
+The tree must preserve a stable order.
+
+Preferred order:
+
+* relation insertion order
+* or registry order
+* or schema order
+
+Do **not** sort alphabetically unless there is no better canonical order.
+
+Reason: the browser should reflect how relations are actually wired.
+
+---
+
+## 5.4 Design sketch
+
+```cpp
+static RelationNode make_relation_node(const RelationEntry& rel,
+                                       const RelationGraph& graph)
+{
+    RelationNode node{};
+    node.parent_alias = rel.parent_alias;
+    node.child_alias = rel.child_alias;
+    node.on_expr = rel.on_expr;
+
+    const auto children = graph.children_of(rel.child_alias);
+    for (const auto& child_rel : children)
+        node.children.push_back(make_relation_node(child_rel, graph));
+
+    return node;
+}
+```
+
+Then:
+
+```cpp
+bool relation_build_tree(const std::string& root_alias,
+                         RelationTreeSnapshot& out_tree,
+                         std::vector<std::string>& warnings,
+                         std::string& status)
+{
+    out_tree = {};
+    out_tree.root_alias = root_alias;
+
+    auto root_children = graph.children_of(root_alias);
+    for (const auto& rel : root_children)
+        out_tree.links.push_back(make_relation_node(rel, graph));
+
+    return true;
+}
+```
+
+That is the right shape.
+
+---
+
+# 6. `build_tuple_rows(...)` design
+
+This is the core payoff step.
+
+ERSATZ must not fake tuple rows anymore. It should consume the real enumeration path.
+
+## Required outcome
+
+One `TupleRow` per actual relation enumeration result.
+
+## Critical rule
+
+ERSATZ should reuse the **same traversal and column evaluation semantics** as `REL ENUM`.
+
+Not “something similar.”
+
+---
+
+# 6.1 Desired abstraction
+
+If possible, pull a non-printing engine function out of `REL ENUM`:
+
+```cpp
+bool rel_enum_rows(xbase::DbArea& root_area,
+                   const std::vector<std::string>& path_aliases,
+                   const std::vector<std::string>& column_exprs,
+                   int limit,
+                   std::vector<std::vector<std::string>>& out_rows,
+                   std::vector<DescendantCount>& out_counts,
+                   std::vector<std::string>& warnings,
+                   std::string& status);
+```
+
+ERSATZ would then simply adapt:
+
+* `TupleColumnMeta.expr` -> column expression list
+* result rows -> `TupleRow`
+* counts -> `DescendantSummary`
+
+That is the cleanest path.
+
+---
+
+## 6.2 If no data API exists yet
+
+Then extract one from the existing `REL ENUM` command implementation.
+
+That extraction should separate:
+
+### Existing `REL ENUM` command into:
+
+1. parse CLI args
+2. build enumeration request
+3. call shared enumerate engine
+4. print rows
+
+ERSATZ would call step 3 only.
+
+---
+
+# 7. Enumeration design contract
+
+The enumeration engine should accept:
+
+* a concrete root record
+* a concrete path
+* a concrete list of expressions
+* a limit
+
+and return:
+
+* rows
+* optional per-hop counts
+* warnings/status
+
+## Strong recommendation
+
+Use a dedicated request/result pair.
+
+```cpp
+struct RelationEnumRequest
+{
+    std::string root_alias;
+    int root_recno = 0;
+    std::vector<std::string> path_aliases;
+    std::vector<std::string> exprs;
+    int limit = 10;
+};
+
+struct RelationEnumResult
+{
+    std::vector<std::vector<std::string>> rows;
+    std::vector<DescendantCount> counts;
+    std::vector<std::string> warnings;
+    std::string status = "OK";
+};
+```
+
+This prevents argument drift between ERSATZ and the command.
+
+---
+
+# 8. Expression handling design
+
+ERSATZ columns are already metadata objects:
+
+```cpp
+TupleColumnMeta {
+    source_alias,
+    expr,
+    label,
+    ...
+}
+```
+
+For enumeration, only `expr` matters.
+
+So `build_tuple_rows(...)` should do this:
+
+### Step A
+
+Extract expression list from columns:
+
+```cpp
+std::vector<std::string> exprs;
+for (const auto& c : columns)
+    exprs.push_back(c.expr);
+```
+
+### Step B
+
+Call relation enumeration engine
+
+### Step C
+
+Convert output rows to `TupleRow`
+
+That keeps evaluation rules centralized.
+
+---
+
+# 9. `build_descendant_summary(...)` design
+
+Once enumeration is real, descendant summary should no longer be guessed from placeholder row count.
+
+There are two acceptable designs.
+
+## Option A — enumeration returns counts directly
+
+Best option.
+
+The enumeration engine tracks how many rows were reached per alias and returns:
+
+```cpp
+std::vector<DescendantCount>
+```
+
+ERSATZ just copies it.
+
+## Option B — derive from traversal trace
+
+If enumeration returns row provenance, summary can be derived afterward.
+
+But if you already have the traversal engine in hand, Option A is cleaner.
+
+---
+
+# 10. Recommended `EnumResult`
+
+I would strengthen the earlier adapter result to include counts directly.
+
+```cpp
+struct EnumResult
+{
+    std::vector<TupleRow> rows;
+    std::vector<DescendantCount> counts;
+    std::vector<std::string> warnings;
+    std::string status = "OK";
+};
+```
+
+Then:
+
+* `build_tuple_rows(...)` becomes a thin adapter
+* `build_descendant_summary(...)` can just consume counts
+* one traversal, one source of truth
+
+---
+
+# 11. Proposed phase split
+
+## Phase 2A — relation tree integration
+
+Wire:
+
+* `resolve_area_by_alias(...)`
+* `relation_build_tree(...)`
+
+This yields:
+
+* correct root/path/tree behavior
+* structurally correct ERSATZ
+* still okay if rows are partial
+
+## Phase 2B — relation enumeration integration
+
+Wire:
+
+* extracted `REL ENUM` data path
+* `relation_enumerate(...)`
+* rows + counts
+
+This yields:
+
+* real tuple grid
+* real descendant summary
+
+## Phase 2C — order status
+
+Wire:
+
+* `build_order_snapshot(...)`
+
+This improves trust and debugging but is not the primary browser value.
+
+---
+
+# 12. Concrete internal file plan
+
+I would add these files:
+
+```text
+include/browser/browser_relation_adapter.hpp
+src/browser/browser_relation_adapter.cpp
+```
+
+And move the real graph/enumeration bridge there.
+
+Then `browser_builders.cpp` stays cleaner:
+
+* snapshot orchestration only
+* not relation internals
+
+That separation will age better.
+
+---
+
+# 13. Builder changes after adapter exists
+
+Then these functions in `browser_builders.cpp` simplify to:
+
+```cpp
+static bool build_relation_tree(const std::string& root_alias,
+                                RelationTreeSnapshot& out,
+                                std::vector<std::string>& warnings,
+                                std::string& status)
+{
+    return relation_build_tree(root_alias, out, warnings, status);
+}
+```
+
+and:
+
+```cpp
+static bool build_tuple_rows(xbase::DbArea& root_area,
+                             const std::vector<std::string>& path_aliases,
+                             const std::vector<TupleColumnMeta>& columns,
+                             int limit,
+                             std::vector<TupleRow>& out_rows,
+                             std::vector<std::string>& warnings,
+                             std::string& status)
+{
+    EnumRequest req{};
+    req.root_alias = root_area.alias();
+    req.path_aliases = path_aliases;
+    req.columns = columns;
+    req.limit = limit;
+
+    EnumResult res{};
+    if (!relation_enumerate(root_area, req, res))
+    {
+        warnings.insert(warnings.end(), res.warnings.begin(), res.warnings.end());
+        status = res.status.empty() ? "ERROR" : res.status;
+        return false;
+    }
+
+    out_rows = std::move(res.rows);
+    warnings.insert(warnings.end(), res.warnings.begin(), res.warnings.end());
+    if (!res.status.empty()) status = res.status;
+    return true;
+}
+```
+
+That is the correct end-state shape.
+
+---
+
+# 14. Immediate design questions to answer in code
+
+When you wire the adapter, pin these decisions:
+
+### A. Does relation graph API already exist?
+
+If yes, adapt it.
+If no, extract from `REL LIST ALL`.
+
+### B. Does `REL ENUM` already have a non-printing row builder?
+
+If yes, reuse it.
+If no, extract it now.
+
+### C. Does enumeration know per-alias counts?
+
+If yes, return them.
+If no, decide whether to add that during extraction.
+
+### D. Where is alias resolution canonical today?
+
+Wherever `SELECT alias` or relation setup resolves aliases, ERSATZ should use that.
+
+---
+
+# 15. Best next concrete implementation target
+
+The next practical design-to-code move is:
+
+## First
+
+Create `browser_relation_adapter.hpp/.cpp`
+
+## Then implement only:
+
+* `relation_build_tree(...)`
+* stub `relation_enumerate(...)`
+
+That gets the adapter boundary into the build without forcing all enumeration extraction at once.
+
+Then replace the builder’s current `build_relation_tree(...)` body with the adapter call.
+
+This is the safest next step.
+
+---
+
+# 16. Bottom line
+
+The design direction is:
+
+* **ERSATZ builder orchestrates**
+* **relation adapter bridges to the existing relation subsystem**
+* **renderer stays pure**
+* **no duplicated relation logic**
+
+That keeps the browser honest and makes it much easier to evolve into the TV/helper shell later.
+
+The exact next artifact to write is the **header for `browser_relation_adapter.hpp` plus the first implementation skeleton for `relation_build_tree(...)`**.

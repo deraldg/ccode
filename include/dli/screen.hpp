@@ -1,6 +1,4 @@
 #pragma once
-// dli/screen.hpp — tiny dirty-region console renderer (Windows-optimized)
-// No 'cli' symbols; all under namespace dli.
 #include <string>
 #include <string_view>
 #include <vector>
@@ -8,42 +6,46 @@
 
 namespace dli {
 
-// Initialize renderer and allocate shadow buffer (width x height);
-// hides cursor for smoother draws. Call shutdown() before exit.
+// Core screen management
 void screen_init(int width, int height);
-
-// Restore cursor and clean up.
 void screen_shutdown();
-
-// Optionally enable/disable VT mode (ANSI escape processing).
-// On Windows this attempts to turn on ENABLE_VIRTUAL_TERMINAL_PROCESSING.
-// Returns true if VT mode is active.
 bool screen_enable_vt(bool enable);
+void screen_clear(bool clear_console = true);
 
-// Clear internal shadow to blanks and optionally clear the console.
-void screen_clear(bool clear_console=true);
-
-// Stage write of a single line by diffing against the shadow and writing
-// only changed spans. 'text' is padded/truncated to current width.
 void screen_write_line(int y, std::string_view text);
-
-// Patch a small rectangular span (actually a single line span) at (x,y).
 void screen_write_span(int x, int y, std::string_view text);
-
-// Update the cursor position and show/hide as desired.
 void screen_set_cursor(int x, int y, bool visible);
 
-// Return current logical width/height used by the renderer.
 int screen_width();
 int screen_height();
-
-// Shadow buffer accessor (width-sized strings of current on-screen state).
 const std::vector<std::string>& screen_shadow();
 
-// Utility: build a highlighted (inverse) string without ANSI if not available.
-// If vt is true, wraps with ESC[7m/ESC[27m. Otherwise, just returns the text;
-// the caller should draw highlight by redrawing normal + inverted attributes
-// using platform API if desired.
+// === VT100 / ANSI ===
 std::string vt_inverse(std::string_view s, bool vt);
+std::string vt_reset(bool vt = true);
+
+// === 16-color ===
+std::string vt_fg(std::string_view text, int fg_code, bool bold = false, bool vt = true);
+
+// === 256-color ===
+std::string vt_256_fg(unsigned int id, bool vt = true);
+std::string vt_256_bg(unsigned int id, bool vt = true);
+std::string vt_fg_256(std::string_view text, unsigned int fg_id, bool bold = false, bool vt = true);
+std::string vt_fg_bg_256(std::string_view text,
+                         unsigned int fg_id, unsigned int bg_id,
+                         bool bold = false, bool vt = true);
+
+// === Truecolor RGB (24-bit) ===
+std::string vt_rgb_fg(uint8_t r, uint8_t g, uint8_t b, bool vt = true);
+std::string vt_rgb_bg(uint8_t r, uint8_t g, uint8_t b, bool vt = true);
+
+std::string vt_fg_rgb(std::string_view text,
+                      uint8_t r, uint8_t g, uint8_t b,
+                      bool bold = false, bool vt = true);
+
+std::string vt_fg_bg_rgb(std::string_view text,
+                         uint8_t fg_r, uint8_t fg_g, uint8_t fg_b,
+                         uint8_t bg_r, uint8_t bg_g, uint8_t bg_b,
+                         bool bold = false, bool vt = true);
 
 } // namespace dli

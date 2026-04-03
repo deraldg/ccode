@@ -10,11 +10,20 @@ namespace xindex {
 // Simple cursor interface returning a stream of (Key, RecNo)
 struct Cursor {
     virtual ~Cursor() = default;
-    // Position to the first record in the cursor's range
+
+    // Position to the first record in the cursor's range.
     // Returns false if empty. On true, fills out parameters.
     virtual bool first(Key& outKey, RecNo& outRec) = 0;
-    // Advance; same return contract as first()
+
+    // Advance forward; same return contract as first()
     virtual bool next(Key& outKey, RecNo& outRec) = 0;
+
+    // Position to the last record in the cursor's range.
+    // Returns false if empty. On true, fills out parameters.
+    virtual bool last(Key& outKey, RecNo& outRec) = 0;
+
+    // Advance backward; same return contract as first()
+    virtual bool prev(Key& outKey, RecNo& outRec) = 0;
 };
 
 struct IIndexBackend {

@@ -1,28 +1,66 @@
 #include <sstream>
 #include <iostream>
-#include "xbase.hpp"
-#include "cli/settings.hpp"
+#include <cstdint>
 
-using cli::Settings;
+#include "xbase.hpp"
+#include "cli/nav_select.hpp"
+#include "cli/settings.hpp"
 
 void cmd_SKIP(xbase::DbArea& A, std::istringstream& in)
 {
-    if (!A.isOpen()) { std::cout << "SKIP: no file open.\n"; return; }
+    if (!A.isOpen()) {
+        std::cout << "SKIP: no file open.\n";
+        return;
+    }
 
     int n = 1;
-    if (!(in >> n)) { in.clear(); } // default +1
-
-    const bool hide_deleted = Settings::instance().deleted_on.load(); // ON means HIDE
-    int steps = (n >= 0 ? n : -n);
-    int dir   = (n >= 0 ? +1 : -1);
-
-    bool ok = true;
-    while (steps-- > 0) {
-        if (!(ok = A.skip(dir))) break;
-        if (hide_deleted) {
-            while (ok && A.isDeleted()) ok = A.skip(dir);
-            if (!ok) break;
-        }
+    if (!(in >> n)) {
+        n = 1;
     }
-    if (!ok) std::cout << "SKIP: hit boundary.\n";
+
+    const bool talk = cli::Settings::instance().talk_on.load();
+
+    if (n == 0) {
+        if (!A.readCurrent()) {
+            std::cout << "SKIP: failed to read record.\n";
+            return;
+        }
+        if (talk) std::cout << "Recno: " << A.recno() << "\n";
+        return;
+    }
+
+    int steps = (n >= 0 ? n : -n);
+    const auto step_kind = (n >= 0)
+        ? cli::navsel::Step::Next
+        : cli::navsel::Step::Prior;
+
+    int32_t current = A.recno();
+    int32_t rn = 0;
+    bool moved = false;
+
+    while (steps-- > 0) {
+        rn = cli::navsel::pick_recno(
+            A,
+            cli::navsel::Mode::AutoByFilter,
+            step_kind,
+            current);
+
+        if (rn <= 0) {
+            if (!moved) {
+                std::cout << "SKIP: at end.\n";
+                return;
+            }
+            break;
+        }
+
+        current = rn;
+        moved = true;
+    }
+
+    if (!moved || !A.gotoRec(current) || !A.readCurrent()) {
+        std::cout << "SKIP: failed.\n";
+        return;
+    }
+
+    if (talk) std::cout << "Recno: " << A.recno() << "\n";
 }

@@ -1,0 +1,165 @@
+Your Architecture
+
+```
+SchemaWorkspace
+      ↓
+WorkAreaManager
+      ↓
+WorkAreaSlot
+      ↓
+DbArea
+      ↓
+IndexManager / memo runtime
+```
+
+Nothing in the existing engine was disturbed, which is exactly what we wanted for the first pass.
+
+---
+
+## What you should do next (safe progression)
+
+Do **not** refactor the command layer yet. First verify the workspace layer behaves correctly at runtime.
+
+### Quick runtime test
+
+Add a temporary test somewhere safe:
+
+```cpp
+dottalk::workspace::WorkAreaManager wam;
+
+std::string err;
+
+wam.select(0);
+wam.current_slot_ref()->open_table("customers.dbf", &err);
+
+dottalk::workspace::SchemaWorkspace ws;
+
+ws.capture_from_runtime(wam, &err);
+ws.save_file("workspace_test.dts", &err);
+
+wam.close_all(&err);
+
+ws.load_file("workspace_test.dts", &err);
+ws.apply_to_runtime(wam, &err);
+```
+
+This verifies:
+
+* slot capture
+* DBF reopen
+* cursor restore
+* schema serialization pipeline
+
+without touching commands like `USE` or `SELECT`.
+
+---
+
+## The first command to migrate
+
+Once that test works, move **SCHEMAS SAVE / LOAD** to the new system.
+
+### SCHEMAS SAVE
+
+Instead of manual state capture:
+
+```cpp
+SchemaWorkspace ws;
+ws.capture_from_runtime(workarea_manager, &err);
+ws.save_file(path, &err);
+```
+
+### SCHEMAS LOAD
+
+```cpp
+SchemaWorkspace ws;
+
+ws.load_file(path, &err);
+ws.clear_runtime(workarea_manager, &err);
+ws.apply_to_runtime(workarea_manager, &err);
+```
+
+That immediately centralizes workspace persistence.
+
+---
+
+## Small improvement you already added
+
+This method in `WorkAreaManager` was a good call:
+
+```cpp
+WorkAreaSlot* current_slot_ref();
+```
+
+It simplifies code like this:
+
+Old:
+
+```
+wam.slot(wam.current_slot())->open_table(...)
+```
+
+New:
+
+```
+wam.current_slot_ref()->open_table(...)
+```
+
+This will make the command code **much cleaner later**.
+
+---
+
+## What is still intentionally unfinished
+
+These parts are deferred by design:
+
+* relation restore
+* index/tag restore
+* full schema serialization
+* UI workspace inspector
+* multi-workspace sessions
+
+All of those can now be added **without touching DbArea**.
+
+---
+
+## Architectural note
+
+Seeing your real `DbArea` header confirms something important:
+
+Your engine already had the **correct internal layering**:
+
+```
+DbArea
+   ├─ record buffer
+   ├─ memo handling
+   ├─ index manager
+   └─ cursor state
+```
+
+The workspace layer we just added sits **above that**, which is exactly where session state belongs.
+
+So this integration required **almost no change to the DB engine**, which is a strong sign the architecture is sound.
+
+---
+
+## If you want the next useful tool
+
+The next feature I would add (very small code, very helpful) is a **workspace inspection command**:
+
+```
+WORKSPACE
+```
+
+Output example:
+
+```
+Slot  Alias      Table        Recno   Memo
+----  --------   ----------   -----   ----
+0     CUSTOMERS  customers    142     fpt
+1     ORDERS     orders       12      none
+2     empty
+```
+
+It becomes the easiest way to debug area state.
+
+If you'd like, I can also show you **one improvement to WorkAreaManager that will make SELECT, USE, AREA, and DBAREAS almost trivial wrappers** around the new model.

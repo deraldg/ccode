@@ -1,0 +1,28 @@
+DTSHEMA 2
+AREA 0 | dbf=BUILDING.DBF | index=none | indextype=NONE | tag=none | alias=BUILDING
+AREA 1 | dbf=CLASSES.DBF | index=none | indextype=NONE | tag=none | alias=CLASSES
+AREA 2 | dbf=COURSES.DBF | index=none | indextype=NONE | tag=none | alias=COURSES
+AREA 3 | dbf=DEPT.DBF | index=none | indextype=NONE | tag=none | alias=DEPT
+AREA 4 | dbf=ENROLL.DBF | index=none | indextype=NONE | tag=none | alias=ENROLL
+AREA 5 | dbf=MAJORS.DBF | index=none | indextype=NONE | tag=none | alias=MAJORS
+AREA 6 | dbf=ROOMS.DBF | index=none | indextype=NONE | tag=none | alias=ROOMS
+AREA 7 | dbf=STUD_MAJ.DBF | index=none | indextype=NONE | tag=none | alias=STUD_MAJ
+AREA 8 | dbf=STUDENTS.dbf | index=none | indextype=NONE | tag=none | alias=STUDENTS
+AREA 9 | dbf=TASSIGN.DBF | index=none | indextype=NONE | tag=none | alias=TASSIGN
+AREA 10 | dbf=TEACHERS.dbf | index=none | indextype=NONE | tag=none | alias=TEACHERS
+AREA 11 | dbf=TERMS.DBF | index=none | indextype=NONE | tag=none | alias=TERMS
+RELATION STUDENTS ENROLL ON SID
+RELATION STUDENTS STUD_MAJ ON SID
+RELATION STUDENTS MAJORS ON MAJOR
+RELATION ENROLL CLASSES ON CLS_ID
+RELATION CLASSES COURSES ON CID
+RELATION CLASSES TERMS ON TERM
+RELATION CLASSES ROOMS ON ROOM
+RELATION CLASSES TEACHERS ON TID
+RELATION CLASSES TASSIGN ON CLS_ID
+RELATION COURSES DEPT ON DEPT_ID
+RELATION ROOMS BUILDING ON BLDG
+RELATION TEACHERS DEPT ON DEPT_ID
+RELATION TASSIGN TEACHERS ON TID
+RELATION STUD_MAJ MAJORS ON MAJOR
+RELATION MAJORS DEPT ON DEPT_ID

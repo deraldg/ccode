@@ -1,0 +1,465 @@
+// src/cli/cmd_recordview.cpp
+// RECORDVIEW (readonly) ? RECORD (edit/modify) ? BROWSETV (TV grid)
+// Now with visible selection highlight for the active field/row.
+
+#include "xbase.hpp"
+#include "textio.hpp"
+
+#include <iostream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cctype>
+#include <cstdint> // for int32_t
+
+using namespace xbase;
+
+static inline short S(int v){ return static_cast<short>(v); }
+static std::string trim(std::string s){
+    auto sp=[](unsigned char c){return c==' '||c=='\t'||c=='\r'||c=='\n';};
+    while(!s.empty()&&sp((unsigned char)s.front())) s.erase(s.begin());
+    while(!s.empty()&&sp((unsigned char)s.back()))  s.pop_back();
+    return s;
+}
+
+// Forward to existing REPLACE engine (edit path).
+extern void cmd_REPLACE(xbase::DbArea&, std::istringstream&);
+
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
+  #define Uses_TProgram
+  #define Uses_TRect
+  #define Uses_TScrollBar
+  #define Uses_TScroller
+  #define Uses_TDrawBuffer
+  #define Uses_TWindow
+  #define Uses_TEvent
+  #define Uses_TKeys
+  #define Uses_TScreen
+  #define Uses_TDeskTop
+  #define Uses_TDialog
+  #define Uses_TInputLine
+  #define Uses_TButton
+  #define Uses_TStaticText
+  #include <tvision/tv.h>
+#endif
+
+// ---------- shared helpers ----------
+struct ColSpec { std::string name; int width; };
+
+static std::vector<ColSpec> columnsFrom(const DbArea& a, int maxWidth){
+    std::vector<ColSpec> cols; int used=0;
+    int recw=1; for (int n=std::max(1,a.recCount()); n>9; n/=10) ++recw;
+    used += 1 + 1 + recw + 1;
+    for (auto &f : a.fields()){
+        int w = std::max(1, (int)f.length);
+        if (used + w + 1 > maxWidth) break;
+        cols.push_back({f.name, w}); used += w + 1;
+    }
+    return cols;
+}
+
+static std::string rowAsString(DbArea& a, const std::vector<ColSpec>& cols, int recw, bool del){
+    std::string s; s.push_back(del?'*':' '); s.push_back(' ');
+    std::string r = std::to_string(a.recno());
+    if ((int)r.size() < recw) s.append((size_t)(recw-(int)r.size()), ' ');
+    s += r; s.push_back(' ');
+    for (int i=0;i<(int)cols.size();++i){
+        std::string v = a.get(i+1);
+        if ((int)v.size() > cols[(size_t)i].width) v.resize((size_t)cols[(size_t)i].width);
+        if ((int)v.size() < cols[(size_t)i].width) v.append((size_t)(cols[(size_t)i].width-(int)v.size()), ' ');
+        s += v; s.push_back(' ');
+    }
+    return s;
+}
+
+static std::vector<std::string> recordLines(DbArea& a){
+    std::vector<std::string> lines;
+    lines.push_back(std::string("Record ") + std::to_string(a.recno()));
+    int nameW=0; for (auto& f:a.fields()) nameW=std::max(nameW,(int)f.name.size());
+    auto pad=[&](const std::string& s,int w){ return s + std::string((size_t)std::max(0,w-(int)s.size()),' '); };
+    for (int i=0;i<(int)a.fields().size();++i){
+        std::string v=a.get(i+1); const size_t Limit=120;
+        if (v.size()>Limit){ v.resize(Limit); v+=" ?"; }
+        lines.push_back(" " + pad(a.fields()[(size_t)i].name, nameW) + " : " + v);
+    }
+    if (lines.size()==1) lines.push_back("(no fields)");
+    return lines;
+}
+
+static std::vector<std::string> recordLinesHighlighted(DbArea& a, int hiIdx){
+    auto lines = recordLines(a);
+    if (hiIdx >= 0 && hiIdx+1 < (int)lines.size())
+        lines[(size_t)hiIdx+1][0] = '>'; // leading marker for clarity
+    return lines;
+}
+
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
+// ---------- TV widgets ----------
+class LinesView : public TScroller {
+public:
+    LinesView(const TRect& r,TScrollBar* h,TScrollBar* v):TScroller(r,h,v){
+        options |= ofFramed;
+        options &= ~(ofSelectable|ofFirstClick|ofPreProcess|ofPostProcess); // window handles keys
+        growMode = gfGrowHiX|gfGrowHiY;
+    }
+    void set(std::vector<std::string> lines){
+        lines_=std::move(lines);
+        short w=1; for(auto&s:lines_) w=std::max<short>(w,(short)s.size());
+        setLimit(std::max<short>(S(1),w), std::max<short>(S(1),(short)lines_.size()));
+        drawView();
+    }
+    void setHighlight(int row){ hi_ = std::max(-1,row); drawView(); }
+    void ensureVisible(int row){
+        if(row<0) return;
+        const int top = delta.y;
+        const int bot = delta.y + size.y - 1;
+        if(row < top)       scrollTo(delta.x, S(row));
+        else if(row > bot)  scrollTo(delta.x, S(row - (int)size.y + 1));
+    }
+    void draw() override{
+        TDrawBuffer b;
+        for(short row=0; row<size.y; ++row){
+            const int idx=delta.y+row;
+            std::string text=(idx>=0&&idx<(int)lines_.size())?lines_[(size_t)idx]:std::string();
+            const int sx=(int)size.x;
+            int tlen=(int)text.size();
+            if(tlen<sx) text.append((size_t)(sx-tlen),' '); else if(tlen>sx) text.resize((size_t)sx);
+            const ushort color = getColor(idx==hi_ ? 0x0303 : 0x0301); // 0x0303 = selection
+            b.moveStr(S(0), text.c_str(), color); // cast to short to avoid C4244
+            writeLine(S(0),row,size.x,S(1),b);
+        }
+    }
+private:
+    std::vector<std::string> lines_;
+    int hi_{-1}; // absolute row index within lines_
+};
+
+class GridView : public TScroller {
+public:
+    GridView(const TRect& r,TScrollBar* h,TScrollBar* v):TScroller(r,h,v){
+        options |= ofFramed;
+        options &= ~(ofSelectable|ofFirstClick|ofPreProcess|ofPostProcess);
+        growMode = gfGrowHiX|gfGrowHiY;
+    }
+    void set(std::vector<std::string> lines){
+        lines_=std::move(lines);
+        short w=1; for(auto&s:lines_) w=std::max<short>(w,(short)s.size());
+        setLimit(std::max<short>(S(1),w), std::max<short>(S(1),(short)lines_.size())); drawView();
+    }
+    void setHighlight(int row){ hi_=std::max(-1,row); drawView(); }
+    void ensureVisible(int row){
+        if(row<0) return;
+        const int top = delta.y;
+        const int bot = delta.y + size.y - 1;
+        if(row < top)       scrollTo(delta.x, S(row));
+        else if(row > bot)  scrollTo(delta.x, S(row - (int)size.y + 1));
+    }
+    void draw() override{
+        TDrawBuffer b;
+        for(short row=0; row<size.y; ++row){
+            const int idx=delta.y+row;
+            std::string text=(idx>=0&&idx<(int)lines_.size())?lines_[(size_t)idx]:std::string();
+            const int sx=(int)size.x;
+            int tlen=(int)text.size();
+            if(tlen<sx) text.append((size_t)(sx-tlen),' '); else if(tlen>sx) text.resize((size_t)sx);
+            const ushort color = getColor(idx==hi_ ? 0x0303 : 0x0301);
+            b.moveStr(S(0), text.c_str(), color); // cast to short to avoid C4244
+            writeLine(S(0),row,size.x,S(1),b);
+        }
+    }
+private:
+    std::vector<std::string> lines_;
+    int hi_{-1};
+};
+
+class RecordViewWindow : public TWindow {
+public:
+    RecordViewWindow(DbArea* a,long rec)
+    : TWindow(TRect(0,0,S(60),S(18)),"Record (read-only)",0), TWindowInit(&TWindow::initFrame), a_(a)
+    {
+        flags|=wfGrow|wfZoom; growMode=gfGrowAll;
+        const int sw=TScreen::screenWidth, sh=TScreen::screenHeight;
+        const int w=std::min(std::max(60,sw-6), sw-2);
+        const int h=std::min(std::max(16,sh-6), sh-2);
+        const int L=(sw-w)/2, T=(sh-h)/2;
+        TRect rc(S(L),S(T),S(L+w),S(T+h)); locate(rc);
+
+        const TRect hRect(S(1),S(h-2),S(w-2),S(h-1)), vRect(S(w-2),S(1),S(w-1),S(h-2));
+        auto* hsb=new TScrollBar(hRect); auto* vsb=new TScrollBar(vRect); insert(hsb); insert(vsb);
+
+        const TRect vr(S(1),S(1),S(w-2),S(h-3)); view_=new LinesView(vr,hsb,vsb); insert(view_);
+
+        insert(new TStaticText(TRect(S(1),S(h-3),S(w-2),S(h-2)),
+            "~?/?~ rec   ~PgUp/PgDn/Home/End~   ~Esc~ close"));
+
+        if(a_&&rec>=1&&rec<=a_->recCount()) a_->gotoRec((int32_t)rec);
+        reload();
+    }
+
+    void reload(){ if(!a_) return; a_->readCurrent(); view_->set(recordLines(*a_)); }
+
+    void handleEvent(TEvent& ev) override{
+        TWindow::handleEvent(ev);
+        if(ev.what==evKeyDown && a_){
+            const int32_t total=a_->recCount(); bool moved=false;
+            switch(ev.keyDown.keyCode){
+                case kbPgUp: case kbUp:   moved=a_->gotoRec(std::max<int32_t>(1,a_->recno()-1)); break;
+                case kbPgDn: case kbDown: moved=a_->gotoRec(std::min<int32_t>(total,a_->recno()+1)); break;
+                case kbHome: moved=a_->top(); break;
+                case kbEnd:  moved=a_->bottom(); break;
+                case kbEsc:  close(); clearEvent(ev); return;
+                default: break;
+            }
+            if(moved){ reload(); clearEvent(ev); }
+        }
+    }
+private: DbArea* a_{nullptr}; LinesView* view_{nullptr};
+};
+
+class RecordEditWindow : public TWindow {
+public:
+    explicit RecordEditWindow(DbArea* a)
+    : TWindow(TRect(0,0,S(60),S(18)),"Record (edit)",0), TWindowInit(&TWindow::initFrame), a_(a)
+    {
+        flags|=wfGrow|wfZoom; growMode=gfGrowAll;
+        const int sw=TScreen::screenWidth, sh=TScreen::screenHeight;
+        const int w=std::min(std::max(60,sw-6), sw-2);
+        const int h=std::min(std::max(16,sh-6), sh-2);
+        const int L=(sw-w)/2, T=(sh-h)/2;
+        TRect rc(S(L),S(T),S(L+w),S(T+h)); locate(rc);
+
+        const TRect hRect(S(1),S(h-2),S(w-2),S(h-1)), vRect(S(w-2),S(1),S(w-1),S(h-2));
+        auto* hsb=new TScrollBar(hRect); auto* vsb=new TScrollBar(vRect); insert(hsb); insert(vsb);
+
+        const TRect vr(S(1),S(1),S(w-2),S(h-3)); view_=new LinesView(vr,hsb,vsb); insert(view_);
+
+        insert(new TStaticText(TRect(S(1),S(h-3),S(w-2),S(h-2)),
+            "~?/?~ field   ~Enter~ edit   ~PgUp/PgDn/Home/End~ rec   ~Esc~ close"));
+
+        sel_ = 0;
+        reload();
+    }
+
+    void handleEvent(TEvent& ev) override{
+        TWindow::handleEvent(ev);
+        if(ev.what!=evKeyDown || !a_) return;
+
+        const int32_t total=a_->recCount();
+        bool handled=true, moved=false;
+
+        switch(ev.keyDown.keyCode){
+            case kbUp:   if(sel_>0) --sel_; else { moved=a_->gotoRec(std::max<int32_t>(1,a_->recno()-1)); sel_ = std::max(0, fieldsCount()-1); } break;
+            case kbDown: if(sel_<fieldsCount()-1) ++sel_; else { moved=a_->gotoRec(std::min<int32_t>(total,a_->recno()+1)); sel_=0; } break;
+
+            case kbPgUp: moved=a_->gotoRec(std::max<int32_t>(1, a_->recno()-std::max(1,fieldsCount()))); break;
+            case kbPgDn: moved=a_->gotoRec(std::min<int32_t>(total, a_->recno()+std::max(1,fieldsCount()))); break;
+            case kbHome: moved=a_->top(); sel_=0; break;
+            case kbEnd:  moved=a_->bottom(); sel_=0; break;
+
+            case kbEnter: editCurrentField(); break;
+
+            case kbEsc:  close(); clearEvent(ev); return;
+
+            default: handled=false; break;
+        }
+
+        // Update highlight & visibility after any change
+        view_->setHighlight(sel_+1);
+        view_->ensureVisible(sel_+1);
+
+        if(moved) reload();
+        if(handled) clearEvent(ev);
+    }
+
+private:
+    int fieldsCount() const { return (int)a_->fields().size(); }
+
+    void reload(){
+        if(!a_) return;
+        a_->readCurrent();
+        view_->set(recordLinesHighlighted(*a_, sel_));
+        view_->setHighlight(sel_+1);          // first row is the header
+        view_->ensureVisible(sel_+1);
+    }
+
+    void editCurrentField(){
+        if(!a_ || sel_<0 || sel_>=fieldsCount()) return;
+        const auto& f = a_->fields()[(size_t)sel_];
+
+        std::string cur = a_->get(sel_+1);
+        auto rtrim=[&](std::string& s){ while(!s.empty() && (unsigned char)s.back()==' ') s.pop_back(); };
+        rtrim(cur);
+
+        const int w = 52;
+        TDialog* dlg = new TDialog(TRect(0,0,S(w),S(7)), "Edit Field");
+        dlg->options |= ofCentered;
+
+        TInputLine* in = new TInputLine(TRect(S(2),S(3),S(w-2),S(4)), 255);
+        dlg->insert(in);
+        if(!cur.empty()) in->setData((void*)cur.c_str()); // TVision copies data
+
+        dlg->insert(new TButton(TRect(S(w-20),S(4),S(w-10),S(6)), "~O~K", cmOK, bfDefault));
+        dlg->insert(new TButton(TRect(S(w-10),S(4),S(w-2), S(6)), "~C~ancel", cmCancel, bfNormal));
+
+        ushort res = TProgram::deskTop->execView(dlg);
+        std::string newVal;
+        if(res==cmOK){
+            const char* raw = in->data;
+            newVal = raw ? std::string(raw) : std::string();
+        }
+        destroy(dlg);
+        if(res!=cmOK) return;
+
+        std::ostringstream cmd;
+        cmd << " " << f.name << " WITH ";
+        bool needsQuote = (f.type=='C' || f.type=='D' || f.type=='M');
+        if(needsQuote) cmd << "\"" << newVal << "\"";
+        else cmd << newVal;
+
+        std::istringstream iss(cmd.str());
+        cmd_REPLACE(*a_, iss);
+
+        reload();
+    }
+
+    DbArea* a_{nullptr};
+    LinesView* view_{nullptr};
+    int sel_{0};
+};
+
+class BrowseGridWindow : public TWindow {
+public:
+    explicit BrowseGridWindow(DbArea* a,bool showAll=false)
+    : TWindow(TRect(0,0,S(80),S(20)),"Browse (TV)",0), TWindowInit(&TWindow::initFrame), a_(a), showAll_(showAll)
+    {
+        flags|=wfGrow|wfZoom; growMode=gfGrowAll;
+        const int sw=TScreen::screenWidth, sh=TScreen::screenHeight;
+        const int w=std::min(std::max(80,sw-6), sw-2);
+        const int h=std::min(std::max(20,sh-6), sh-2);
+        const int L=(sw-w)/2, T=(sh-h)/2;
+        TRect rc(S(L),S(T),S(L+w),S(T+h)); locate(rc);
+
+        const TRect hRect(S(1),S(h-2),S(w-2),S(h-1)), vRect(S(w-2),S(1),S(w-1),S(h-2));
+        auto* hsb=new TScrollBar(hRect); auto* vsb=new TScrollBar(vRect); insert(hsb); insert(vsb);
+
+        const TRect vr(S(1),S(1),S(w-2),S(h-3)); view_=new GridView(vr,hsb,vsb); insert(view_);
+
+        insert(new TStaticText(TRect(S(1),S(h-3),S(w-2),S(h-2)),
+            "~?/?/PgUp/PgDn/Home/End~ move   ~Enter~ open   ~A~ ALL   ~R~ refresh   ~Esc~ close"));
+
+        recw_=1; for(int n=std::max(1,a_->recCount()); n>9; n/=10) ++recw_;
+        reload();
+    }
+
+    void handleEvent(TEvent& ev) override{
+        TWindow::handleEvent(ev); if(!a_||ev.what!=evKeyDown) return;
+        const int32_t total=a_->recCount(); const int page=std::max<int>(1, (int)view_->size.y-2); bool handled=true;
+        switch(ev.keyDown.keyCode){
+            case kbHome: cur_=1; break;
+            case kbEnd:  cur_=total; break;
+            case kbUp:   cur_=std::max<int32_t>(1,cur_-1); break;
+            case kbDown: cur_=std::min<int32_t>(total,cur_+1); break;
+            case kbPgUp: cur_=std::max<int32_t>(1,cur_-page); break;
+            case kbPgDn: cur_=std::min<int32_t>(total,cur_+page); break;
+            case kbEnter: openRecord(); break;
+            default: handled=false; break;
+        }
+        if(!handled){
+            const ushort ch=ev.keyDown.charScan.charCode;
+            if(ch=='A'||ch=='a'){ showAll_=!showAll_; reload(); handled=true; }
+            else if(ch=='R'||ch=='r'){ reload(); handled=true; }
+            else if(ch==27){ close(); handled=true; }
+        }
+        if(handled){ clearEvent(ev); }
+    }
+
+private:
+    void openRecord(){ if(cur_<1||cur_>a_->recCount()) return; auto* w=new RecordViewWindow(a_,cur_); TProgram::deskTop->insert(w); w->select(); }
+    void reload(){
+        std::vector<std::string> lines; int maxW=std::max<int>(10, (int)view_->size.x);
+        auto cols=columnsFrom(*a_, maxW);
+        std::string hdr = showAll_ ? "[ALL] " : "      ";
+        hdr += "  "; hdr.append((size_t)recw_,' '); hdr.push_back(' ');
+        for(auto& c:cols){
+            std::string n=c.name;
+            if((int)n.size()>c.width) n.resize((size_t)c.width);
+            if((int)n.size()<c.width) n.append((size_t)(c.width-(int)n.size()), ' ');
+            hdr+=n; hdr.push_back(' ');
+        }
+        lines.push_back(hdr);
+        const int32_t total=a_->recCount();
+        const int rows=std::max<int>(1, (int)view_->size.y-2);
+        int32_t rn=std::max<int32_t>(1, std::min<int32_t>(total, std::max<int32_t>(1, cur_-rows/2)));
+        int printed=0;
+        for(; rn<=total && printed<rows; ++rn){
+            if(!a_->gotoRec(rn) || !a_->readCurrent()) continue;
+            if(a_->isDeleted() && !showAll_) continue;
+            lines.push_back(rowAsString(*a_, cols, recw_, a_->isDeleted()));
+            ++printed;
+        }
+        if(lines.size()==1) lines.push_back("(no rows)");
+        view_->set(std::move(lines));
+        // Optionally: highlight current line (header=0, first row=1). Not tracking row cursor here, leaving unhighlighted.
+    }
+
+    DbArea* a_{nullptr};
+    GridView* view_{nullptr};
+    int recw_{3};
+    int32_t cur_{1};
+    bool showAll_{false};
+};
+#endif // TV
+
+// ---------- CLI fallbacks ----------
+static void cli_record_dump(DbArea& a, long rn){
+    if(rn>=1) a.gotoRec((int32_t)rn);
+    if(!a.readCurrent()){ std::cout<<"(no record)\n"; return; }
+    std::cout<<"Record "<<a.recno()<<"\n";
+    for(int i=0;i<(int)a.fields().size();++i){
+        std::string v=a.get(i+1); const size_t Limit=120; if(v.size()>Limit){ v.resize(Limit); v+=" ?"; }
+        std::cout<<"  "<<a.fields()[(size_t)i].name<<" = "<<v<<"\n";
+    }
+}
+static void cli_browse_hint(){ std::cout<<"(No UI) Use existing CLI BROWSE / BROWSE ALL.\n"; }
+
+// ---------- Commands ----------
+void cmd_RECORDVIEW(DbArea& a, std::istringstream& iss){
+    if(!a.isOpen()){ std::cout<<"No table open.\n"; return; }
+    long rn=0; iss>>rn;
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
+    if(TProgram::application){
+        auto* w=new RecordViewWindow(&a, rn>=1?rn:a.recno());
+        TProgram::deskTop->insert(w); w->select();
+        return;
+    }
+#endif
+    cli_record_dump(a, rn);
+}
+
+void cmd_RECORD(DbArea& a, std::istringstream& iss){
+    if(!a.isOpen()){ std::cout<<"No table open.\n"; return; }
+    std::string peek; std::streampos pos = iss.tellg();
+    if(iss >> peek){ iss.clear(); iss.seekg(pos); cmd_REPLACE(a, iss); return; }
+
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
+    if(TProgram::application){
+        auto* w = new RecordEditWindow(&a);
+        TProgram::deskTop->insert(w); w->select();
+        return;
+    }
+#endif
+    std::cout<<"RECORD (edit): no UI available. Use: RECORD <field> WITH <value>\n";
+}
+
+void cmd_BROWSETV(DbArea& a, std::istringstream& iss){
+    if(!a.isOpen()){ std::cout<<"No table open.\n"; return; }
+    std::string tok; bool all=false; if(iss>>tok) all = textio::ieq(tok,"ALL");
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
+    if(TProgram::application){ auto* w=new BrowseGridWindow(&a, all); TProgram::deskTop->insert(w); w->select(); return; }
+#endif
+    cli_browse_hint();
+}
+
+
+

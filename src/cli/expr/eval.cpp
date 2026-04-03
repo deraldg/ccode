@@ -1,6 +1,11 @@
-#include "dottalk/expr/ast.hpp"
-#include "dottalk/expr/eval.hpp"
+#include "cli/expr/ast.hpp"
+#include "cli/expr/eval.hpp"
+#include "cli/expr/text_compare.hpp"
+#include "predicate_eval.hpp"
+
 #include <cctype>
+#include <optional>
+#include <string>
 
 using namespace dottalk::expr;
 
@@ -20,7 +25,6 @@ static std::string value_as_string(const RecordView& rv, const Expr* e) {
   }
   if (auto ls = dynamic_cast<const LitString*>(e)) return ls->v;
   if (auto ln = dynamic_cast<const LitNumber*>(e)) return std::to_string(ln->v);
-  // generic expr → stringify bool as "1"/"0"
   return e->eval(rv) ? "1" : "0";
 }
 
@@ -50,16 +54,44 @@ bool Cmp::eval(const RecordView& rv) const {
       case CmpOp::GE: return a >= b;
     }
   }
+
   std::string as = value_as_string(rv, lhs.get());
   std::string bs = value_as_string(rv, rhs.get());
+
+  const bool case_on = predx::get_case_sensitive();
+  const auto match = dottalk::expr::compare_text_values(as, bs);
+
   switch (op) {
-    case CmpOp::EQ: return iequals(as, bs);
-    case CmpOp::NE: return !iequals(as, bs);
-    case CmpOp::LT: return up(as) <  up(bs);
-    case CmpOp::LE: return up(as) <= up(bs);
-    case CmpOp::GT: return up(as) >  up(bs);
-    case CmpOp::GE: return up(as) >= up(bs);
+    case CmpOp::EQ:
+      return dottalk::expr::text_match_is_true(match, case_on);
+
+    case CmpOp::NE:
+      return !dottalk::expr::text_match_is_true(match, case_on);
+
+    case CmpOp::LT:
+    case CmpOp::LE:
+    case CmpOp::GT:
+    case CmpOp::GE: {
+      const std::string lhs_exact = dottalk::expr::normalize_text_exact(as);
+      const std::string rhs_exact = dottalk::expr::normalize_text_exact(bs);
+
+      if (case_on) {
+        if (op == CmpOp::LT) return lhs_exact <  rhs_exact;
+        if (op == CmpOp::LE) return lhs_exact <= rhs_exact;
+        if (op == CmpOp::GT) return lhs_exact >  rhs_exact;
+        if (op == CmpOp::GE) return lhs_exact >= rhs_exact;
+      } else {
+        const std::string lhs_fold = dottalk::expr::normalize_text_folded(as);
+        const std::string rhs_fold = dottalk::expr::normalize_text_folded(bs);
+
+        if (op == CmpOp::LT) return lhs_fold <  rhs_fold;
+        if (op == CmpOp::LE) return lhs_fold <= rhs_fold;
+        if (op == CmpOp::GT) return lhs_fold >  rhs_fold;
+        if (op == CmpOp::GE) return lhs_fold >= rhs_fold;
+      }
+    }
   }
+
   return false;
 }
 
@@ -75,7 +107,6 @@ bool BoolBin::eval(const RecordView& rv) const {
 
 bool Not::eval(const RecordView& rv) const { return !inner->eval(rv); }
 
-// ----- Arithmetic -----
 double Arith::evalNumber(const RecordView& rv) const {
   auto L = value_as_number(rv, lhs.get()).value_or(0.0);
   auto R = value_as_number(rv, rhs.get()).value_or(0.0);

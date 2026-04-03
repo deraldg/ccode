@@ -1,0 +1,82 @@
+=== HELP: SET ORDER ===
+Syntax
+  SET ORDER TO <path_or_base> [TAG <tag>] [ASC|DESC]
+
+Description
+  Activates an index order for the current AREA. Works with CNX (multi-tag) and INX (single/multi-tag) containers, and accepts legacy IDX.
+
+Path resolution
+  If <path_or_base> includes an extension, the path is used as given.
+  If no extension, DotTalk++ probes in this order (first hit wins):
+    1) indexes\<base>.cnx
+    2) indexes\<base>.inx
+    3) dbf\<base>.idx   (legacy)
+    4) <dbf_dir>\<base>.{cnx|inx|idx}  (sibling of the DBF; last resort)
+
+Tag selection
+  CNX / multi-tag INX require TAG <tag> unless a default tag exists.
+  If omitted and no default exists, available tags are listed.
+
+Behavior
+  Applies to the current AREA. Performs an implicit GO TOP.
+  AREA status reflects the active order and container, e.g.:
+    Order      : LNAME (ASC) via CNX [indexes/students.cnx]
+    Active tag : LNAME
+
+Examples
+  SET ORDER TO students <TAG> LNAME
+  SET ORDER TO indexes\students <TAG> GENDER
+  SET ORDER TO students ASC <first tag>
+
+Notes
+  Paths shown in banners are relative to the data folder for readability.
+
+--------------------------------------------------------------------
+
+=== HELP: SET INDEX (legacy convenience) ===
+Syntax
+  SET INDEX TO <inx_path_or_base> [TAG <tag>]
+
+Description
+  Convenience for INX/IDX containers. If a CNX container is supplied, it is accepted and treated like SET ORDER TO <that> [TAG ...].
+
+Examples
+  SET INDEX TO students
+  SET INDEX TO indexes\enroll.inx
+
+Notes
+  If multiple tags exist and none is specified, the default tag is used if present; otherwise available tags are listed.
+
+--------------------------------------------------------------------
+
+=== HELP: REINDEX ===
+Syntax
+  REINDEX
+
+Description
+  Rebuilds the active index for the current AREA.
+
+Behavior
+  • If a CNX+TAG is active → rebuild that tag in the CNX (in place).
+  • If an INX is active    → rebuild that INX file (in place).
+  • If no active order:
+      - If indexes\<table>.cnx exists → rebuild its default tag(s) (or all, implementation choice; print what you did).
+      - Else if indexes\<table>.inx exists → rebuild it.
+      - Else if <dbf_dir>\<table>.idx exists → rebuild it.
+      - Else → error: “No index to reindex for <table>.”
+
+Messages (examples)
+  REINDEX: rebuilt tag LNAME in indexes/students.cnx (202 keys)
+  REINDEX: wrote indexes/students.inx  (tag expr: lname, ASC)
+
+--------------------------------------------------------------------
+
+=== HELP: USE — Auto-attach index ===
+Note
+  On USE <table>, DotTalk++ probes and auto-attaches an index in this order:
+    1) indexes\<table>.cnx (preferred)
+    2) indexes\<table>.inx
+    3) <dbf_dir>\<table>.idx (legacy)
+    4) sibling CNX/INX (last resort)
+  A one-line notice is printed, e.g.:
+    Auto-attached index: indexes\students.cnx (TAG LNAME).

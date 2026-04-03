@@ -1,0 +1,252 @@
+Here’s a **full shake-down DotTalk++ script** that hits the big surfaces (SCHEMAS/SELECT/USE/STRUCT/LIST/COUNT/TUP/LOCATE/CALC + all the new date/time functions, plus a **reversible** CALCWRITE test on `GPA`).
+
+Save as something like: `mcc_shakedown.dts`
+
+```text
+&& ------------------------------------------------------------
+&& MCC_SHAKEDOWN.DTS  (DotTalk++ / DotScript)
+&& Assumes your DBFs live under:  dbf\
+&& ------------------------------------------------------------
+
+set echo on
+echo ===== DotTalk++ MCC Shake-Down START =====
+
+&& ---- Clean slate / banner checks ----
+color default
+schemas close
+schemas open dbf
+schemas
+
+echo ===== Basic command sanity =====
+help
+area
+
+&& ---- Quick per-table sanity: open/select/count/peek ----
+echo ===== STUDENTS =====
+select students
+area
+struct
+count
+list 5
+tup
+
+echo ===== TEACHERS =====
+select teachers
+area
+struct
+count
+list 5
+tup
+
+echo ===== COURSES =====
+select courses
+area
+struct
+count
+list 5
+tup
+
+echo ===== CLASSES =====
+select classes
+area
+struct
+count
+list 5
+tup
+
+echo ===== ENROLL =====
+select enroll
+area
+struct
+count
+list 5
+tup
+
+echo ===== DEPT =====
+select dept
+area
+struct
+count
+list 5
+tup
+
+echo ===== BUILDING =====
+select building
+area
+struct
+count
+list 5
+tup
+
+echo ===== ROOMS =====
+select rooms
+area
+struct
+count
+list 5
+tup
+
+echo ===== TERMS =====
+select terms
+area
+struct
+count
+list 5
+tup
+
+echo ===== MAJORS =====
+select majors
+area
+struct
+count
+list 5
+tup
+
+echo ===== STUD_MAJ =====
+select stud_maj
+area
+struct
+count
+list 5
+tup
+
+echo ===== TASSIGN =====
+select tassign
+area
+struct
+count
+list 5
+tup
+
+&& ---- Date/Time shake-down (run against STUDENTS for DOB/ENROLL_D) ----
+echo ===== DATE/TIME FUNCTIONS (STUDENTS) =====
+select students
+list 1
+tup
+
+echo -- Clock calls (no DBF required, but we are open anyway)
+calc date()
+calc today()
+calc time()
+calc now()
+calc datetime()
+
+echo -- Field-driven date algebra
+echo -- (DOB is a D field in STUDENTS)
+calc dob
+calc dob + 1
+calc dob - 1
+calc dateadd(dob, 30)
+calc dateadd(dob, -30)
+
+echo -- Date differences (days)
+calc datediff(date(), dob)
+calc date() - dob
+
+echo -- Text -> Date (CTOD)
+calc ctod(2000-01-01)
+calc ctod("2000/01/01")
+calc ctod(20000101)
+
+echo -- Date + integer days
+calc date() + 30
+calc date() - 30
+
+&& ---- Boolean/predicate shake-down ----
+echo ===== BOOLEAN / PREDICATE SHAKE-DOWN (STUDENTS) =====
+select students
+list 1
+tup
+calc gpa
+calc gpa > 3
+boolean gpa > 3
+calc gpa >= 2 and gpa <= 4
+
+&& ---- String builtins shake-down via CALC TUPLE ----
+echo ===== STRING BUILTINS (CALC TUPLE ...) =====
+select students
+list 1
+tup
+calc tuple upper(lname)
+calc tuple lower(lname)
+calc tuple proper(lname)
+calc tuple left(lname, 3)
+calc tuple right(fname, 2)
+calc tuple alltrim(email)
+calc tuple rtrim(lname)
+calc tuple ltrim(fname)
+
+&& ---- LOCATE shake-down (case-insensitive feel) ----
+echo ===== LOCATE SHAKE-DOWN =====
+select students
+locate for lname = davis
+tup
+locate for lname = taylor
+tup
+
+&& ---- Reversible write test (exercises CALCWRITE record-lock path) ----
+&& NOTE: This changes GPA briefly, then restores it.
+echo ===== REVERSIBLE WRITE TEST (GPA += .01 then -= .01) =====
+select students
+list 1
+tup
+calc gpa
+calc gpa = gpa + 0.01
+calc gpa
+calc gpa = gpa - 0.01
+calc gpa
+tup
+
+&& ---- Color / UI sanity ----
+echo ===== COLOR SANITY =====
+color green
+color amber
+color default
+
+echo ===== DotTalk++ MCC Shake-Down END =====
+quit
+```
+
+## Date/time function syntax rundown (what your new CALC supports)
+
+All are **case-insensitive** in practice:
+
+* **Clock calls**
+
+  * `CALC DATE()` / `CALC TODAY()` → `YYYYMMDD`
+  * `CALC TIME()` → `HHMMSS`
+  * `CALC NOW()` / `CALC DATETIME()` → `YYYYMMDDHHMMSS`
+
+* **Convert text to DBF date**
+
+  * `CALC CTOD(2000-01-01)` → `20000101`
+  * `CALC CTOD("2000/01/01")` → `20000101`
+  * `CALC CTOD(20000101)` → `20000101`
+
+* **Date arithmetic (days)**
+
+  * `CALC <dateExpr> + <intDays>`
+
+    * example: `CALC DOB + 1`
+    * example: `CALC DATE() + 30`
+  * `CALC <dateExpr> - <intDays>`
+
+    * example: `CALC ENROLL_D - 7`
+
+* **DATEADD**
+
+  * `CALC DATEADD(<dateExpr>, <intDays>)`
+
+    * example: `CALC DATEADD(DOB, 30)`
+    * example: `CALC DATEADD(DATE(), -90)`
+
+* **Date difference (days)**
+
+  * `CALC <dateExprA> - <dateExprB>` → integer day count
+
+    * example: `CALC DATE() - DOB`
+  * `CALC DATEDIFF(<dateExprA>, <dateExprB>)` → integer day count
+
+    * example: `CALC DATEDIFF(DATE(), DOB)`
+
+If you want, I can tailor the shake-down script to also stress-test **indexes (INX/CNX)** and **REL tree navigation**, but I need the exact command spellings you’re using today for ORDER/SET ORDER/REL BUILD/REL ON (whatever you settled on).

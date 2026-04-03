@@ -1,3 +1,4 @@
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
 #pragma once
 
 #define Uses_TKeys
@@ -20,3 +21,7 @@
 #include <tvision/tv.h>
 
 // ... your other common STL/system includes as desired
+#else
+// TVision not enabled: header declarations not required in non-TV build.
+
+#endif  // TVISION guard

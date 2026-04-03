@@ -24,3 +24,6 @@ namespace xindex {
 // Map to your DbArea methods now that they return real values.
 #define XINDEX_DB_FILENAME(a)        ((a).filename())
 #define XINDEX_DB_RECORD_LENGTH(a)   ((a).recordLength())
+
+
+

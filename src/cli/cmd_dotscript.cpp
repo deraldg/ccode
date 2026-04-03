@@ -1,267 +1,300 @@
-﻿// src/cli/cmd_dotscript.cpp
-// DotScript runner: DOTSCRIPT <file> [QUIET] [STOPONERROR] [ECHO]
-// Improvements:
-// - Smart finder: tries .dts if missing, ./scripts, exe dir, exe dir/scripts, and parent folders.
-// - Keeps absolute path support intact.
-// - Echo/Quiet/StopOnError flags unchanged.
+// src/commands/cmd_dotscript.cpp
+// DOTSCRIPT runner with TRACE banner + scripts/tests resolver + @file support + one-level subscript limit.
 
+#include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <iostream>
-#include <cctype>
 #include <vector>
-#include <utility>
-#include <filesystem>
-#include <unordered_set>
 
-#ifdef _WIN32
-  #include <windows.h>
-#endif
-
+#include "shell_api.hpp"
 #include "xbase.hpp"
-#include "textio.hpp"
-#include "shell_api.hpp"   // shell_dispatch_line(DbArea&, const std::string&)
 
 using xbase::DbArea;
-namespace fs = std::filesystem;
 
 namespace {
 
-inline bool is_comment_or_blank(const std::string& raw) {
+struct ScopeExit {
+    void (*fn)() = nullptr;
+    ~ScopeExit() { if (fn) fn(); }
+};
+
+static inline std::string ltrim_copy(std::string s) {
     size_t i = 0;
-    while (i < raw.size() && std::isspace(static_cast<unsigned char>(raw[i]))) ++i;
-    if (i >= raw.size()) return true;                 // blank
-    if (raw[i] == '#' || raw[i] == ';') return true; // # ; comments
-    if (i + 1 < raw.size() && raw[i] == '/' && raw[i+1] == '/') return true; // //
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) ++i;
+    s.erase(0, i);
+    return s;
+}
+
+static inline std::string rtrim_copy(std::string s) {
+    while (!s.empty()) {
+        const char c = s.back();
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') s.pop_back();
+        else break;
+    }
+    return s;
+}
+
+static inline std::string trim_copy(std::string s) {
+    return rtrim_copy(ltrim_copy(std::move(s)));
+}
+
+static inline std::string upper_copy(std::string s) {
+    for (char& c : s) {
+        if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
+    }
+    return s;
+}
+
+static inline std::string unquote_copy(std::string s) {
+    s = trim_copy(std::move(s));
+    if (s.size() >= 2) {
+        const char a = s.front();
+        const char b = s.back();
+        if ((a == '"' && b == '"') || (a == '\'' && b == '\'')) {
+            s = s.substr(1, s.size() - 2);
+        }
+    }
+    return trim_copy(std::move(s));
+}
+
+static inline std::string strip_at_prefix(std::string s) {
+    s = trim_copy(std::move(s));
+    if (!s.empty() && s.front() == '@') {
+        s.erase(0, 1);
+        s = trim_copy(std::move(s));
+        s = unquote_copy(std::move(s));
+    }
+    return s;
+}
+
+static inline bool looks_like_comment_or_blank(const std::string& line) {
+    const std::string t = ltrim_copy(line);
+    if (t.empty()) return true;
+    if (t.rfind("*", 0) == 0) return true;
+    if (t.rfind("//", 0) == 0) return true;
+    if (t.rfind("&&", 0) == 0) return true;
+    if (t.rfind(";", 0) == 0) return true;
     return false;
 }
 
-struct Flags {
-    bool quiet = false;        // suppress echo of each line
-    bool stopOnError = false;  // (reserved; QUIT/EXIT already stops)
-    bool echo = false;         // force echo (overrides quiet)
-};
+static inline bool has_extension(const std::string& s) {
+    return std::filesystem::path(s).has_extension();
+}
 
-Flags parse_flags(std::istringstream& iss) {
-    Flags f;
-    std::string w;
-    while (iss >> w) {
-        std::string u = textio::up(w);
-        if (u == "QUIET")        f.quiet = true;
-        else if (u == "STOPONERROR") f.stopOnError = true;
-        else if (u == "ECHO")    f.echo = true;
-        else {
-            // push token back into stream for caller (we advanced one too far)
-            std::string rest;
-            std::getline(iss, rest);
-            std::string merged = w + rest;
-            iss.clear();
-            iss.str(merged);
-            iss.seekg(0);
-            break;
+static std::vector<std::string> build_candidate_specs(const std::string& spec) {
+    std::vector<std::string> out;
+    out.push_back(spec);
+
+    if (!has_extension(spec)) {
+        out.push_back(spec + ".dts");
+    }
+
+    const std::filesystem::path p(spec);
+    const bool no_parent = !p.has_parent_path();
+
+    if (no_parent) {
+        // Priority requested: scripts/ first, then tests/
+        out.push_back((std::filesystem::path("scripts") / spec).string());
+        if (!has_extension(spec)) out.push_back((std::filesystem::path("scripts") / (spec + ".dts")).string());
+
+        out.push_back((std::filesystem::path("tests") / spec).string());
+        if (!has_extension(spec)) out.push_back((std::filesystem::path("tests") / (spec + ".dts")).string());
+    }
+
+    // Dedup preserving order
+    std::vector<std::string> dedup;
+    dedup.reserve(out.size());
+    for (const auto& s : out) {
+        bool seen = false;
+        for (const auto& d : dedup) {
+            if (d == s) { seen = true; break; }
+        }
+        if (!seen) dedup.push_back(s);
+    }
+    return dedup;
+}
+
+static std::optional<std::filesystem::path> resolve_existing_script_path(
+    const std::string& spec,
+    std::string* attempts_out
+) {
+    const auto candidates = build_candidate_specs(spec);
+    std::ostringstream attempts;
+
+    for (const auto& c : candidates) {
+        const auto p = shell_resolve_script_path(c);
+        attempts << "  - " << c << " -> " << p.string() << "\n";
+        if (std::filesystem::exists(p)) {
+            if (attempts_out) *attempts_out = attempts.str();
+            return p;
         }
     }
-    return f;
+
+    if (attempts_out) *attempts_out = attempts.str();
+    return std::nullopt;
 }
 
-#ifdef _WIN32
-static std::string utf8_from_w(const std::wstring& ws) {
-    if (ws.empty()) return {};
-    int size = WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), (int)ws.size(), nullptr, 0, nullptr, nullptr);
-    std::string out(size, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), (int)ws.size(), out.data(), size, nullptr, nullptr);
-    return out;
-}
-#endif
+static thread_local int g_dotscript_depth = 0;
+static bool g_dotscript_trace = false;
+static bool g_trace_banner_printed = false;
 
-static fs::path get_exe_dir() {
-#ifdef _WIN32
-    std::wstring buf;
-    buf.resize(1024);
-    DWORD n = GetModuleFileNameW(nullptr, &buf[0], (DWORD)buf.size());
-    if (n >= buf.size()) {
-        buf.resize(32768);
-        n = GetModuleFileNameW(nullptr, &buf[0], (DWORD)buf.size());
-    }
-    buf.resize(n);
-    fs::path p = fs::path(buf).parent_path();
-    return p;
-#else
-    try {
-        fs::path p = fs::read_symlink("/proc/self/exe").parent_path();
-        return p;
-    } catch (...) {
-        return fs::current_path();
-    }
-#endif
+static void print_usage() {
+    std::cout
+        << "Usage:\n"
+        << "  DOTSCRIPT <file>\n"
+        << "  DOTSCRIPT @<file>\n"
+        << "  DOTSCRIPT TRACE\n"
+        << "  DOTSCRIPT TRACE ON|OFF\n"
+        << "  DOTSCRIPT TRACE <file>\n"
+        << "  DOTSCRIPT TRACE @<file>\n"
+        << "  DOTSCRIPT TRACE ON|OFF <file>\n"
+        << "  DOTSCRIPT TRACE ON|OFF @<file>\n";
 }
 
-static bool has_extension(const std::string& name) {
-    fs::path p(name);
-    return p.has_extension();
+static void maybe_print_trace_banner() {
+    if (g_trace_banner_printed) return;
+    g_trace_banner_printed = true;
+
+    std::cout
+        << "DOTSCRIPT TRACE: resolver search order:\n"
+        << "  1) <typed>\n"
+        << "  2) <typed>.dts (if no extension)\n"
+        << "  3) scripts/<typed>(.dts) (if no parent path)\n"
+        << "  4) tests/<typed>(.dts)   (if no parent path)\n";
 }
 
-static bool exists_file(const fs::path& p) {
-    std::error_code ec;
-    return fs::exists(p, ec) && fs::is_regular_file(p, ec);
-}
+} // namespace
 
-// Build a list of candidate paths in order of preference.
-static std::vector<fs::path> build_candidates(const std::string& rawName) {
-    std::vector<fs::path> out;
-    fs::path name = rawName;
-    bool addDtsVariant = !has_extension(rawName); // if user didn't specify an extension, try .dts too
+void cmd_DOTSCRIPT(DbArea& area, std::istringstream& args)
+{
+    std::string rest;
+    std::getline(args, rest);
+    rest = trim_copy(std::move(rest));
 
-    auto add_in = [&](const fs::path& base) {
-        out.push_back(base / name);
-        if (addDtsVariant) out.push_back(base / (name.string() + ".dts"));
-    };
-
-    // 1) As given (absolute or relative)
-    out.push_back(name);
-    if (addDtsVariant) out.push_back(name.string() + ".dts");
-
-    // 2) Current working directory and ./scripts
-    fs::path cwd = fs::current_path();
-    add_in(cwd);
-    add_in(cwd / "scripts");
-
-    // 3) Executable directory and exeDir/scripts
-    fs::path exeDir = get_exe_dir();
-    add_in(exeDir);
-    add_in(exeDir / "scripts");
-
-    // 4) Walk up parent folders (up to 5 levels) from CWD, try parent and parent/scripts
-    fs::path cur = cwd;
-    for (int i = 0; i < 5; ++i) {
-        cur = cur.parent_path();
-        if (cur.empty() || cur == cur.parent_path()) break;
-        add_in(cur);
-        add_in(cur / "scripts");
-    }
-
-    // De-duplicate while preserving order (don't require files to exist).
-    std::unordered_set<std::string> seen;
-    std::vector<fs::path> uniq;
-    uniq.reserve(out.size());
-    for (const auto& p : out) {
-        // Normalize lexically (no FS access).
-        std::string k = p.lexically_normal().generic_string();
-        if (seen.insert(k).second) uniq.push_back(p);
-    }
-    return uniq;
-}
-
-static std::pair<bool, fs::path> find_script_file(const std::string& userArg, std::vector<fs::path>* tried = nullptr) {
-    auto candidates = build_candidates(userArg);
-    for (const auto& p : candidates) {
-        if (tried) tried->push_back(p);
-        if (exists_file(p)) {
-            std::error_code ec;
-            // Use weakly_canonical when possible; otherwise fall back to absolute.
-            fs::path can = fs::weakly_canonical(p, ec);
-            if (ec) can = fs::absolute(p, ec);
-            return {true, can};
-        }
-    }
-    return {false, {}};
-}
-
-} // anon
-
-// DOTSCRIPT <file> [QUIET] [STOPONERROR] [ECHO]
-void cmd_DOTSCRIPT(DbArea& A, std::istringstream& iss) {
-    // Parse entire tail first (we allow flags before/after file)
-    std::string tail; std::getline(iss, tail);
-    tail = textio::trim(tail);
-    if (tail.empty()) {
-        std::cout << "Usage: DOTSCRIPT <file> [QUIET] [STOPONERROR] [ECHO]\n";
+    if (rest.empty()) {
+        print_usage();
         return;
     }
 
-    auto run_with = [&](const std::string& filename, Flags f) {
-        if (f.echo) f.quiet = false;
+    bool trace_for_this_run = g_dotscript_trace;
+    std::string file_spec;
 
-        std::vector<fs::path> tried;
-        auto [ok, path] = find_script_file(filename, &tried);
-        if (!ok) {
-            std::cout << "DOTSCRIPT: cannot find '" << filename << "'.\n";
-            std::cout << "  Tried:\n";
-            for (const auto& p : tried) std::cout << "    " << p.string() << "\n";
-            return;
-        }
-
-        std::ifstream in(path);
-        if (!in) { std::cout << "DOTSCRIPT: cannot open '" << path.string() << "'.\n"; return; }
-
-        std::size_t lineNo = 0, ran = 0, skipped = 0, failed = 0;
-        std::string line;
-        while (std::getline(in, line)) {
-            ++lineNo;
-            if (is_comment_or_blank(line)) { ++skipped; continue; }
-            std::string trimmed = textio::trim(line);
-            if (f.echo || (!f.quiet)) {
-                std::cout << "[dts:" << lineNo << "] " << trimmed << "\n";
-            }
-            bool okline = shell_dispatch_line(A, trimmed);
-            if (!okline) { std::cout << "DOTSCRIPT: terminated by QUIT/EXIT at line " << lineNo << ".\n"; break; }
-            ++ran;
-        }
-        std::cout << "DOTSCRIPT: file='" << path.string() << "' ran=" << ran
-                  << " skipped=" << skipped << " failed=" << failed << "\n";
-    };
-
-    // Pass 1: flags then filename
     {
-        std::istringstream pass1(tail);
-        Flags f = parse_flags(pass1);
-        std::string tok;
-        if (pass1 >> std::ws && pass1.peek() == '"') {
-            pass1.get();
-            std::getline(pass1, tok, '"');
-        } else {
-            pass1 >> tok;
-        }
-        if (!tok.empty()) {
-            std::string after; std::getline(pass1, after);
-            std::istringstream pass1b(after);
-            Flags f2 = parse_flags(pass1b);
-            f.quiet       = (f.quiet       || f2.quiet);
-            f.stopOnError = (f.stopOnError || f2.stopOnError);
-            f.echo        = (f.echo        || f2.echo);
-            run_with(tok, f);
+        std::istringstream ss(rest);
+        std::string t1;
+        ss >> t1;
+
+        if (t1.empty()) {
+            print_usage();
             return;
+        }
+
+        const std::string t1u = upper_copy(t1);
+
+        if (t1u == "TRACE") {
+            std::string t2;
+            if (!(ss >> t2) || t2.empty()) {
+                std::cout << "DOTSCRIPT TRACE is " << (g_dotscript_trace ? "ON" : "OFF") << "\n";
+                print_usage();
+                return;
+            }
+
+            const std::string t2u = upper_copy(t2);
+
+            if (t2u == "ON" || t2u == "OFF") {
+                g_dotscript_trace = (t2u == "ON");
+                trace_for_this_run = g_dotscript_trace;
+
+                std::string tail;
+                std::getline(ss, tail);
+                tail = strip_at_prefix(unquote_copy(std::move(tail)));
+                if (tail.empty()) {
+                    std::cout << "DOTSCRIPT TRACE is now " << (g_dotscript_trace ? "ON" : "OFF") << "\n";
+                    return;
+                }
+                file_spec = tail;
+            } else {
+                // TRACE <file...> => run once with trace ON; global unchanged.
+                trace_for_this_run = true;
+
+                std::string tail;
+                std::getline(ss, tail);
+                tail = trim_copy(std::move(tail));
+
+                std::string joined = t2;
+                if (!tail.empty()) joined += " " + tail;
+
+                file_spec = strip_at_prefix(unquote_copy(std::move(joined)));
+            }
+        } else {
+            // DOTSCRIPT <file...> or DOTSCRIPT @<file...>
+            file_spec = strip_at_prefix(unquote_copy(std::move(rest)));
         }
     }
 
-    // Pass 2: filename then flags
-    {
-        std::istringstream pass2(tail);
-        std::string tok;
-        if (pass2 >> std::ws && pass2.peek() == '"') {
-            pass2.get();
-            std::getline(pass2, tok, '"');
-        } else {
-            pass2 >> tok;
+    if (file_spec.empty()) {
+        print_usage();
+        return;
+    }
+
+    // One-level controlled subscript: allow main + 1 subscript; block deeper.
+    if (g_dotscript_depth >= 2) {
+        std::cout << "DOTSCRIPT: nesting limit reached (max 1 subscript).\n";
+        return;
+    }
+
+    if (trace_for_this_run) {
+        maybe_print_trace_banner();
+    }
+
+    std::string attempts;
+    const auto resolved = resolve_existing_script_path(file_spec, &attempts);
+    if (!resolved) {
+        std::cout << "DOTSCRIPT: script not found.\n" << attempts;
+        return;
+    }
+
+    if (trace_for_this_run) {
+        std::cout << "DOTSCRIPT TRACE: resolved: " << resolved->string() << "\n";
+    }
+
+    const bool as_subscript = shell_script_active();
+
+    std::string push_err;
+    if (!shell_script_push(*resolved, as_subscript, &push_err)) {
+        std::cout << "DOTSCRIPT: " << push_err << ": " << resolved->string() << "\n";
+        return;
+    }
+
+    ScopeExit pop_guard{[] { shell_script_pop(); }};
+    ++g_dotscript_depth;
+    ScopeExit depth_guard{[] { --g_dotscript_depth; }};
+
+    std::ifstream in(*resolved, std::ios::binary);
+    if (!in) {
+        std::cout << "DOTSCRIPT: unable to open '" << resolved->string() << "'\n";
+        return;
+    }
+
+    std::string line;
+    size_t lineno = 0;
+
+    while (std::getline(in, line)) {
+        ++lineno;
+
+        const std::string trimmed = trim_copy(line);
+        if (looks_like_comment_or_blank(trimmed)) continue;
+
+        if (trace_for_this_run) {
+            std::cout << resolved->string() << ":" << lineno << "> " << trimmed << "\n";
         }
-        if (tok.empty()) {
-            std::cout << "Usage: DOTSCRIPT <file> [QUIET] [STOPONERROR] [ECHO]\n";
-            return;
+
+        if (!shell_execute_line(area, trimmed)) {
+            std::cout << "DOTSCRIPT: " << resolved->string() << ":" << lineno
+                      << ": Unknown command: " << trimmed << "\n";
         }
-        std::string after; std::getline(pass2, after);
-        std::istringstream flagss(after);
-        Flags f = parse_flags(flagss);
-        run_with(tok, f);
     }
 }
-
-// Self-register with the command registry
-#include "command_registry.hpp"
-static bool s_registered = [](){
-    dli::registry().add("DOTSCRIPT", &cmd_DOTSCRIPT);
-    dli::registry().add("RUN",       &cmd_DOTSCRIPT);
-    dli::registry().add("DO",        &cmd_DOTSCRIPT);
-    return true;
-}();
-

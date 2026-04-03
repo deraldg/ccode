@@ -1,0 +1,27 @@
+* ============================================================
+* SQLITE_SMOKE.DTS
+* Basic smoke test for DotTalk++ SQLITE command.
+* - Creates an in-memory DB, makes a table, inserts a few rows, SELECTs, then closes.
+* Keep ASCII only.
+* ============================================================
+
+ECHO ===== SQLITE SMOKE START =====
+
+SQLITE VERSION
+
+* Open in-memory
+SQLITE OPEN :memory:
+
+* Create + insert
+SQLITE EXEC CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT, n INTEGER);
+SQLITE EXEC INSERT INTO t (name, n) VALUES ('alpha', 10);
+SQLITE EXEC INSERT INTO t (name, n) VALUES ('bravo', 20);
+SQLITE EXEC INSERT INTO t (name, n) VALUES ('charlie', 30);
+
+* Query
+SQLITE SELECT SELECT id, name, n FROM t ORDER BY id;
+
+* Close
+SQLITE CLOSE
+
+ECHO ===== SQLITE SMOKE END =====

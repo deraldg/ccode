@@ -1,0 +1,16 @@
+DTSHEMA 2
+AREA 0 | dbf=BUILDING.DBF | index=none | indextype=NONE | tag=none | alias=BUILDING
+AREA 1 | dbf=CLASSES.DBF | index=none | indextype=NONE | tag=none | alias=CLASSES
+AREA 2 | dbf=COURSES.DBF | index=none | indextype=NONE | tag=none | alias=COURSES
+AREA 3 | dbf=DEPT.DBF | index=none | indextype=NONE | tag=none | alias=DEPT
+AREA 4 | dbf=ENROLL.DBF | index=none | indextype=NONE | tag=none | alias=ENROLL
+AREA 5 | dbf=LOCKTEST.dbf | index=none | indextype=NONE | tag=none | alias=LOCKTEST
+AREA 6 | dbf=MAJORS.DBF | index=none | indextype=NONE | tag=none | alias=MAJORS
+AREA 7 | dbf=ROOMS.DBF | index=none | indextype=NONE | tag=none | alias=ROOMS
+AREA 8 | dbf=STUD_MAJ.DBF | index=none | indextype=NONE | tag=none | alias=STUD_MAJ
+AREA 9 | dbf=STUDENTS.dbf | index=STUDENTS.cdx | indextype=CDX | tag=LNAME | alias=STUDENTS
+AREA 10 | dbf=TASSIGN.DBF | index=none | indextype=NONE | tag=none | alias=TASSIGN
+AREA 11 | dbf=TEACHERS.dbf | index=none | indextype=NONE | tag=none | alias=TEACHERS
+AREA 12 | dbf=TERMS.DBF | index=none | indextype=NONE | tag=none | alias=TERMS
+RELATION STUDENTS ENROLL ON SID
+RELATION ENROLL CLASSES ON CLS_ID

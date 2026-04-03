@@ -1,0 +1,35 @@
+schemas close
+* Open both tables (use explicit aliases so SELECT by name works)
+SELECT 0
+USE .\help\commands ALIAS commands
+SELECT 1
+USE .\help\cmd_args ALIAS cmd_args
+
+* Parent: index and order on COMMAND
+SELECT commands
+INDEX ON COMMAND TAG CMDPs
+SETINDEX CMDP.inx
+* SETORDER CMDP
+
+* Child: index and order on COMMAND
+SELECT cmd_args
+INDEX ON COMMAND TAG CMDA
+SETINDEX CMDA.inx
+* SETORDER CMDA
+
+* Wire relation: parent (commands) -> child (cmd_args)
+SELECT commands
+* SET RELATIONS TO COMMAND INTO cmd_args
+SET RELATIONS ADD COMMANDS CMD_ARGS ON COMMAND
+
+* Sanity checks
+DISPLAY
+SELECT cmd_args
+LIST FOR COMMAND = APPEND   
+
+* Try a different parent row; child should auto-follow
+SELECT commands
+SEEK COMMAND = "ZAP"
+DISPLAY
+SELECT cmd_args
+SL FOR COMMAND =  ZAP

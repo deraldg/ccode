@@ -1,0 +1,1458 @@
+Below is the **full source bundle for the final adapter-phase wrap-up**.
+
+Included:
+
+* `include/browser/browser.hpp`
+* `include/browser/browser_snapshot.hpp`
+* `include/browser/browser_builders.hpp`
+* `include/browser/browser_render_console.hpp`
+* `include/browser/browser_relation_adapter.hpp`
+* `src/browser/browser_render_console.cpp`
+* `src/browser/browser_relation_adapter.cpp`
+* `src/browser/browser_builders.cpp`
+
+This is the corrected, internally consistent phase state:
+
+* browser subsystem root header is in place
+* snapshot/request/result types are pinned
+* console renderer is complete
+* builder orchestrates root/order/tree/path/columns/enumeration/summary
+* relation adapter owns the tree/enumeration seam
+* `RawRelationEdge` is present and ready to map to the real relation registry
+* enumeration is still stubbed intentionally until you extract the non-printing `REL ENUM` path
+
+---
+
+## `include/browser/browser.hpp`
+
+```cpp
+// include/browser/browser.hpp
+#pragma once
+
+// ERSATZ / RBROWSE browser subsystem root header.
+//
+// Public surface:
+//   - snapshot/request types
+//   - builder entry points
+//   - console renderer entry points
+//   - relation adapter boundary
+
+#include "browser/browser_snapshot.hpp"
+#include "browser/browser_builders.hpp"
+#include "browser/browser_render_console.hpp"
+#include "browser/browser_relation_adapter.hpp"
+```
+
+---
+
+## `include/browser/browser_snapshot.hpp`
+
+```cpp
+// include/browser/browser_snapshot.hpp
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace browser
+{
+    struct TypeMeta
+    {
+        std::string code;      // "C", "N", "D", etc.
+        std::string name;      // "Character", "Numeric", etc.
+
+        bool is_numeric = false;
+        bool is_text = false;
+        bool is_date = false;
+        bool is_logical = false;
+        bool is_memo = false;
+    };
+
+    struct FieldMeta
+    {
+        std::string name;
+        TypeMeta type;
+        int length = 0;
+        int decimals = 0;
+        std::string source;
+    };
+
+    struct RecordSnapshot
+    {
+        std::string alias;
+        std::string dbf_path;
+        int recno = 0;
+        bool bof = false;
+        bool eof = false;
+        bool deleted = false;
+
+        std::vector<FieldMeta> fields;
+        std::vector<std::string> values;
+    };
+
+    struct RelationNode
+    {
+        std::string parent_alias;
+        std::string child_alias;
+        std::string on_expr;
+        std::vector<RelationNode> children;
+    };
+
+    struct RelationTreeSnapshot
+    {
+        std::string root_alias;
+        std::vector<RelationNode> links;
+    };
+
+    struct DescendantCount
+    {
+        std::string alias;
+        int count = 0;
+    };
+
+    struct DescendantSummary
+    {
+        std::vector<DescendantCount> counts;
+    };
+
+    struct TupleColumnMeta
+    {
+        std::string source_alias;
+        std::string expr;
+        std::string label;
+        TypeMeta type;
+        int width = 0;
+        int decimals = 0;
+    };
+
+    struct TupleRow
+    {
+        std::vector<std::string> cells;
+    };
+
+    struct OrderSnapshot
+    {
+        bool has_order = false;
+        std::string container_path;
+        std::string tag_name;
+        std::string direction;
+        bool physical_fallback = false;
+    };
+
+    struct BrowserRequest
+    {
+        std::string root_alias;
+        std::vector<std::string> path_aliases;
+        std::vector<std::string> column_exprs;
+        int limit = 10;
+
+        bool move_next = false;
+        bool move_prev = false;
+        bool move_top = false;
+        bool move_bottom = false;
+        bool refresh_only = false;
+
+        bool walk_mode = false;
+        int walk_count = 0;
+        int walk_limit = 10;
+    };
+
+    struct BrowserSnapshot
+    {
+        std::string command_name = "ERSATZ";
+
+        RecordSnapshot root;
+        RelationTreeSnapshot relation_tree;
+        DescendantSummary descendant_summary;
+        OrderSnapshot order;
+
+        std::vector<std::string> path_aliases;
+        std::vector<TupleColumnMeta> columns;
+        std::vector<TupleRow> rows;
+
+        int limit = 10;
+        int rows_shown = 0;
+
+        std::vector<std::string> warnings;
+        std::string status = "OK";
+    };
+
+    struct WalkSnapshot
+    {
+        std::vector<BrowserSnapshot> frames;
+        std::vector<std::string> warnings;
+        std::string status = "OK";
+    };
+}
+```
+
+---
+
+## `include/browser/browser_builders.hpp`
+
+```cpp
+// include/browser/browser_builders.hpp
+#pragma once
+
+#include "xbase.hpp"
+#include "browser/browser_snapshot.hpp"
+
+namespace browser
+{
+    bool build_browser_snapshot(xbase::DbArea& current_area,
+                                const BrowserRequest& req,
+                                BrowserSnapshot& out);
+
+    bool build_walk_snapshot(xbase::DbArea& current_area,
+                             const BrowserRequest& req,
+                             WalkSnapshot& out);
+}
+```
+
+---
+
+## `include/browser/browser_render_console.hpp`
+
+```cpp
+// include/browser/browser_render_console.hpp
+#pragma once
+
+#include "browser/browser_snapshot.hpp"
+
+namespace browser
+{
+    void render_browser_snapshot_console(const BrowserSnapshot& snap);
+    void render_walk_snapshot_console(const WalkSnapshot& walk);
+}
+```
+
+---
+
+## `include/browser/browser_relation_adapter.hpp`
+
+```cpp
+// include/browser/browser_relation_adapter.hpp
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include "browser/browser_snapshot.hpp"
+#include "xbase.hpp"
+
+namespace browser
+{
+    struct EnumRequest
+    {
+        std::string root_alias;
+        std::vector<std::string> path_aliases;
+        std::vector<TupleColumnMeta> columns;
+        int limit = 10;
+    };
+
+    struct EnumResult
+    {
+        std::vector<TupleRow> rows;
+        std::vector<DescendantCount> counts;
+        std::vector<std::string> warnings;
+        std::string status = "OK";
+    };
+
+    bool relation_build_tree(const std::string& root_alias,
+                             RelationTreeSnapshot& out_tree,
+                             std::vector<std::string>& warnings,
+                             std::string& status);
+
+    bool relation_enumerate(xbase::DbArea& root_area,
+                            const EnumRequest& req,
+                            EnumResult& out);
+}
+```
+
+---
+
+## `src/browser/browser_render_console.cpp`
+
+```cpp
+// src/browser/browser_render_console.cpp
+#include "browser/browser_render_console.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace browser
+{
+    namespace
+    {
+        static int clamp_console_width(int w)
+        {
+            if (w < 1)  return 1;
+            if (w > 20) return 20;
+            return w;
+        }
+
+        static bool is_right_aligned(const TupleColumnMeta& col)
+        {
+            return col.type.is_numeric;
+        }
+
+        static std::string pad_left(const std::string& s, int width)
+        {
+            if (width <= 0) return "";
+            if (static_cast<int>(s.size()) >= width) return s;
+            return std::string(static_cast<size_t>(width - static_cast<int>(s.size())), ' ') + s;
+        }
+
+        static std::string pad_right(const std::string& s, int width)
+        {
+            if (width <= 0) return "";
+            if (static_cast<int>(s.size()) >= width) return s;
+            return s + std::string(static_cast<size_t>(width - static_cast<int>(s.size())), ' ');
+        }
+
+        static std::string join_path(const std::vector<std::string>& parts, const std::string& sep)
+        {
+            if (parts.empty()) return "(none)";
+
+            std::ostringstream oss;
+            for (size_t i = 0; i < parts.size(); ++i)
+            {
+                if (i) oss << sep;
+                oss << parts[i];
+            }
+            return oss.str();
+        }
+
+        static std::string format_cell(const std::string& value,
+                                       const TupleColumnMeta& col,
+                                       int width)
+        {
+            if (width <= 0) return "";
+
+            std::string s = value;
+            if (static_cast<int>(s.size()) > width)
+                s.resize(static_cast<size_t>(width));
+
+            return is_right_aligned(col) ? pad_left(s, width)
+                                         : pad_right(s, width);
+        }
+
+        static std::vector<std::string> build_visible_labels(const std::vector<TupleColumnMeta>& cols)
+        {
+            std::map<std::string, int> counts;
+            for (const auto& c : cols)
+                ++counts[c.label];
+
+            std::vector<std::string> out;
+            out.reserve(cols.size());
+
+            for (const auto& c : cols)
+            {
+                const std::string base = c.label.empty() ? c.expr : c.label;
+                if (counts[c.label] > 1 && !c.source_alias.empty())
+                    out.push_back(c.source_alias + "." + base);
+                else
+                    out.push_back(base);
+            }
+
+            return out;
+        }
+
+        static std::vector<int> compute_display_widths(const std::vector<TupleColumnMeta>& cols,
+                                                       const std::vector<TupleRow>& rows,
+                                                       const std::vector<std::string>& labels)
+        {
+            std::vector<int> widths(cols.size(), 1);
+
+            for (size_t i = 0; i < cols.size(); ++i)
+            {
+                int w = cols[i].width;
+                w = std::max(w, static_cast<int>(labels[i].size()));
+
+                for (const auto& row : rows)
+                {
+                    if (i < row.cells.size())
+                        w = std::max(w, static_cast<int>(row.cells[i].size()));
+                }
+
+                widths[i] = clamp_console_width(w);
+            }
+
+            return widths;
+        }
+
+        static void render_header(const BrowserSnapshot& snap)
+        {
+            std::cout << snap.command_name << " Relational Browser\n";
+            std::cout << "ROOT: "
+                      << (snap.root.alias.empty() ? "(none)" : snap.root.alias)
+                      << "  RECNO: " << snap.root.recno << "\n";
+            std::cout << "PATH: " << join_path(snap.path_aliases, " -> ") << "\n";
+            std::cout << "LIMIT: " << snap.limit << "\n";
+
+            if (snap.order.has_order)
+            {
+                std::cout << "ORDER: "
+                          << (snap.order.container_path.empty() ? "(container?)" : snap.order.container_path);
+
+                if (!snap.order.tag_name.empty())
+                    std::cout << "  TAG " << snap.order.tag_name;
+
+                if (!snap.order.direction.empty())
+                    std::cout << "  " << snap.order.direction;
+
+                if (snap.order.physical_fallback)
+                    std::cout << "  [fallback]";
+
+                std::cout << "\n";
+            }
+            else
+            {
+                std::cout << "ORDER: physical\n";
+            }
+
+            std::cout << "\n";
+        }
+
+        static void render_warnings(const std::vector<std::string>& warnings)
+        {
+            if (warnings.empty())
+                return;
+
+            std::cout << "WARNINGS\n";
+            for (const auto& w : warnings)
+                std::cout << "  - " << w << "\n";
+            std::cout << "\n";
+        }
+
+        static void render_root(const RecordSnapshot& root)
+        {
+            std::cout << "CURRENT ROOT RECORD\n";
+
+            if (root.fields.empty() && root.values.empty())
+            {
+                std::cout << "  (none)\n\n";
+                return;
+            }
+
+            if (root.fields.size() != root.values.size())
+            {
+                std::cout << "  (field/value mismatch)\n\n";
+                return;
+            }
+
+            size_t max_name = 0;
+            for (const auto& f : root.fields)
+                max_name = std::max(max_name, f.name.size());
+
+            for (size_t i = 0; i < root.fields.size(); ++i)
+            {
+                std::cout << "  "
+                          << pad_right(root.fields[i].name, static_cast<int>(max_name))
+                          << " : "
+                          << root.values[i]
+                          << "\n";
+            }
+
+            std::cout << "\n";
+        }
+
+        static void render_relation_node(const RelationNode& node, int depth)
+        {
+            std::string indent(static_cast<size_t>(depth * 3), ' ');
+            std::cout << indent << "-> " << node.child_alias;
+
+            if (!node.on_expr.empty())
+                std::cout << "   ON " << node.on_expr;
+
+            std::cout << "\n";
+
+            for (const auto& child : node.children)
+                render_relation_node(child, depth + 1);
+        }
+
+        static void render_relation_tree(const RelationTreeSnapshot& tree)
+        {
+            std::cout << "RELATION TREE\n";
+
+            if (tree.root_alias.empty() && tree.links.empty())
+            {
+                std::cout << "  (none)\n\n";
+                return;
+            }
+
+            std::cout << "  " << tree.root_alias << "\n";
+            if (tree.links.empty())
+            {
+                std::cout << "  (none)\n\n";
+                return;
+            }
+
+            for (const auto& link : tree.links)
+                render_relation_node(link, 1);
+
+            std::cout << "\n";
+        }
+
+        static void render_descendant_summary(const DescendantSummary& ds)
+        {
+            std::cout << "DESCENDANT SUMMARY\n";
+
+            if (ds.counts.empty())
+            {
+                std::cout << "  (none)\n\n";
+                return;
+            }
+
+            size_t max_alias = 0;
+            for (const auto& c : ds.counts)
+                max_alias = std::max(max_alias, c.alias.size());
+
+            for (const auto& c : ds.counts)
+            {
+                std::cout << "  "
+                          << pad_right(c.alias, static_cast<int>(max_alias))
+                          << " : "
+                          << c.count
+                          << "\n";
+            }
+
+            std::cout << "\n";
+        }
+
+        static void render_tuple_grid(const std::vector<TupleColumnMeta>& cols,
+                                      const std::vector<TupleRow>& rows)
+        {
+            std::cout << "TUPLE GRID\n";
+
+            if (cols.empty())
+            {
+                std::cout << "  (none)\n\n";
+                return;
+            }
+
+            const auto labels = build_visible_labels(cols);
+            const auto widths = compute_display_widths(cols, rows, labels);
+
+            for (size_t i = 0; i < cols.size(); ++i)
+            {
+                if (i) std::cout << ' ';
+                std::cout << pad_right(labels[i], widths[i]);
+            }
+            std::cout << "\n";
+
+            for (const auto& row : rows)
+            {
+                if (row.cells.size() != cols.size())
+                {
+                    std::cout << "(row/column mismatch)\n";
+                    continue;
+                }
+
+                for (size_t i = 0; i < cols.size(); ++i)
+                {
+                    if (i) std::cout << ' ';
+                    std::cout << format_cell(row.cells[i], cols[i], widths[i]);
+                }
+                std::cout << "\n";
+            }
+
+            std::cout << "\n";
+        }
+
+        static void render_footer(const BrowserSnapshot& snap)
+        {
+            std::cout << "ROWS SHOWN: " << snap.rows_shown
+                      << " / LIMIT " << snap.limit
+                      << " | STATUS: " << snap.status
+                      << "\n";
+        }
+    } // namespace
+
+    void render_browser_snapshot_console(const BrowserSnapshot& snap)
+    {
+        render_header(snap);
+        render_warnings(snap.warnings);
+        render_root(snap.root);
+        render_relation_tree(snap.relation_tree);
+        render_descendant_summary(snap.descendant_summary);
+        render_tuple_grid(snap.columns, snap.rows);
+        render_footer(snap);
+    }
+
+    void render_walk_snapshot_console(const WalkSnapshot& walk)
+    {
+        std::cout << "ERSATZ WALK\n\n";
+
+        if (walk.frames.empty())
+        {
+            std::cout << "  (none)\n";
+            if (!walk.warnings.empty())
+            {
+                std::cout << "\nWARNINGS\n";
+                for (const auto& w : walk.warnings)
+                    std::cout << "  - " << w << "\n";
+            }
+            return;
+        }
+
+        for (size_t i = 0; i < walk.frames.size(); ++i)
+        {
+            std::cout << "==== FRAME " << (i + 1) << " ====\n";
+            render_browser_snapshot_console(walk.frames[i]);
+            std::cout << "\n";
+        }
+
+        if (!walk.warnings.empty())
+        {
+            std::cout << "WALK WARNINGS\n";
+            for (const auto& w : walk.warnings)
+                std::cout << "  - " << w << "\n";
+        }
+    }
+}
+```
+
+---
+
+## `src/browser/browser_relation_adapter.cpp`
+
+```cpp
+// src/browser/browser_relation_adapter.cpp
+#include "browser/browser_relation_adapter.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace browser
+{
+    namespace
+    {
+        static std::string upper_copy(const std::string& s)
+        {
+            std::string out = s;
+            for (char& ch : out)
+                ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            return out;
+        }
+
+        // Flat adapter shape used by ERSATZ tree building.
+        struct RawRelationEdge
+        {
+            std::string parent_alias;
+            std::string child_alias;
+            std::string on_expr;
+        };
+
+        static std::vector<RawRelationEdge> fetch_active_relation_edges()
+        {
+            std::vector<RawRelationEdge> out;
+
+            // TODO:
+            // Replace this with your real active relation registry snapshot.
+            //
+            // Example shape:
+            //
+            // const auto& rels = relation_registry::active_relations();
+            // for (const auto& rel : rels)
+            // {
+            //     RawRelationEdge e{};
+            //     e.parent_alias = rel.parent_alias;
+            //     e.child_alias  = rel.child_alias;
+            //     e.on_expr      = rel.on_expr;
+            //     out.push_back(std::move(e));
+            // }
+
+            return out;
+        }
+
+        static std::vector<RawRelationEdge> children_of(
+            const std::vector<RawRelationEdge>& edges,
+            const std::string& parent_alias)
+        {
+            std::vector<RawRelationEdge> out;
+            const std::string up_parent = upper_copy(parent_alias);
+
+            for (const auto& e : edges)
+            {
+                if (upper_copy(e.parent_alias) == up_parent)
+                    out.push_back(e);
+            }
+
+            return out;
+        }
+
+        static RelationNode build_relation_node_recursive(
+            const RawRelationEdge& edge,
+            const std::vector<RawRelationEdge>& edges,
+            std::set<std::pair<std::string, std::string>>& seen_edges)
+        {
+            RelationNode node{};
+            node.parent_alias = edge.parent_alias;
+            node.child_alias = edge.child_alias;
+            node.on_expr = edge.on_expr;
+
+            const auto edge_key = std::make_pair(
+                upper_copy(edge.parent_alias),
+                upper_copy(edge.child_alias));
+
+            if (seen_edges.count(edge_key))
+                return node;
+
+            seen_edges.insert(edge_key);
+
+            const auto kids = children_of(edges, edge.child_alias);
+            node.children.reserve(kids.size());
+
+            for (const auto& child_edge : kids)
+                node.children.push_back(build_relation_node_recursive(child_edge, edges, seen_edges));
+
+            seen_edges.erase(edge_key);
+            return node;
+        }
+
+        static std::vector<RelationNode> build_root_links(
+            const std::string& root_alias,
+            const std::vector<RawRelationEdge>& edges)
+        {
+            std::vector<RelationNode> out;
+            const auto root_children = children_of(edges, root_alias);
+            out.reserve(root_children.size());
+
+            for (const auto& edge : root_children)
+            {
+                std::set<std::pair<std::string, std::string>> seen_edges;
+                out.push_back(build_relation_node_recursive(edge, edges, seen_edges));
+            }
+
+            return out;
+        }
+    } // namespace
+
+    bool relation_build_tree(const std::string& root_alias,
+                             RelationTreeSnapshot& out_tree,
+                             std::vector<std::string>& warnings,
+                             std::string& status)
+    {
+        out_tree = RelationTreeSnapshot{};
+        out_tree.root_alias = root_alias;
+
+        if (root_alias.empty())
+        {
+            warnings.push_back("relation_build_tree: empty root alias.");
+            status = "ERROR";
+            return false;
+        }
+
+        const auto edges = fetch_active_relation_edges();
+        out_tree.links = build_root_links(root_alias, edges);
+
+        if (edges.empty())
+        {
+            if (status.empty())
+                status = "OK";
+            return true;
+        }
+
+        if (out_tree.links.empty())
+        {
+            warnings.push_back("No active relations found from root alias " + root_alias + ".");
+            if (status == "OK")
+                status = "WARN";
+        }
+
+        return true;
+    }
+
+    bool relation_enumerate(xbase::DbArea& root_area,
+                            const EnumRequest& req,
+                            EnumResult& out)
+    {
+        out = EnumResult{};
+
+        // TODO:
+        // Replace this with the extracted non-printing REL ENUM engine path.
+        //
+        // Required final behavior:
+        //   - traverse from current root record in root_area
+        //   - follow req.path_aliases
+        //   - evaluate req.columns[*].expr
+        //   - honor req.limit
+        //   - populate out.rows
+        //   - populate out.counts
+
+        (void)root_area;
+        (void)req;
+
+        out.status = "WARN";
+        out.warnings.push_back("relation_enumerate: REL ENUM data path not wired yet.");
+        return true;
+    }
+}
+```
+
+---
+
+## `src/browser/browser_builders.cpp`
+
+```cpp
+// src/browser/browser_builders.cpp
+#include "browser/browser_builders.hpp"
+
+#include "browser/browser_relation_adapter.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <set>
+#include <string>
+#include <vector>
+
+namespace browser
+{
+    namespace
+    {
+        static std::string upper_copy(const std::string& s)
+        {
+            std::string out = s;
+            for (char& ch : out)
+                ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            return out;
+        }
+
+        static TypeMeta fallback_type_meta_from_code(char type_code)
+        {
+            TypeMeta tm{};
+            const char t = static_cast<char>(std::toupper(static_cast<unsigned char>(type_code)));
+
+            switch (t)
+            {
+            case 'C':
+                tm.code = "C"; tm.name = "Character"; tm.is_text = true; break;
+            case 'N':
+                tm.code = "N"; tm.name = "Numeric"; tm.is_numeric = true; break;
+            case 'F':
+                tm.code = "F"; tm.name = "Float"; tm.is_numeric = true; break;
+            case 'D':
+                tm.code = "D"; tm.name = "Date"; tm.is_date = true; break;
+            case 'L':
+                tm.code = "L"; tm.name = "Logical"; tm.is_logical = true; break;
+            case 'M':
+                tm.code = "M"; tm.name = "Memo"; tm.is_memo = true; break;
+            case 'I':
+                tm.code = "I"; tm.name = "Integer"; tm.is_numeric = true; break;
+            case 'Y':
+                tm.code = "Y"; tm.name = "Currency"; tm.is_numeric = true; break;
+            case 'T':
+                tm.code = "T"; tm.name = "DateTime"; tm.is_date = true; break;
+            case 'B':
+                tm.code = "B"; tm.name = "Double"; tm.is_numeric = true; break;
+            default:
+                tm.code = std::string(1, t ? t : 'C');
+                tm.name = "Character";
+                tm.is_text = true;
+                break;
+            }
+
+            return tm;
+        }
+
+        static int browser_default_width(const TypeMeta& tm, int declared_length, int decimals)
+        {
+            if (declared_length > 0)
+                return declared_length;
+
+            if (tm.is_memo)    return 10;
+            if (tm.is_date)    return (tm.code == "T") ? 16 : 8;
+            if (tm.is_logical) return 1;
+            if (tm.is_numeric) return (decimals > 0) ? 12 : 10;
+            return 12;
+        }
+
+        static int score_default_field_name(const std::string& upper_name,
+                                            const TypeMeta& tm,
+                                            bool prefer_identity)
+        {
+            if (upper_name.empty()) return -100;
+            if (tm.is_memo) return -100;
+
+            int score = 0;
+
+            if (prefer_identity)
+            {
+                if (upper_name == "ID") score += 100;
+                if (upper_name == "SID" || upper_name == "TID" || upper_name == "CID") score += 95;
+                if (upper_name.size() > 3 &&
+                    upper_name.substr(upper_name.size() - 3) == "_ID") score += 95;
+                if (upper_name.find("CODE") != std::string::npos) score += 60;
+            }
+
+            if (upper_name == "NAME") score += 90;
+            if (upper_name == "LNAME") score += 95;
+            if (upper_name == "FNAME") score += 85;
+            if (upper_name == "TITLE") score += 80;
+            if (upper_name == "GRADE") score += 75;
+            if (upper_name == "SEC") score += 70;
+            if (upper_name == "DESC" || upper_name == "DESCRIPTION") score += 70;
+
+            if (tm.is_text) score += 20;
+            else if (tm.is_numeric) score += 10;
+            else if (tm.is_date) score += 8;
+            else if (tm.is_logical) score -= 10;
+
+            return score;
+        }
+
+        struct FieldCandidate
+        {
+            int index = -1;
+            std::string name;
+            TypeMeta type;
+            int identity_score = 0;
+            int display_score = 0;
+        };
+
+        static xbase::DbArea* resolve_root_area(xbase::DbArea& current_area,
+                                                const BrowserRequest& req,
+                                                std::vector<std::string>& warnings,
+                                                std::string& status)
+        {
+            if (req.root_alias.empty())
+                return &current_area;
+
+            // TODO:
+            // Replace with real workspace scan by alias.
+            if (upper_copy(req.root_alias) == upper_copy(current_area.alias()))
+                return &current_area;
+
+            warnings.push_back("Root alias not found: " + req.root_alias);
+            status = "ERROR";
+            return nullptr;
+        }
+
+        static xbase::DbArea* resolve_area_by_alias(xbase::DbArea& current_area,
+                                                    const std::string& alias)
+        {
+            // TODO:
+            // Replace with real workspace scan by alias.
+            if (upper_copy(alias) == upper_copy(current_area.alias()))
+                return &current_area;
+            return nullptr;
+        }
+
+        static bool apply_browser_movement(xbase::DbArea& area,
+                                           const BrowserRequest& req,
+                                           std::vector<std::string>& warnings,
+                                           std::string& status)
+        {
+            const int moves = (req.move_next ? 1 : 0)
+                            + (req.move_prev ? 1 : 0)
+                            + (req.move_top ? 1 : 0)
+                            + (req.move_bottom ? 1 : 0);
+
+            if (req.refresh_only)
+                return true;
+
+            if (moves > 1)
+                warnings.push_back("Multiple movement flags supplied; using first recognized movement.");
+
+            if (req.move_next)      { area.skip(1);  return true; }
+            if (req.move_prev)      { area.skip(-1); return true; }
+            if (req.move_top)       { area.top();    return true; }
+            if (req.move_bottom)    { area.bottom(); return true; }
+
+            (void)status;
+            return true;
+        }
+
+        static bool build_root_snapshot(xbase::DbArea& area,
+                                        RecordSnapshot& out,
+                                        std::vector<std::string>& warnings,
+                                        std::string& status)
+        {
+            out = RecordSnapshot{};
+
+            out.alias = area.alias();
+            out.recno = area.recno();
+            out.bof = area.bof();
+            out.eof = area.eof();
+            out.deleted = area.deleted();
+
+            // If your DbArea has a path getter, wire it here.
+            // out.dbf_path = area.path();
+
+            const auto defs = area.fields();
+            if (!defs)
+            {
+                warnings.push_back("No field definitions available for root snapshot.");
+                status = "ERROR";
+                return false;
+            }
+
+            out.fields.clear();
+            out.values.clear();
+
+            for (int i = 0; i < static_cast<int>(defs->size()); ++i)
+            {
+                const auto& fd = (*defs)[i];
+
+                FieldMeta fm{};
+                fm.name = fd.name;
+                fm.type = fallback_type_meta_from_code(fd.type);
+                fm.length = fd.length;
+                fm.decimals = fd.decimals;
+                fm.source = out.alias;
+
+                out.fields.push_back(fm);
+
+                // Assumes canonical xbase API: get(1-based index)
+                out.values.push_back(area.get(i + 1));
+            }
+
+            if (out.fields.size() != out.values.size())
+            {
+                warnings.push_back("Root snapshot field/value mismatch.");
+                status = "ERROR";
+                return false;
+            }
+
+            return true;
+        }
+
+        static bool build_order_snapshot(xbase::DbArea& area,
+                                         OrderSnapshot& out,
+                                         std::vector<std::string>& warnings,
+                                         std::string& status)
+        {
+            out = OrderSnapshot{};
+
+            // TODO:
+            // Replace with your real order/tag/container APIs.
+            (void)area;
+            (void)warnings;
+            (void)status;
+
+            out.has_order = false;
+            out.physical_fallback = true;
+            return true;
+        }
+
+        static void longest_path_dfs(const RelationNode& node,
+                                     std::vector<std::string>& current,
+                                     std::vector<std::string>& best)
+        {
+            current.push_back(node.child_alias);
+
+            if (current.size() > best.size())
+                best = current;
+
+            for (const auto& child : node.children)
+                longest_path_dfs(child, current, best);
+
+            current.pop_back();
+        }
+
+        static std::vector<std::string> infer_default_path(const RelationTreeSnapshot& tree)
+        {
+            std::vector<std::string> best;
+            std::vector<std::string> current;
+
+            for (const auto& link : tree.links)
+                longest_path_dfs(link, current, best);
+
+            return best;
+        }
+
+        static bool validate_path_recursive(const std::vector<RelationNode>& nodes,
+                                            const std::vector<std::string>& path,
+                                            size_t index)
+        {
+            if (index >= path.size())
+                return true;
+
+            for (const auto& n : nodes)
+            {
+                if (upper_copy(n.child_alias) == upper_copy(path[index]))
+                    return validate_path_recursive(n.children, path, index + 1);
+            }
+
+            return false;
+        }
+
+        static bool resolve_browser_path(const BrowserRequest& req,
+                                         const RelationTreeSnapshot& tree,
+                                         std::vector<std::string>& resolved_path,
+                                         std::vector<std::string>& warnings,
+                                         std::string& status)
+        {
+            resolved_path.clear();
+
+            if (!req.path_aliases.empty())
+            {
+                if (!validate_path_recursive(tree.links, req.path_aliases, 0))
+                {
+                    warnings.push_back("Requested PATH does not match active relation tree.");
+                    status = "ERROR";
+                    return false;
+                }
+
+                resolved_path = req.path_aliases;
+                return true;
+            }
+
+            resolved_path = infer_default_path(tree);
+            return true;
+        }
+
+        static bool browser_has_column_expr(const std::vector<TupleColumnMeta>& cols,
+                                            const std::string& expr)
+        {
+            for (const auto& c : cols)
+            {
+                if (upper_copy(c.expr) == upper_copy(expr))
+                    return true;
+            }
+            return false;
+        }
+
+        static bool choose_default_fields_for_alias(xbase::DbArea& area,
+                                                    int max_fields,
+                                                    std::vector<int>& out_field_indexes,
+                                                    std::vector<std::string>& warnings,
+                                                    std::string& status)
+        {
+            out_field_indexes.clear();
+
+            const auto defs = area.fields();
+            if (!defs)
+            {
+                warnings.push_back("No field definitions available for default column inference.");
+                status = "WARN";
+                return false;
+            }
+
+            std::vector<FieldCandidate> candidates;
+            candidates.reserve(defs->size());
+
+            for (int i = 0; i < static_cast<int>(defs->size()); ++i)
+            {
+                const auto& fd = (*defs)[i];
+
+                FieldCandidate fc{};
+                fc.index = i;
+                fc.name = fd.name;
+                fc.type = fallback_type_meta_from_code(fd.type);
+
+                const std::string u = upper_copy(fd.name);
+                fc.identity_score = score_default_field_name(u, fc.type, true);
+                fc.display_score  = score_default_field_name(u, fc.type, false);
+
+                candidates.push_back(fc);
+            }
+
+            std::set<int> chosen;
+
+            auto pick_best = [&](bool identity_pass) -> bool
+            {
+                int best_idx = -1;
+                int best_score = -1000000;
+
+                for (const auto& c : candidates)
+                {
+                    if (chosen.count(c.index))
+                        continue;
+
+                    const int score = identity_pass ? c.identity_score : c.display_score;
+                    if (score > best_score)
+                    {
+                        best_score = score;
+                        best_idx = c.index;
+                    }
+                }
+
+                if (best_idx >= 0 && best_score > -100)
+                {
+                    chosen.insert(best_idx);
+                    out_field_indexes.push_back(best_idx);
+                    return true;
+                }
+
+                return false;
+            };
+
+            if (static_cast<int>(out_field_indexes.size()) < max_fields)
+                pick_best(true);
+
+            while (static_cast<int>(out_field_indexes.size()) < max_fields)
+            {
+                if (!pick_best(false))
+                    break;
+            }
+
+            if (static_cast<int>(out_field_indexes.size()) < max_fields)
+            {
+                for (const auto& c : candidates)
+                {
+                    if (chosen.count(c.index))
+                        continue;
+                    if (c.type.is_memo)
+                        continue;
+
+                    chosen.insert(c.index);
+                    out_field_indexes.push_back(c.index);
+
+                    if (static_cast<int>(out_field_indexes.size()) >= max_fields)
+                        break;
+                }
+            }
+
+            return !out_field_indexes.empty();
+        }
+
+        static bool append_default_columns_for_alias(xbase::DbArea& area,
+                                                     const std::string& alias,
+                                                     int max_fields,
+                                                     std::vector<TupleColumnMeta>& out_columns,
+                                                     std::vector<std::string>& warnings,
+                                                     std::string& status)
+        {
+            std::vector<int> picks;
+            if (!choose_default_fields_for_alias(area, max_fields, picks, warnings, status))
+                return false;
+
+            const auto defs = area.fields();
+            if (!defs)
+                return false;
+
+            for (int idx : picks)
+            {
+                if (idx < 0 || idx >= static_cast<int>(defs->size()))
+                    continue;
+
+                const auto& fd = (*defs)[idx];
+
+                TupleColumnMeta col{};
+                col.source_alias = alias;
+                col.expr = alias + "." + fd.name;
+                col.label = fd.name;
+                col.type = fallback_type_meta_from_code(fd.type);
+                col.width = browser_default_width(col.type, fd.length, fd.decimals);
+                col.decimals = fd.decimals;
+
+                if (!browser_has_column_expr(out_columns, col.expr))
+                    out_columns.push_back(col);
+            }
+
+            return true;
+        }
+
+        static bool infer_default_columns(xbase::DbArea& root_area,
+                                          const std::vector<std::string>& path_aliases,
+                                          std::vector<TupleColumnMeta>& out_columns,
+                                          std::vector<std::string>& warnings,
+                                          std::string& status)
+        {
+            out_columns.clear();
+
+            append_default_columns_for_alias(root_area,
+                                             root_area.alias(),
+                                             3,
+                                             out_columns,
+                                             warnings,
+                                             status);
+
+            for (const auto& alias : path_aliases)
+            {
+                xbase::DbArea* child = resolve_area_by_alias(root_area, alias);
+                if (!child)
+                {
+                    warnings.push_back("Could not resolve area for alias " + alias + " during default column inference.");
+                    status = "WARN";
+                    continue;
+                }
+
+                append_default_columns_for_alias(*child,
+                                                 alias,
+                                                 2,
+                                                 out_columns,
+                                                 warnings,
+                                                 status);
+            }
+
+            return !out_columns.empty();
+        }
+
+        static bool resolve_tuple_columns(xbase::DbArea& root_area,
+                                          const std::vector<std::string>& path_aliases,
+                                          const BrowserRequest& req,
+                                          std::vector<TupleColumnMeta>& out_columns,
+                                          std::vector<std::string>& warnings,
+                                          std::string& status)
+        {
+            if (!req.column_exprs.empty())
+                warnings.push_back("Explicit COLUMNS not yet wired; using inferred default columns.");
+
+            return infer_default_columns(root_area, path_aliases, out_columns, warnings, status);
+        }
+
+        static bool build_descendant_summary(xbase::DbArea& root_area,
+                                             const std::vector<std::string>& path_aliases,
+                                             const std::vector<TupleRow>& rows,
+                                             const std::vector<DescendantCount>& counts,
+                                             DescendantSummary& out,
+                                             std::vector<std::string>& warnings,
+                                             std::string& status)
+        {
+            out = DescendantSummary{};
+
+            (void)root_area;
+            (void)warnings;
+            (void)status;
+
+            if (!counts.empty())
+            {
+                out.counts = counts;
+                return true;
+            }
+
+            for (const auto& alias : path_aliases)
+            {
+                DescendantCount dc{};
+                dc.alias = alias;
+                dc.count = rows.empty() ? 0 : static_cast<int>(rows.size());
+                out.counts.push_back(dc);
+            }
+
+            return true;
+        }
+    } // namespace
+
+    bool build_browser_snapshot(xbase::DbArea& current_area,
+                                const BrowserRequest& req,
+                                BrowserSnapshot& out)
+    {
+        out = BrowserSnapshot{};
+        out.limit = (req.limit > 0) ? req.limit : 10;
+        out.status = "OK";
+
+        xbase::DbArea* root_area = resolve_root_area(current_area, req, out.warnings, out.status);
+        if (!root_area)
+            return false;
+
+        if (!apply_browser_movement(*root_area, req, out.warnings, out.status))
+            return false;
+
+        if (!build_root_snapshot(*root_area, out.root, out.warnings, out.status))
+            return false;
+
+        build_order_snapshot(*root_area, out.order, out.warnings, out.status);
+
+        if (!relation_build_tree(out.root.alias, out.relation_tree, out.warnings, out.status))
+            return false;
+
+        if (!resolve_browser_path(req, out.relation_tree, out.path_aliases, out.warnings, out.status))
+            return false;
+
+        if (!resolve_tuple_columns(*root_area, out.path_aliases, req, out.columns, out.warnings, out.status))
+        {
+            out.warnings.push_back("Column resolution failed.");
+            out.status = "ERROR";
+            return false;
+        }
+
+        EnumRequest enum_req{};
+        enum_req.root_alias = root_area->alias();
+        enum_req.path_aliases = out.path_aliases;
+        enum_req.columns = out.columns;
+        enum_req.limit = out.limit;
+
+        EnumResult enum_res{};
+        if (!relation_enumerate(*root_area, enum_req, enum_res))
+        {
+            out.warnings.insert(out.warnings.end(), enum_res.warnings.begin(), enum_res.warnings.end());
+            out.status = enum_res.status.empty() ? "ERROR" : enum_res.status;
+            return false;
+        }
+
+        out.rows = std::move(enum_res.rows);
+        out.warnings.insert(out.warnings.end(), enum_res.warnings.begin(), enum_res.warnings.end());
+
+        if (!enum_res.status.empty() && out.status == "OK")
+            out.status = enum_res.status;
+
+        build_descendant_summary(*root_area,
+                                 out.path_aliases,
+                                 out.rows,
+                                 enum_res.counts,
+                                 out.descendant_summary,
+                                 out.warnings,
+                                 out.status);
+
+        out.rows_shown = static_cast<int>(out.rows.size());
+        if (out.rows_shown > out.limit)
+            out.rows_shown = out.limit;
+
+        if (out.status.empty())
+            out.status = out.warnings.empty() ? "OK" : "WARN";
+
+        return true;
+    }
+
+    bool build_walk_snapshot(xbase::DbArea& current_area,
+                             const BrowserRequest& req,
+                             WalkSnapshot& out)
+    {
+        out = WalkSnapshot{};
+
+        int count = req.walk_count;
+        if (count <= 0)
+        {
+            out.warnings.push_back("WALK count <= 0; nothing to build.");
+            out.status = "WARN";
+            return true;
+        }
+
+        BrowserRequest frame_req = req;
+        frame_req.walk_mode = false;
+        frame_req.limit = (req.walk_limit > 0) ? req.walk_limit : req.limit;
+
+        for (int i = 0; i < count; ++i)
+        {
+            BrowserSnapshot snap{};
+            if (!build_browser_snapshot(current_area, frame_req, snap))
+            {
+                out.warnings.push_back("Failed to build WALK frame " + std::to_string(i + 1) + ".");
+                out.status = "WARN";
+                break;
+            }
+
+            out.frames.push_back(std::move(snap));
+
+            frame_req.refresh_only = false;
+            frame_req.move_next = true;
+            frame_req.move_prev = false;
+            frame_req.move_top = false;
+            frame_req.move_bottom = false;
+        }
+
+        if (out.status.empty())
+            out.status = out.warnings.empty() ? "OK" : "WARN";
+
+        return true;
+    }
+}
+```
+
+---
+
+That wraps the subsystem at this phase cleanly.
+
+The next real integration step is to replace the stub in `fetch_active_relation_edges()` with your active relation registry snapshot.

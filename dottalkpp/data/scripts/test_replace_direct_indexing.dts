@@ -1,0 +1,109 @@
+* test_replace_direct_indexing_clean.dts
+* Shake-down for direct-write indexing:
+* * REPLACE
+* * MULTIREP
+* Simple field-name == tag-name CDX tags only.
+
+ECHO ON
+
+USE students
+SET INDEX TO students
+SET ORDER TO LNAME
+LIST 3
+
+? "BASELINE"
+TOP
+TUP
+LIST 5
+SEEK TAYLOR
+
+? "REPLACE indexed field: LNAME -> TESTNAME1"
+TOP
+REPLACE LNAME WITH TESTNAME1
+LIST 5
+SEEK TESTNAME1
+TUP
+
+? "RESTORE indexed field: LNAME -> TAYLOR"
+REPLACE LNAME WITH TAYLOR
+SEEK TAYLOR
+TUP
+
+? "REPLACE non-indexed field: EMAIL"
+REPLACE EMAIL WITH [test_replace_single@student.mcc.edu](mailto:test_replace_single@student.mcc.edu)
+LIST 5
+SEEK TAYLOR
+TUP
+
+? "MULTIREP indexed field: LNAME -> TESTNAME2"
+TOP
+MULTIREP LNAME WITH TESTNAME2
+LIST 5
+SEEK TESTNAME2
+TUP
+
+? "RESTORE indexed field: LNAME -> TAYLOR"
+MULTIREP LNAME WITH TAYLOR
+SEEK TAYLOR
+TUP
+
+? "MULTIREP non-indexed field: EMAIL"
+MULTIREP EMAIL WITH [test_replace_multi@student.mcc.edu](mailto:test_replace_multi@student.mcc.edu)
+LIST 5
+SEEK TAYLOR
+TUP
+
+? "MULTIREP mixed fields: LNAME + EMAIL"
+TOP
+MULTIREP LNAME WITH TESTNAME3, EMAIL WITH [mixed_update@student.mcc.edu](mailto:mixed_update@student.mcc.edu)
+LIST 5
+SEEK TESTNAME3
+TUP
+
+? "RESTORE mixed indexed field: LNAME -> TAYLOR"
+MULTIREP LNAME WITH TAYLOR
+SEEK TAYLOR
+TUP
+
+? "DESCEND sanity"
+DESCEND
+TOP
+TUP
+BOTTOM
+TUP
+ASCEND
+TOP
+TUP
+
+? "Optional indexed field: FNAME"
+SET ORDER TO FNAME
+TOP
+REPLACE FNAME WITH ZZZTESTFNAME
+LIST 5
+SEEK ZZZTESTFNAME
+TUP
+
+? "RESTORE FNAME"
+REPLACE FNAME WITH QUINN2
+SEEK QUINN2
+TUP
+
+? "Optional indexed field: DOB"
+SET ORDER TO DOB
+TOP
+REPLACE DOB WITH 20991231
+LIST 5
+SEEK 20991231
+TUP
+
+? "RESTORE DOB"
+REPLACE DOB WITH 19921225
+SEEK 19921225
+TUP
+
+SET ORDER TO LNAME
+SEEK TAYLOR
+LIST 5
+AREA
+
+ECHO OFF

@@ -1,0 +1,395 @@
+// src/cli/cmd_calcwrite.cpp
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+#include "xbase.hpp"
+#include "xbase_locks.hpp"
+
+#include "cli/expr/api.hpp"
+#include "cli/expr/ast.hpp"
+#include "cli/expr/fn_date.hpp"
+#include "cli/expr/fn_string.hpp"
+#include "cli/expr/glue_xbase.hpp"
+
+#include "value_normalize.hpp"
+
+#include "cli/settings.hpp"
+#include "cli/table_state.hpp"
+
+// Provided by the interactive shell.
+extern "C" xbase::XBaseEngine* shell_engine(void);
+
+using cli::Settings;
+
+using dottalk::expr::Arith;
+using dottalk::expr::CompileResult;
+using dottalk::expr::Expr;
+using dottalk::expr::LitNumber;
+using dottalk::expr::LitString;
+using dottalk::expr::RecordView;
+
+namespace {
+
+static inline std::string ltrim(std::string s) {
+    size_t i = 0;
+    while (i < s.size() && std::isspace((unsigned char)s[i])) ++i;
+    return s.substr(i);
+}
+static inline std::string rtrim(std::string s) {
+    if (s.empty()) return s;
+    size_t i = s.size();
+    while (i > 0 && std::isspace((unsigned char)s[i - 1])) --i;
+    s.resize(i);
+    return s;
+}
+static inline std::string trim(std::string s) { return rtrim(ltrim(std::move(s))); }
+
+static inline std::string upper(std::string s) {
+    std::transform(
+        s.begin(), s.end(), s.begin(),
+        [](unsigned char c) { return (char)std::toupper(c); });
+    return s;
+}
+
+static bool parse_assignment(const std::string& line, std::string& out_field, std::string& out_expr) {
+    auto pos = line.find('=');
+    if (pos == std::string::npos) return false;
+
+    out_field = trim(line.substr(0, pos));
+    out_expr  = trim(line.substr(pos + 1));
+
+    if (out_field.empty() || out_expr.empty()) return false;
+
+    // Conservative token rules (matches cmd_replace expectations).
+    for (char c : out_field) {
+        if (!(std::isalnum((unsigned char)c) || c == '_' || c == '$')) return false;
+    }
+    return true;
+}
+
+static int field_index_ci(const xbase::DbArea& a, std::string_view name) {
+    const auto& Fs = a.fields();
+    std::string U  = upper(std::string(name));
+    for (int i = 0; i < (int)Fs.size(); ++i) {
+        std::string H = Fs[(size_t)i].name;
+        if (upper(H) == U) return i + 1; // 1-based
+    }
+    return 0;
+}
+
+static int resolve_current_index(xbase::DbArea& A) {
+    xbase::XBaseEngine* eng = shell_engine();
+    if (!eng) return -1;
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        if (&eng->area(i) == &A) return i;
+    }
+    return -1;
+}
+
+static void coerce_numeric_literals_inplace(std::unique_ptr<Expr>& node) {
+    using namespace dottalk::expr;
+    if (!node) return;
+
+    if (auto a = dynamic_cast<Arith*>(node.get())) {
+        coerce_numeric_literals_inplace(a->lhs);
+        coerce_numeric_literals_inplace(a->rhs);
+        return;
+    }
+    if (auto ls = dynamic_cast<LitString*>(node.get())) {
+        auto canon = util::normalize_for_compare('N', 18, 6, ls->v);
+        if (canon) {
+            try {
+                double dv = std::stod(*canon);
+                node.reset(new LitNumber{dv});
+            } catch (...) {
+            }
+        }
+    }
+}
+
+struct EvalResult {
+    enum Kind { K_None, K_Number, K_String, K_Bool } kind = K_None;
+    double number = 0.0;
+    std::string text;
+    bool tf = false;
+};
+
+static EvalResult eval_program(const Expr* prog, const RecordView& rv) {
+    EvalResult er;
+
+    if (auto ln = dynamic_cast<const LitNumber*>(prog)) {
+        er.kind = EvalResult::K_Number;
+        er.number = ln->v;
+        return er;
+    }
+    if (auto ls = dynamic_cast<const LitString*>(prog)) {
+        er.kind = EvalResult::K_String;
+        er.text = ls->v;
+        return er;
+    }
+    if (auto ar = dynamic_cast<const Arith*>(prog)) {
+        try {
+            er.kind = EvalResult::K_Number;
+            er.number = ar->evalNumber(rv);
+            return er;
+        } catch (...) {
+        }
+    }
+
+    try {
+        er.kind = EvalResult::K_Bool;
+        er.tf = prog->eval(rv);
+    } catch (...) {
+        er.kind = EvalResult::K_None;
+    }
+    return er;
+}
+
+// Safe, locale-independent conversion of number to 8-digit YYYYMMDD.
+static std::string format_date8_from_number(double dv) {
+    long long iv = static_cast<long long>(dv + (dv >= 0 ? 0.5 : -0.5));
+    std::string s = std::to_string(iv);
+
+    if (s.size() < 8) s = std::string(8 - s.size(), '0') + s;
+    if (s.size() > 8) s.resize(8);
+    return s;
+}
+
+static std::string digits_only(std::string s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s)
+        if (std::isdigit((unsigned char)c)) out.push_back(c);
+    return out;
+}
+
+static std::string to_string_trim(double dv, int fdec) {
+    std::ostringstream os;
+    os << std::fixed << std::setprecision(std::max(0, fdec)) << dv;
+    return trim(os.str());
+}
+
+static std::string format_for_field(char ftype, int flen, int fdec, const EvalResult& er) {
+    std::string to_store;
+
+    switch ((char)std::toupper((unsigned char)ftype)) {
+    case 'N':
+        if (er.kind == EvalResult::K_Number)
+            to_store = to_string_trim(er.number, fdec);
+        else if (er.kind == EvalResult::K_Bool)
+            to_store = to_string_trim(er.tf ? 1.0 : 0.0, fdec);
+        else if (er.kind == EvalResult::K_String) {
+            std::string s;
+            s.reserve(er.text.size());
+            for (char c : er.text) if (c != ',') s.push_back(c);
+            try {
+                double dv = std::stod(s);
+                to_store = to_string_trim(dv, fdec);
+            } catch (...) {
+                to_store = "0";
+            }
+        } else {
+            to_store = "0";
+        }
+        break;
+
+    case 'D':
+        if (er.kind == EvalResult::K_Number)
+            to_store = format_date8_from_number(er.number);
+        else if (er.kind == EvalResult::K_String) {
+            std::string d = digits_only(er.text);
+            if (d.size() < 8) d.insert(d.begin(), 8 - d.size(), '0');
+            if (d.size() > 8) d.resize(8);
+            to_store = d;
+        } else if (er.kind == EvalResult::K_Bool) {
+            to_store = er.tf ? "00000001" : "00000000";
+        } else {
+            to_store.clear();
+        }
+        break;
+
+    case 'L':
+        if (er.kind == EvalResult::K_Bool)
+            to_store = er.tf ? "T" : "F";
+        else if (er.kind == EvalResult::K_Number)
+            to_store = (er.number != 0.0) ? "T" : "F";
+        else if (er.kind == EvalResult::K_String) {
+            std::string u = upper(er.text);
+            to_store = (u == "T" || u == ".T." || u == "TRUE" || u == "Y" || u == "1") ? "T" : "F";
+        } else {
+            to_store = "F";
+        }
+        break;
+
+    default: // C, etc.
+        if (er.kind == EvalResult::K_String)
+            to_store = er.text;
+        else if (er.kind == EvalResult::K_Number)
+            to_store = to_string_trim(er.number, fdec);
+        else if (er.kind == EvalResult::K_Bool)
+            to_store = er.tf ? "T" : "F";
+        else
+            to_store.clear();
+        break;
+    }
+
+    if (flen >= 0 && (int)to_store.size() > flen) to_store.resize((size_t)flen);
+    return to_store;
+}
+
+struct RecordLockGuard {
+    xbase::DbArea& A;
+    uint32_t rn = 0;
+    bool locked = false;
+
+    RecordLockGuard(xbase::DbArea& area, uint32_t recno, bool acquire) : A(area), rn(recno) {
+        if (!acquire) return;
+        std::string err;
+        locked = xbase::locks::try_lock_record(A, rn, &err);
+        if (!locked) throw std::runtime_error(err.empty() ? "lock failed" : err);
+    }
+
+    ~RecordLockGuard() {
+        if (locked) xbase::locks::unlock_record(A, rn);
+    }
+
+    RecordLockGuard(const RecordLockGuard&) = delete;
+    RecordLockGuard& operator=(const RecordLockGuard&) = delete;
+};
+
+} // namespace
+
+void cmd_CALCWRITE(xbase::DbArea& area, std::istringstream& in) {
+    if (!area.isOpen()) {
+        std::cout << "CALCWRITE: no file open. Use: USE <table>\n";
+        return;
+    }
+
+    std::string line;
+    std::getline(in, line);
+    line = trim(line);
+
+    if (line.empty()) {
+        std::cout << "Usage:\n  CALCWRITE <field> = <expr>\n";
+        return;
+    }
+
+    std::string lhs, rhs;
+    if (!parse_assignment(line, lhs, rhs)) {
+        std::cout << "Usage:\n  CALCWRITE <field> = <expr>\n";
+        return;
+    }
+
+    const int field1 = field_index_ci(area, lhs);
+    if (field1 <= 0) {
+        std::cout << "CALCWRITE: unknown field '" << lhs << "'\n";
+        return;
+    }
+
+    const uint32_t rn = area.recno();
+    if (rn == 0) {
+        std::cout << "CALCWRITE: no current record.\n";
+        return;
+    }
+
+    const int area0 = resolve_current_index(area);
+    if (area0 < 0) {
+        std::cout << "CALCWRITE: cannot determine current area.\n";
+        return;
+    }
+
+    const auto& f = area.fields()[(size_t)(field1 - 1)];
+    const char ftype = (char)std::toupper((unsigned char)f.type);
+    const int  flen  = (int)f.length;
+    const int  fdec  = (int)f.decimals;
+
+    // CALCWRITE uses compile_where (keep existing behavior).
+    CompileResult cr = dottalk::expr::compile_where(rhs);
+    if (!cr) {
+        std::cout << "CALCWRITE error: " << cr.error << "\n";
+        return;
+    }
+
+    // Preserve numeric-literal coercion behavior.
+    coerce_numeric_literals_inplace(cr.program);
+
+    // ────────────────────────────────────────────────────────────────────────
+    // TABLE ON: stage change only (no OS record lock; COMMIT owns locking).
+    // Mirrors cmd_replace.cpp behavior.
+    // ────────────────────────────────────────────────────────────────────────
+    if (dottalk::table::is_enabled(area0)) {
+        RecordView rv = dottalk::expr::glue::make_record_view(area);
+        const EvalResult er = eval_program(cr.program.get(), rv);
+        const std::string to_store = format_for_field(ftype, flen, fdec, er);
+
+        auto& tb = dottalk::table::get_tb(area0);
+
+        std::uint64_t field_mask[dottalk::table::kWords]{};
+        const int fldIndex0 = field1 - 1;  // 0-based
+        const int word = fldIndex0 / 64;
+        const int bit  = fldIndex0 % 64;
+        if (word >= 0 && word < dottalk::table::kWords) field_mask[word] |= (std::uint64_t{1} << bit);
+
+        tb.add_change((int)rn, dottalk::table::CHANGE_UPDATE, field_mask, field1, to_store);
+
+        if (!dottalk::table::is_dirty(area0)) dottalk::table::set_dirty(area0, true);
+
+        // Buffered edits make fields stale until COMMIT resolves/reindexes.
+        dottalk::table::mark_stale_field(area0, field1);
+
+        if (Settings::instance().talk_on.load())
+            std::cout << "CALCWRITE: buffered " << lhs << " = " << to_store << " at rec " << rn << ".\n";
+        else
+            std::cout << "CALCWRITE: buffered " << lhs << ".\n";
+        return;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // TABLE OFF: lock + write immediately (mirrors cmd_replace.cpp behavior).
+    // ────────────────────────────────────────────────────────────────────────
+    std::string before;
+    std::string after;
+
+    try {
+        RecordLockGuard lock(area, rn, /*acquire=*/true);
+
+        try { before = area.get(field1); } catch (...) { before.clear(); }
+
+        RecordView rv = dottalk::expr::glue::make_record_view(area);
+        const EvalResult er = eval_program(cr.program.get(), rv);
+        const std::string to_store = format_for_field(ftype, flen, fdec, er);
+
+        bool ok = false;
+        try {
+            ok = area.set(field1, to_store) && area.writeCurrent();
+        } catch (...) {
+            ok = false;
+        }
+
+        if (!ok) {
+            std::cout << "CALCWRITE: write failed.\n";
+            return;
+        }
+
+        try { after = area.get(field1); } catch (...) { after.clear(); }
+
+        if (before != after) dottalk::table::mark_stale_field(area0, field1);
+
+        std::cout << "CALCWRITE: wrote " << lhs << " = " << to_store << "\n";
+    } catch (const std::exception& e) {
+        std::cout << "CALCWRITE: record is locked (" << e.what() << ").\n";
+    } catch (...) {
+        std::cout << "CALCWRITE: record is locked.\n";
+    }
+}

@@ -1,0 +1,19 @@
+SET ECHO OFF
+ECHO ===== DOTSCRIPT SHAKEDOWN START =====
+
+ECHO [1] top-level command execution
+VERSION
+
+ECHO [2] relative child call should work
+DOTSCRIPT sub/child_ok.dts
+
+ECHO [3] nested child call should be rejected
+DOTSCRIPT sub/child_tries_nested.dts
+
+ECHO [4] missing file should be rejected clearly
+DOTSCRIPT sub/no_such_script.dts
+
+ECHO [5] self-call script should be rejected clearly
+DOTSCRIPT sub/self_call.dts
+
+ECHO ===== DOTSCRIPT SHAKEDOWN END =====

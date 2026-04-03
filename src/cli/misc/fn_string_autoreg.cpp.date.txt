@@ -1,0 +1,186 @@
+// src/cli/fn_string_autoreg.cpp
+// Auto-register FoxPro-style string builtins as CLI commands.
+// Supports implicit parentheses:
+//
+//   LEFT LNAME,2
+//   LEFT(LNAME,2)
+//
+// Fully compatible with CALC and REPLACE.
+//
+// Also auto-registers FoxPro-style date/time builtins (DATE/TIME/NOW/CTOD/etc.)
+// so they can be called directly from the shell the same way as string functions.
+
+#include "cli/expr/fn_string.hpp"
+#include "cli/expr/fn_date.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "command_registry.hpp"
+
+namespace {
+
+// ------------------------------------------------------------
+// helpers
+// ------------------------------------------------------------
+
+static std::string up_copy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return (char)std::toupper(c); });
+    return s;
+}
+
+struct ArgTok {
+    std::string text;
+    bool quoted{false};
+};
+
+// ------------------------------------------------------------
+// parse args: supports
+//   a,b
+//   a, b
+//   "a b", 3
+//   LNAME,2
+// ------------------------------------------------------------
+static std::vector<ArgTok> parse_args(const std::string& s)
+{
+    std::vector<ArgTok> out;
+    std::string cur;
+    bool in_single=false, in_double=false;
+    bool quoted=false;
+
+    auto flush = [&]() {
+        auto trim = [](std::string v){
+            size_t i=0; while(i<v.size() && std::isspace((unsigned char)v[i])) ++i;
+            size_t j=v.size(); while(j>i && std::isspace((unsigned char)v[j-1])) --j;
+            return v.substr(i, j-i);
+        };
+        std::string t = trim(cur);
+        if (!t.empty()) out.push_back({t, quoted});
+        cur.clear();
+        quoted=false;
+    };
+
+    for (char c : s) {
+        if (!in_double && c=='\'') { in_single=!in_single; quoted=true; continue; }
+        if (!in_single && c=='\"')  { in_double=!in_double; quoted=true; continue; }
+
+        if (!in_single && !in_double) {
+            if (c==',' ) { flush(); continue; }
+        }
+        cur.push_back(c);
+    }
+    flush();
+    return out;
+}
+
+// ------------------------------------------------------------
+// field resolution
+// ------------------------------------------------------------
+
+static int field_index_by_name(xbase::DbArea& A, const std::string& name)
+{
+    const std::string want = up_copy(name);
+    const auto defs = A.fields();
+    for (size_t i=0;i<defs.size();++i)
+        if (up_copy(defs[i].name) == want)
+            return (int)i + 1;
+    return 0;
+}
+
+static std::string field_value(xbase::DbArea& A, int idx)
+{
+    try { return A.get(idx); }
+    catch (...) { return {}; }
+}
+
+static std::string resolve_arg(xbase::DbArea& A, const ArgTok& tok)
+{
+    if (tok.quoted)
+        return tok.text;
+
+    if (!tok.text.empty() && tok.text.front()=='#') {
+        int idx = field_index_by_name(A, tok.text.substr(1));
+        return idx>0 ? field_value(A, idx) : std::string{};
+    }
+
+    int idx = field_index_by_name(A, tok.text);
+    return idx>0 ? field_value(A, idx) : tok.text;
+}
+
+// ------------------------------------------------------------
+// register one builtin as a CLI command
+// ------------------------------------------------------------
+
+static void register_builtin_fn(const dottalk::expr::BuiltinFnSpec& spec)
+{
+    dli::registry().add(spec.name,
+        [&spec](xbase::DbArea& A, std::istringstream& in)
+    {
+        std::string tail;
+        std::getline(in, tail);
+
+        // strip optional parentheses
+        auto l = tail.find('(');
+        auto r = tail.rfind(')');
+        if (l != std::string::npos && r != std::string::npos && r > l)
+            tail = tail.substr(l+1, r-l-1);
+
+        auto toks = parse_args(tail);
+
+        std::vector<std::string> argv;
+        for (const auto& t : toks)
+            argv.push_back(resolve_arg(A, t));
+
+        if ((int)argv.size() < spec.minArgs ||
+            (int)argv.size() > spec.maxArgs)
+        {
+            std::cout << spec.name << " expects "
+                      << spec.minArgs;
+            if (spec.minArgs != spec.maxArgs)
+                std::cout << ".." << spec.maxArgs;
+            std::cout << " argument(s).\n";
+            return;
+        }
+
+        try {
+            std::cout << spec.eval(argv) << "\n";
+        }
+        catch (...) {
+            std::cout << spec.name << ": evaluation error.\n";
+        }
+    });
+}
+
+// ------------------------------------------------------------
+// auto-register at startup
+// ------------------------------------------------------------
+
+struct AutoRegister {
+    AutoRegister() {
+        // String builtins
+        {
+            const auto* specs = dottalk::expr::string_fn_specs();
+            const auto  count = dottalk::expr::string_fn_specs_count();
+            for (std::size_t i=0;i<count;++i)
+                register_builtin_fn(specs[i]);
+        }
+
+        // Date/time builtins
+        {
+            const auto* specs = dottalk::expr::date_fn_specs();
+            const auto  count = dottalk::expr::date_fn_specs_count();
+            for (std::size_t i=0;i<count;++i)
+                register_builtin_fn(specs[i]);
+        }
+    }
+};
+
+static AutoRegister g_autoreg;
+
+} // namespace

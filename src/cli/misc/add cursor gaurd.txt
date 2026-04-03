@@ -1,0 +1,6 @@
+#include "cursor_guard.hpp"
+
+void cmd_LIST(xbase::DbArea& A, std::istringstream& in) {
+    cli::CursorGuard guard(A);   // <- restores recno on exit
+    ... existing LIST logic ...
+}

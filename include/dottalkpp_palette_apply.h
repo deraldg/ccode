@@ -8,3 +8,6 @@ inline void applyPalette(TApplication &app, const TPalette &pal) {
     dst = pal;
     app.invalidate();
 }
+
+
+

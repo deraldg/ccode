@@ -1,0 +1,62 @@
+  <!-- PAGE 4: VT-100 Rendering Pipeline (Retro Green) -->
+  <diagram id="p4_diagram" name="VT-100 Rendering Pipeline">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCFFCC">
+      <root>
+        <mxCell id="p4_0"/>
+        <mxCell id="p4_1" parent="p4_0"/>
+
+        <!-- CAPABILITY DETECTOR -->
+        <mxCell id="p4_capdet" value="Capability Detector&#xa;---&#xa;Terminal Probe&#xa;Feature Flags&#xa;Color Support&#xa;Cursor Ops&#xa;Keymap"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="80" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- INPUT STREAM -->
+        <mxCell id="p4_input" value="Input Stream&#xa;---&#xa;Keystrokes&#xa;Escape Sequences&#xa;Control Codes&#xa;Event Queue"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="500" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- ESCAPE SEQUENCE PARSER -->
+        <mxCell id="p4_escparser" value="Escape Sequence Parser&#xa;---&#xa;CSI Parser&#xa;OSC Parser&#xa;SS3&#xa;VT Extensions&#xa;Mode Switching"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="900" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- RENDERING ENGINE -->
+        <mxCell id="p4_render" value="Rendering Engine&#xa;---&#xa;Cell Grid&#xa;Attributes&#xa;Color Map&#xa;Cursor State&#xa;Dirty Regions"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="80" y="360" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- LINE WRAP + SCROLL -->
+        <mxCell id="p4_wrapscroll" value="Line Wrap + Scroll&#xa;---&#xa;Soft Wrap&#xa;Hard Wrap&#xa;Scroll Up/Down&#xa;Region Limits&#xa;History Buffer"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="500" y="360" width="340" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- OUTPUT DRIVER -->
+        <mxCell id="p4_output" value="Output Driver&#xa;---&#xa;Frame Builder&#xa;Diff Engine&#xa;Flush Ops&#xa;Terminal Sync&#xa;Performance Metrics"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="900" y="360" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p4_edge1" edge="1" parent="p4_1" source="p4_capdet" target="p4_input"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge2" edge="1" parent="p4_1" source="p4_input" target="p4_escparser"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge3" edge="1" parent="p4_1" source="p4_escparser" target="p4_render"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge4" edge="1" parent="p4_1" source="p4_render" target="p4_wrapscroll"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge5" edge="1" parent="p4_1" source="p4_wrapscroll" target="p4_output"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

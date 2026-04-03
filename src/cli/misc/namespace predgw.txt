@@ -1,0 +1,22 @@
+namespace predgw {
+
+// Config flags (single source)
+struct EvalFlags {
+  bool char_case_sensitive = false;
+  bool char_eq_trims       = true;   // trim both sides only for equality
+  enum class LikeStyle { FOX, SQL } like_style = LikeStyle::FOX;
+};
+
+// Opaque compiled handle from the real engine/cache
+using Compiled = std::shared_ptr<void>;  // wrap concrete type internally
+
+// Normalize (optional SQL→FOR), compile (cached), return handle
+Compiled compile_where_cached(std::string_view expr);
+
+// Evaluate on current record using compiled handle
+bool evaluate_compiled(xbase::DbArea& db, const Compiled& prog, const EvalFlags& flags);
+
+// Convenience: evaluate raw expr (fast path → normalize → compile → eval)
+bool evaluate_for(xbase::DbArea& db, std::string_view expr, const EvalFlags& flags);
+
+} // namespace predgw

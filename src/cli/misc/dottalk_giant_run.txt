@@ -1,0 +1,439 @@
+
+Commands (registry U foxref)
+-------------------------------------------------------------
+ID   NAME               IMPLEMENTED  FOXREF     SUMMARY/USAGE
+133  !                  yes          yes        Alias for BANG (execute an OS command).r
+172  $                  yes          no         Homegrown command.
+181  AGGS               yes          no         Homegrown command.
+65   ALLTRIM            yes          yes        Remove leading and trailing spaces from <cExpression>.
+11   APPEND             yes          yes        Append a new record (interactive in future).
+68   APPEND_BLANK       yes          yes        Append a blank record to the current table/work area. (DotTalk++ command; FoxPro equivalent: APPEND BLANK)
+125  AREA               yes          yes        Report or set the current work area slot.
+100  AREA51             yes          yes        Developer sandbox / experimental command.
+60   ASC                yes          yes        Return the ASCII code (0-255) of the first character of <cExpression>.
+110  ASCEND             yes          yes        Set ascending sort direction for the active order/tag.
+80   AT                 yes          yes        Return the 1-based position of <cSearch> within <cExpression> (case-sensitive).
+81   ATC                yes          yes        Return the 1-based position of <cSearch> within <cExpression> (case-insensitive).
+162  AVERAGE            yes          yes        Compute the average of a numeric expression over a record set.
+163  AVG                yes          yes        Alias for AVERAGE (xBase compatibility).
+134  BANG               yes          yes        Execute an OS command (shell escape).
+137  BOOLEAN            yes          yes        Convert common textual forms to a boolean (true/false).
+10   BOTTOM             yes          yes        Go to last record.
+30   BROWSE             yes          no         Table browser.
+58   BROWSER            yes          yes        Developer browser command (experimental).
+
+Example:
+    BROWSER
+56   BROWSETUI          yes          yes        Text-mode browser UI (developer tool).
+
+Example:
+    BROWSETUI
+57   BROWSETV           yes          yes        Turbo Vision browser UI (developer tool).
+
+Example:
+    BROWSETV
+135  CALC               yes          yes        Evaluate an expression and display the result.
+136  CALCWRITE          yes          yes        Evaluate an expression and write the result to a target.
+84   CHR                yes          yes        Convert an integer ASCII code (0-255) to a 1-character string.
+119  CLEAR              yes          yes        Clear current state (filters/orders/relations) depending on context.
+98   CLOSE              yes          yes        Close the current work area or close all open tables (FoxPro: CLOSE TABLES/DATABASES/ALL).
+156  CMDARGCHK          yes          yes        Validate command argument parsing and report issues.
+34   CMDHELP            yes          yes        Build / report the HELP command catalogs.
+
+Examples:
+    CMDHELP BUILD
+    CH               (alias report)
+
+Notes:
+    Mines command registry + foxref + optional DBF help sources.
+66   CMDHELPCHK         yes          yes        Validate HELP catalogs vs the command registry.
+155  CMDREL             yes          yes        Relations command wrapper (engine diagnostics/controls).
+51   CNX                yes          yes        Index container command (CNX multi-tag support).
+
+Example:
+    CNX students
+31   COLOR              yes          yes        Switch CLI/TUI color theme.
+
+Examples:
+    COLOR GREEN
+    COLOR G+
+    COLOR AMBER
+    COLOR DEFAULT
+
+Notes:
+    Used by FOXTALK/Turbo Vision palette wiring.
+154  COMMANDSHELP       yes          yes        Command help (alias of CMDHELP).
+175  COMMIT             yes          no         Homegrown command.
+173  CONCAT             yes          no         Homegrown command.
+124  CONTINUE           yes          yes        Continue a running loop/scan block (scripting control flow).
+88   COPY               yes          yes        Copy a file to a new location (FoxPro: COPY FILE ... TO ...).
+21   COUNT              yes          yes        Count matching records; optionally store the result to a variable.
+120  CREATE             yes          yes        Create an object/table/resource (developer/legacy; see command usage).
+160  CTOD               yes          yes        Convert a character date to a Date value using current SET DATE/SET CENTURY.
+158  DATE               yes          yes        Return the current system date.
+171  DATEADD            yes          no         Homegrown command.
+177  DATEDIFF           yes          no         Homegrown command.
+170  DATETIME           yes          no         Homegrown command.
+145  DBAREA             yes          yes        Report or inspect the current DbArea/workspace (diagnostics).
+184  DBAREAS            yes          no         Homegrown command.
+14   DELETE             yes          yes        Mark record(s) deleted.
+111  DESCEND            yes          yes        Set descending sort direction for the active order/tag.
+132  DIR                yes          yes        List directory contents.
+102  DISPLAY            yes          yes        Display the current record (optionally selected fields).
+45   DOTSCRIPT          yes          yes        Run a DotTalk script file (test harness / automation).
+
+Example:
+    DOTSCRIPT run_all_sql_tests.dts
+166  DTOC               yes          no         Homegrown command.
+69   DUMP               yes          yes        Debug: print a structured dump of an internal value/state.
+87   ECHO               yes          yes        Print text to the console.
+121  EDIT               yes          yes        Edit a field/value interactively (where supported).
+130  ELSE               yes          no         Optional ELSE branch for an IF block.
+131  ENDIF              yes          no         End an IF block.
+147  ENDLOOP            yes          yes        End a LOOP block (scripting).
+123  ENDSCAN            yes          yes        End a SCAN block.
+151  ENDUNTIL           yes          yes        End an UNTIL block (scripting).
+128  ENDWHILE           yes          yes        End a WHILE block (scripting control flow).
+144  ERASE              yes          yes        Delete file(s) matching <filespec> (FoxPro: ERASE).
+95   EVAL               yes          yes        Evaluate an expression and print its value.
+17   EXPORT             yes          yes        Export to CSV.
+2    FIELDS             yes          yes        Show structure (field list).
+6    FIND               yes          yes        Find a value in the current order/index (FoxPro: FIND).
+114  FORMULA            yes          yes        Evaluate/print an expression (FoxPro-style ? / ?? shortcut).
+33   FOXHELP            yes          yes        List or search command help topics.
+
+Examples:
+    FOXHELP
+    FOXHELP SCHEMA
+    FOXHELP REL
+
+Notes:
+    Uses the help catalogs and any HELP DBFs.
+103  FOXPRO             yes          yes        DotTalk++ UI / browser command.
+32   FOXTALK            yes          yes        Launch the Turbo Vision (FoxPro-style) TUI shell.
+
+Examples:
+    FOXTALK
+
+Notes:
+    Intended for keyboard-driven browsing and diagnostics.
+    Exits back to the DotTalk++ CLI.
+105  GENERIC            yes          yes        Developer utility placeholder command.
+93   GO                 yes          yes        Execute a DotTalk++ command line (dispatch to command handlers).
+8    GOTO               yes          yes        Go to record number.
+153  HELP               yes          yes        General help entry point (supports /FOX and /PRED views).
+129  IF                 yes          no         Conditional execution block: IF ... [ELSE] ... ENDIF.
+18   IMPORT             yes          yes        Import from CSV.
+3    INDEX              yes          yes        Create an index on an expression (simple or compound) (FoxPro syntax).
+112  INDEXSEEK          yes          yes        Seek using the active index/order (DotTalk++ seek wiring).
+179  INIT               yes          no         Homegrown command.
+141  INSERT             yes          yes        Insert data rows (scripting/SQL helper; see command usage).
+74   LEFT               yes          yes        Return the left-most <nChars> characters of <cExpression>.
+78   LEN                yes          yes        Return the length (character count) of <cExpression>.
+94   LIKE               yes          yes        Pattern match using FoxPro-style LIKE semantics (%, _, [], and literals).
+5    LIST               yes          yes        List records with optional field selection and filtering.
+122  LOCATE             yes          yes        Locate the first record matching a filter expression.
+117  LOCK               yes          yes        Lock the current record (or table) for editing.
+146  LOOP               yes          yes        Begin a LOOP block (scripting).
+149  LOOP_BUFFER        yes          yes        Internal: loop over a buffered result set (developer tool).
+71   LOWER              yes          yes        Convert <cExpression> to lower-case.
+72   LTRIM              yes          yes        Remove leading spaces from <cExpression>.
+165  MAX                yes          yes        Return the larger of <e1> and <e2> (aggregate MAX is typically via SQL/CALCULATE).
+164  MIN                yes          yes        Return the smaller of <e1> and <e2> (aggregate MIN is typically via SQL/CALCULATE).
+82   MULTIREP           yes          yes        Perform multiple replace operations in one pass (text transform).
+138  NORMALIZE          yes          yes        Normalize/clean an input expression or text (developer utility).
+168  NOW                yes          no         Homegrown command.
+16   PACK               yes          yes        Permanently remove deleted rows (see notes).
+92   PADC               yes          yes        Center <cExpression> in length <nLen> using spaces (or <cFill>).
+90   PADL               yes          yes        Left-pad <cExpression> to length <nLen> using spaces (or <cFill>).
+91   PADR               yes          yes        Right-pad <cExpression> to length <nLen> using spaces (or <cFill>).
+63   PREDHELP           yes          yes        Help for predicates/expressions and filtering.
+64   PREDICATES         yes          yes        List supported predicates/operators for filtering.
+96   PROPER             yes          yes        Convert <cExpression> to Proper Case (title case).
+169  REBUILD            yes          no         Homegrown command.
+15   RECALL             yes          yes        Un-delete record(s).
+126  RECNO              yes          yes        Return the current record number.
+79   RECORD             yes          yes        Display or return the current record context (utility).
+59   RECORDVIEW         yes          yes        Vertical record viewer.
+
+Example:
+    RECORDVIEW
+127  REFRESH            yes          yes        Refresh internal state / UI view (where applicable).
+27   REINDEX            yes          yes        Rebuild index files for the current table (or all open tables).
+37   REL                yes          yes        Relations engine commands.
+
+Subcommands:
+    REL LIST
+    REL REFRESH
+    REL SAVE [path] | REL SAVE AS <dataset>
+    REL LOAD [path] | REL LOAD AS <dataset>
+    REL ADD <parent> <child> ON <field>
+    REL CLEAR <parent>|ALL
+
+Examples:
+    REL LIST
+    REL ADD STUDENTS ENROLL ON SID
+    REL REFRESH
+
+Notes:
+    This is the modern relations layer used by tuple browsing.
+182  RELATIONS          yes          no         Homegrown command.
+113  REL_LIST           yes          yes        List active relations in the relations engine.
+115  REL_REFRESH        yes          yes        Refresh/recompute relation links.
+13   REPLACE            yes          yes        Replace a field value with an expression (optionally across records).
+86   REPLICATE          yes          yes        Repeat <cExpression> <nTimes> times.
+76   RIGHT              yes          yes        Return the right-most <nChars> characters of <cExpression>.
+178  ROLLBACK           yes          no         Homegrown command.
+73   RTRIM              yes          yes        Remove trailing spaces from <cExpression>.
+142  SCAN               yes          yes        Iterate records using a SCAN block (record loop).
+148  SCAN_BUFFER        yes          yes        Internal: scan/iterate a buffered result set (developer tool).
+23   SCHEMA             yes          yes        Schema Architech.
+36   SCHEMAS            yes          yes        Bulk-open schemas/DBFs into consecutive work areas.
+
+Examples:
+    SCHEMAS OPEN dbf
+
+Notes:
+    Intended for dataset bring-up and Smart Browser sessions.
+7    SEEK               yes          yes        Seek an exact match using the current index/order.
+99   SELECT             yes          yes        Select the active work area by number or alias.
+107  SET                yes          yes        Inspect or change runtime settings (DotTalk++ SET family).
+28   SET RELATION       yes          yes        Relate tables.
+108  SET UNIQUE         yes          yes        Toggle UNIQUE behavior for index/order operations.
+55   SETCASE            yes          yes        Control case-sensitivity / collation mode for comparisons.
+
+Example:
+    SETCASE ON
+52   SETCNX             yes          yes        Attach/activate a CNX container for the current area.
+
+Example:
+    SETCNX TO indexes\students.cnx
+54   SETFILTER          yes          yes        Set a filter expression (DotTalk++ variant).
+
+Example:
+    SETFILTER lname = "SMITH"
+4    SETINDEX           yes          yes        Activate an index for the area.
+53   SETORDER           yes          yes        Set controlling order/tag (DotTalk++ wiring).
+
+Example:
+    SETORDER LNAME
+35   SETPATH            yes          yes        Manage runtime root directories (DATA/DBF/HELP/TESTS/INDEXES/DOCS/TEMP).
+
+Examples:
+    SETPATH            (show roots)
+    SETPATH HELP help  (set HELP root)
+    SETPATH DBF dbf
+    SETPATH RESET
+
+Notes:
+    Used so HELP/TESTS can be moved without requiring users to type paths.
+50   SHOW               yes          yes        Show internal engine state / debug views.
+
+Examples:
+    SHOW ORDER
+    SHOW FILTER
+    SHOW BREADCRUMBS
+180  SHUTDOWN           yes          no         Homegrown command.
+39   SIMPLEBROWSER      yes          yes        SIMPLEBROWSER  (SB)
+NAME
+    SIMPLEBROWSER
+
+ALIASES
+    SB
+
+PURPOSE
+    Workspace/DbArea-centric interactive browser for table relationships and logical rows.
+
+SYNTAX
+    SIMPLEBROWSER [FOR <expr>] [ORDER <tag>|PHYSICAL] [LIMIT <n>]
+
+OPTIONS / SUBCOMMANDS
+    FOR <expr>           Apply a filter expression (tuple/expr aware).
+    CLEAR FOR            Clear active filter.
+    ORDER PHYSICAL|INX|CNX|<tag>   Change controlling order/tag.
+    SHOW CHILDREN [LIMIT n]        Browse related child rows from current record.
+    SHOW|HIDE SCHEMA|JSON          Toggle schema/JSON debug overlays.
+    STATUS VERBOSE|COMPACT         Toggle status verbosity.
+
+EXAMPLES
+    SIMPLEBROWSER
+    SB FOR lname = "GRIMWOOD"
+    SB ORDER LNAME
+    SB SHOW CHILDREN LIMIT 20
+
+NOTES
+    Simple Browser is designed for browsing within the current workspace DbArea.
+    It is order-aware and expression/predicate aware.
+
+SEE ALSO
+    SMARTBROWSER, SMARTLIST, REL, TUPLE, SCHEMAS
+
+STATUS
+    stable
+
+101  SKIP               yes          yes        Move the record pointer forward/backward by <nRecords> (default 1).
+40   SMARTBROWSER       yes          yes        SMARTBROWSER  (SM, SMART)
+NAME
+    SMARTBROWSER
+
+ALIASES
+    SM, SMART
+
+PURPOSE
+    Advanced browser/workhorse for relational + expression-aware browsing across backends.
+
+SYNTAX
+    SMARTBROWSER [<source>] [FOR <expr>] [ORDER <tag>|PHYSICAL]
+
+OPTIONS / SUBCOMMANDS
+    <source>             Optional source (DbArea/workspace, SQLite3, or schema engine where available).
+    FOR <expr>           Apply an expression filter using the predicate pipeline.
+    ORDER <tag>|PHYSICAL Set controlling order/tag when browsing DbArea-backed sources.
+
+EXAMPLES
+    SMARTBROWSER
+    SM FOR gpa >= 3.5
+    SMART ORDER LNAME
+
+NOTES
+    Smart Browser is the flagship browser. It can operate with DbArea/workspaces and,
+    when configured, can also operate with SQLite3 and schema-driven sources.
+    The SCHEMAS command is workspace/DbArea bring-up (not part of Smart Browser itself).
+
+SEE ALSO
+    SIMPLEBROWSER, SMARTLIST, SCHEMAS, SQLITE, REL, TUPLE
+
+STATUS
+    stable
+
+46   SMARTLIST          yes          yes        LIST-style output with SQL-grade filtering (order-aware).
+
+Examples:
+    SMARTLIST 20 FOR gpa >= 3.5
+    SMARTLIST ALL FOR lname LIKE "SMI%"
+
+Notes:
+    Evaluates filters using the expression/predicate pipeline.
+185  SORT               yes          no         Homegrown command.
+85   SPACE              yes          yes        Return a character string containing <nSpaces> spaces.
+139  SQL                yes          yes        Execute an SQL statement using the configured SQL engine.
+183  SQLERASE           yes          no         Homegrown command.
+43   SQLITE             yes          yes        SQLite integration.
+
+Examples:
+    SQLITE DB data\sql_regression.sqlite
+    SQLITE EXEC CREATE TABLE t(x INT)
+    SQLITE EXEC INSERT INTO t(x) VALUES (1)
+    SQLITE SELECT * FROM t
+
+Notes:
+    Used for regression testing and DBFâ†”SQL bridging experiments.
+24   SQLITE             yes          yes        SQL Interface
+140  SQLSEL             yes          yes        Execute an SQL SELECT and display results.
+44   SQLVER             yes          yes        Report SQLite availability and version.
+
+Example:
+    SQLVER
+20   STATUS             yes          yes        Display area status.
+67   STR                yes          yes        Convert numeric <nExpr> to a character string (optionally controlling width/decimals).
+174  STRCAT             yes          no         Homegrown command.
+19   STRUCT             yes          yes        Display table structure.
+83   STUFF              yes          yes        Replace <nLen> characters of <cExpr> starting at <nStart> with <cRepl>.
+77   SUBSTR             yes          yes        Return substring of <cExpr> starting at <nStart> for <nLen> characters (or to end).
+161  SUM                yes          yes        Sum a numeric expression over a record set.
+167  TABLE              yes          no         Homegrown command.
+75   TEST               yes          yes        DotTalk++ scripting/test harness command.
+159  TIME               yes          yes        Return the current system time as a character string (HH:MM:SS).
+176  TODAY              yes          no         Homegrown command.
+9    TOP                yes          yes        Go to first record.
+97   TRANSFORM          yes          yes        Format <eExpr> as a string using an optional picture/mask.
+22   TRIM               yes          yes        Remove trailing spaces from <cExpression> (use ALLTRIM to trim both ends).
+25   TUPLE              yes          yes        Build one tuple row from fields across work areas.
+Examples:
+    TUPLE *                    (all fields from current area)
+    TUPLE LNAME,FNAME          (selected fields from current area)
+    TUPLE #11.*                (all fields from area 11)
+    TUPLE #9.*,#11.LNAME       (mix of areas)
+
+Notes:
+    #n prefixes a work area slot; "*" means all fields for that area.
+    Output fields are separated by ASCII Unit Separator (0x1F).
+116  TUPTALK            yes          yes        DotTalk++ tuple/logical-row command.
+49   TURBOPACK          yes          yes        Turbo Vision / pack-related utility.
+
+Example:
+    TURBOPACK
+48   TVISION            yes          yes        Turbo Vision diagnostics / demos.
+
+Example:
+    TVISION
+106  UNDELETE           yes          yes        Un-delete (recall) the current record or selection.
+118  UNLOCK             yes          yes        Release a previously acquired lock (optionally all locks).
+150  UNTIL              yes          yes        Begin an UNTIL block (scripting).
+143  UPDATE             yes          yes        Update data rows (scripting/SQL helper; see command usage).
+70   UPPER              yes          yes        Convert <cExpression> to upper-case.
+1    USE                yes          yes        Open a DBF in a work area.
+89   VAL                yes          yes        Convert a numeric-looking character expression to a number.
+109  VALIDATE           yes          yes        DotTalk++ schema/sidecar engine command.
+157  VERSION            yes          yes        Print build/version information.
+104  WHERE              yes          yes        Apply an SQL-like filter to the current context.
+152  WHILE              yes          yes        Begin a WHILE block (scripting).
+47   WSREPORT           yes          yes        Workspace report / diagnostics.
+
+Example:
+    WSREPORT
+29   ZAP                yes          yes        Remove all records.
+12   APPEND BLANK       no           no         Append blank record. (DotTalk++: use APPEND_BLANK for now; APPEND BLANK is a compatibility alias.)
+62   DO                 no           no         Execute a program. (DotTalk++: not implemented; use DOTSCRIPT.)
+61   RUN                no           no         Run an OS command (FoxPro). (DotTalk++: not implemented; use DOTSCRIPT.)
+38   SB                 no           no         SIMPLEBROWSER  (SB)
+NAME
+    SIMPLEBROWSER
+
+ALIASES
+    SB
+
+PURPOSE
+    Workspace/DbArea-centric interactive browser for table relationships and logical rows.
+
+SYNTAX
+    SIMPLEBROWSER [FOR <expr>] [ORDER <tag>|PHYSICAL] [LIMIT <n>]
+
+OPTIONS / SUBCOMMANDS
+    FOR <expr>           Apply a filter expression (tuple/expr aware).
+    CLEAR FOR            Clear active filter.
+    ORDER PHYSICAL|INX|CNX|<tag>   Change controlling order/tag.
+    SHOW CHILDREN [LIMIT n]        Browse related child rows from current record.
+    SHOW|HIDE SCHEMA|JSON          Toggle schema/JSON debug overlays.
+    STATUS VERBOSE|COMPACT         Toggle status verbosity.
+
+EXAMPLES
+    SIMPLEBROWSER
+    SB FOR lname = "GRIMWOOD"
+    SB ORDER LNAME
+    SB SHOW CHILDREN LIMIT 20
+
+NOTES
+    Simple Browser is designed for browsing within the current workspace DbArea.
+    It is order-aware and expression/predicate aware.
+
+SEE ALSO
+    SMARTBROWSER, SMARTLIST, REL, TUPLE, SCHEMAS
+
+STATUS
+    stable
+
+26   SET ORDER          no           yes        Set controlling index tag.
+42   SM                 no           yes        SM
+  Alias for SMARTBROWSER.
+
+See:
+    FOXHELP SMARTBROWSER
+
+41   SMART              no           yes        SMART
+  Alias for SMARTBROWSER.
+
+See:
+    FOXHELP SMARTBROWSER
+
+.

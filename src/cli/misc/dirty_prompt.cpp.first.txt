@@ -1,0 +1,46 @@
+// src/cli/dirty_prompt.cpp
+#include <cctype>
+#include <iostream>
+#include "xbase.hpp"
+#include "cli/table_state.hpp"
+#include "cli/dirty_prompt.hpp"
+
+
+namespace dottalk::dirty {
+
+static inline bool prompt_yes_no(const std::string& opLabel, const std::string& scopeLabel) {
+    // Default to NO (safer). Accept: y/yes, n/no.
+    std::cout << "TABLE: uncommitted changes detected (" << scopeLabel
+              << "). Continue " << opLabel << "? (y/N) ";
+
+    std::string answer;
+    if (!std::getline(std::cin, answer)) return false;
+
+    // trim + lowercase
+    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
+    while (!answer.empty() && is_space((unsigned char)answer.front())) answer.erase(answer.begin());
+    while (!answer.empty() && is_space((unsigned char)answer.back()))  answer.pop_back();
+    for (auto& c : answer) c = (char)std::tolower((unsigned char)c);
+
+    if (answer == "y" || answer == "yes") return true;
+    return false;
+}
+
+bool maybe_prompt_area(const int area0, const std::string& opLabel) {
+    if (!table::is_enabled(area0) || !table::is_dirty(area0)) return true;
+    return prompt_yes_no(opLabel, std::string("area ") + std::to_string(area0));
+}
+
+bool maybe_prompt_all(xbase::XBaseEngine& eng, const std::string& opLabel) {
+    // If no dirty enabled areas, allow immediately.
+    int dirtyCount = 0;
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        (void)eng; // engine presence matters later (commit/rollback); not required for Phase 1
+        if (table::is_enabled(i) && table::is_dirty(i)) ++dirtyCount;
+    }
+    if (dirtyCount == 0) return true;
+
+    return prompt_yes_no(opLabel, std::string("all areas (") + std::to_string(dirtyCount) + " dirty)");
+}
+
+} // namespace dottalk::dirty

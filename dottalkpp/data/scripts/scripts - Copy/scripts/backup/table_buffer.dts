@@ -1,0 +1,125 @@
+* ============================================================
+* MCC_TUPLE_BUFFER_OVERLAY_SHAKEDOWN.DTS
+* Focus:
+*  - Verify TUP / TUPLE become TABLE-buffer aware (overlay)
+*  - Verify DBF not changed until COMMIT (TABLE ON)
+*  - Verify TABLE OFF does direct writes
+*
+* Assumptions:
+*  - MCC DBFs present
+*  - STUDENTS has fields: SID, LNAME, FNAME, DOB, GENDER, MAJOR, ENROLL_D, GPA, EMAIL
+* ============================================================
+
+SET ECHO ON
+ECHO ===== TUPLE BUFFER OVERLAY SHAKE-DOWN START =====
+COLOR DEFAULT
+
+* ------------------------------------------------------------
+* 0) Open tables
+* ------------------------------------------------------------
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+SELECT STUDENTS
+USE STUDENTS
+
+* Anchor on stable record (use same SID you’ve been using)
+TOP
+LOCATE FOR SID = 50000001
+RECNO
+TUP
+TUPLE
+
+ECHO -- Baseline (physical) -- 
+LIST 2
+TUP DOB
+TUP ENROLL_D
+
+* ------------------------------------------------------------
+* 1) TABLE ON: REPLACE buffers, TUP must show overlay immediately
+* ------------------------------------------------------------
+ECHO ===== CASE 1: TABLE ON overlay appears in TUP immediately =====
+TABLE ON
+
+* Make a visible change (strings)
+REPLACE FNAME WITH "ZZ_TUPBUF"
+REPLACE LNAME WITH "YY_TUPBUF"
+
+* Expected:
+*  - TUP/TUPLE should show ZZ_TUPBUF / YY_TUPBUF immediately (buffer overlay)
+*  - LIST should still show old physical values until COMMIT (unless LIST also became overlay-aware)
+ECHO -- After buffered REPLACE (no COMMIT yet) --
+TUP
+TUPLE
+LIST 1
+
+* Show buffer contents (optional sanity)
+TABLE BUFFER DUMP
+
+* ------------------------------------------------------------
+* 2) TABLE ON: Date field buffered overlay (DOB + ENROLL_D)
+* ------------------------------------------------------------
+ECHO ===== CASE 2: Buffered DATE overlay in TUP =====
+REPLACE DOB WITH 19560214
+REPLACE ENROLL_D WITH 20240923
+
+ECHO -- After buffered date REPLACE (no COMMIT yet) --
+TUP DOB
+TUP ENROLL_D
+TUP
+TUPLE
+
+* ------------------------------------------------------------
+* 3) TABLE ON: blank-date buffering (should overlay as blanks)
+* ------------------------------------------------------------
+ECHO ===== CASE 3: Buffered blank-date overlay =====
+REPLACE DOB WITH "        "
+
+ECHO -- DOB should now show blank in TUP/TUPLE (no COMMIT) --
+TUP DOB
+TUP
+TUPLE
+
+* Restore DOB buffered to a real date so we can commit safely
+REPLACE DOB WITH 19560213
+
+* ------------------------------------------------------------
+* 4) COMMIT: physical DBF changes now match buffered values
+* ------------------------------------------------------------
+ECHO ===== CASE 4: COMMIT applies buffered values to DBF =====
+COMMIT
+
+ECHO -- After COMMIT: TUP and LIST should match new values physically --
+TUP
+TUPLE
+LIST 1
+
+* Restore baseline physical values (so dataset doesn’t drift)
+ECHO ===== RESTORE BASELINE (TABLE ON + COMMIT) =====
+REPLACE LNAME WITH "Washington"
+REPLACE FNAME WITH "George"
+REPLACE DOB WITH 19560213
+REPLACE ENROLL_D WITH 20240922
+COMMIT
+
+ECHO -- After baseline restore --
+TUP
+LIST 1
+
+* ------------------------------------------------------------
+* 5) TABLE OFF: REPLACE should write directly (no buffering)
+* ------------------------------------------------------------
+ECHO ===== CASE 5: TABLE OFF direct write behavior =====
+TABLE OFF
+
+REPLACE FNAME WITH "ZZ_OFF"
+ECHO -- With TABLE OFF, physical should change immediately --
+TUP
+LIST 1
+
+* Restore again (direct write)
+REPLACE FNAME WITH "George"
+ECHO -- Restored --
+TUP
+LIST 1
+
+ECHO ===== TUPLE BUFFER OVERLAY SHAKE-DOWN END =====

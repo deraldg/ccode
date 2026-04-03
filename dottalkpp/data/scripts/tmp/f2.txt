@@ -1,0 +1,71 @@
+  <!-- PAGE 2: x64base Architecture (Retro Blue) -->
+  <diagram id="p2_diagram" name="x64base Architecture">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCE0FF">
+      <root>
+        <mxCell id="p2_0"/>
+        <mxCell id="p2_1" parent="p2_0"/>
+
+        <!-- X64BASE CORE -->
+        <mxCell id="p2_core" value="x64base Core&#xa;---&#xa;Platform Kernel&#xa;Runtime&#xa;Environment&#xa;System Services"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="80" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- DOTTalk++ ENGINE -->
+        <mxCell id="p2_engine" value="DotTalk++ Engine&#xa;---&#xa;Command Engine&#xa;Expression Engine&#xa;Index Manager&#xa;Storage Layer"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="480" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- APPLICATION LAYER -->
+        <mxCell id="p2_app" value="Application Layer&#xa;---&#xa;DIAL&#xa;WebSurface&#xa;draw.io Integration&#xa;UI Windows&#xa;Event Loop"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="900" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- STORAGE SUBSYSTEM -->
+        <mxCell id="p2_storage" value="Storage Subsystem&#xa;---&#xa;DBF Files&#xa;Index Files&#xa;Memo Files&#xa;Locking&#xa;LMDB Integration"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="80" y="340" width="340" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- QUERY ENGINE -->
+        <mxCell id="p2_query" value="Query Engine&#xa;---&#xa;SQLSEL&#xa;SMARTLIST&#xa;Filter Engine&#xa;Sort Engine&#xa;Cursor Manager"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="480" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- CURRICULUM + CODEX -->
+        <mxCell id="p2_docs" value="Curriculum + Codex&#xa;---&#xa;Chapters&#xa;Sections&#xa;Examples&#xa;Exercises&#xa;Glossary&#xa;Build System"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="900" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- BRANDING -->
+        <mxCell id="p2_brand" value="Branding System&#xa;---&#xa;Trademark&#xa;Logo System&#xa;Color System&#xa;Typography&#xa;Usage Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="480" y="640" width="360" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p2_edge1" edge="1" parent="p2_1" source="p2_core" target="p2_engine"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge2" edge="1" parent="p2_1" source="p2_engine" target="p2_app"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge3" edge="1" parent="p2_1" source="p2_engine" target="p2_storage"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge4" edge="1" parent="p2_1" source="p2_engine" target="p2_query"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge5" edge="1" parent="p2_1" source="p2_app" target="p2_docs"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge6" edge="1" parent="p2_1" source="p2_docs" target="p2_brand"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

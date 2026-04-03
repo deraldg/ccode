@@ -1,0 +1,283 @@
+// src/cli/cmd_seek.cpp
+// SEEK ? type-aware equality search with flexible syntax.
+// Adds parsing for:
+//   SEEK <value> IN <field>
+//   SEEK <field> = <value>
+//   SEEK <field> <value>
+//   SEEK <value> [IN <field>] [TAG <tag> [OF <file>]]
+//
+// Notes:
+// - Still sequential until index hooks are wired. We accept TAG/OF now so the
+//   public surface is stable; later we can route to the active order / tag.
+// - Equality rules:
+//     C: case-insensitive, trimmed
+//     N: tolerant numeric equality (1 == 1.0 == 01)
+//     D: digits-only compare (2026-04-06 == 20260406)
+//     L: T/F/Y/N/1/0
+//
+// Output:
+//   "Found at <recno>." on success, "SEEK: Not found." on miss.
+
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "xbase_field_getters.hpp"
+#include "cli/order_state.hpp"
+
+// SEEK TRACE toggle.
+// When enabled, SEEK prints diagnostic comparisons while searching.
+static bool g_seek_trace = false;
+
+static inline void seek_trace_set(const std::string& v) {
+    if (textio::ieq(v, "ON") || v == "1" || textio::ieq(v, "TRUE")) g_seek_trace = true;
+    else if (textio::ieq(v, "OFF") || v == "0" || textio::ieq(v, "FALSE")) g_seek_trace = false;
+}
+
+static inline void seek_trace_print() {
+    std::cout << "SEEK TRACE is " << (g_seek_trace ? "ON" : "OFF") << "\n";
+}
+
+
+namespace dottalk::lmdbcli {
+    bool is_open();
+    bool use_db(const std::string& tag, std::string& err);
+    bool seek_key(const std::string& key, int& out_recno, std::string& err);
+}
+
+namespace {
+
+inline std::string trim(const std::string& s) { return textio::trim(s); }
+
+inline std::string upper(std::string s) {
+    for (char& c : s) {
+        const unsigned char uc = static_cast<unsigned char>(c);
+        c = static_cast<char>(std::toupper(uc));
+    }
+    return s;
+}
+
+inline std::vector<std::string> split_ws(const std::string& s) {
+    std::vector<std::string> out;
+    std::string tok;
+    std::istringstream iss(s);
+    while (iss >> tok) out.push_back(tok);
+    return out;
+}
+
+inline std::string unquote(std::string s) {
+    std::string t = trim(s);
+    if (t.size() >= 2) {
+        char q = t.front();
+        if ((q == '"' || q == '\'') && t.back() == q) {
+            t = t.substr(1, t.size() - 2);
+        }
+    }
+    return t;
+}
+
+inline std::string digits_only(std::string s) {
+    s.erase(std::remove_if(s.begin(), s.end(),
+        [](unsigned char c){ return !std::isdigit(c); }), s.end());
+    return s;
+}
+
+inline bool parse_logical(const std::string& s, bool& out) {
+    if (s.empty()) return false;
+    char c = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
+    if (c=='T' || c=='Y' || c=='1') { out = true;  return true; }
+    if (c=='F' || c=='N' || c=='0') { out = false; return true; }
+    return false;
+}
+
+struct SeekSpec {
+    std::string field;     // required (resolved later)
+    std::string value;     // required
+    std::string tag;       // optional
+    std::string tag_file;  // optional after OF
+};
+
+// Parse flexible SEEK forms.
+// Returns true on success; fills out spec. Does NOT validate field existence.
+bool parse_seek_args(xbase::DbArea& A, std::istringstream& iss, SeekSpec& out) {
+    // Grab everything after the word SEEK (already consumed by caller)
+    std::ostringstream oss; oss << iss.rdbuf();
+    std::string rest = trim(oss.str());
+    if (rest.empty()) return false;
+
+    // Look for TAG ... [OF ...] at the tail (case-insensitive).
+    auto restU = upper(rest);
+    std::string before = rest;
+    std::string tagPart;
+
+    auto posTAG = restU.rfind(" TAG ");
+    if (posTAG != std::string::npos) {
+        before = trim(rest.substr(0, posTAG));
+        tagPart = trim(rest.substr(posTAG + 5)); // after " TAG "
+        // Extract tag and optional OF file
+        auto tagU = upper(tagPart);
+        auto posOF = tagU.find(" OF ");
+        if (posOF == std::string::npos) {
+            out.tag     = unquote(tagPart);
+            out.tag_file.clear();
+        } else {
+            out.tag     = unquote(trim(tagPart.substr(0, posOF)));
+            out.tag_file= unquote(trim(tagPart.substr(posOF + 4)));
+        }
+    } else {
+        before = rest;
+    }
+
+    // Support: "<value> IN <field>"
+    // Case-insensitive " IN " split
+    std::string beforeU = upper(before);
+    auto posIN = beforeU.find(" IN ");
+    if (posIN != std::string::npos) {
+        out.value = unquote(trim(before.substr(0, posIN)));
+        out.field = unquote(trim(before.substr(posIN + 4)));
+        return !out.value.empty() && !out.field.empty();
+    }
+
+    // Tokenize the "before" part and try:
+    // 1) <field> = <value>
+    // 2) <field> <value>
+    auto toks = split_ws(before);
+    if (toks.empty()) return false;
+
+    // If first token resolves to a field, treat it as field
+    if (xfg::resolve_field_index_std(A, toks.front()) > 0) {
+        out.field = toks.front();
+        std::string rhs = trim(before.substr(out.field.size()));
+        if (!rhs.empty() && rhs.front()=='=') {
+            rhs.erase(rhs.begin());
+            rhs = trim(rhs);
+        }
+        out.value = unquote(rhs);
+        return !out.value.empty();
+    }
+
+    // Otherwise assume: value [IN field] form must be used ? fail
+    return false;
+}
+
+} // namespace
+
+void cmd_SEEK(xbase::DbArea& db, std::istringstream& iss)
+{
+    if (!db.isOpen()) { std::cout << "SEEK: no table open.\n"; return; }
+
+    SeekSpec spec;
+    if (!parse_seek_args(db, iss, spec)) {
+        std::cout << "Usage:\n"
+                  << "  SEEK <value> IN <field> [TAG <tag> [OF <file>]]\n"
+                  << "  SEEK <field> = <value> [TAG <tag> [OF <file>]]\n"
+                  << "  SEEK <field> <value>\n";
+        return;
+    }
+
+    const int fi = xfg::resolve_field_index_std(db, spec.field);
+    if (fi <= 0) { std::cout << "Unknown field: " << spec.field << "\n"; return; }
+
+    const auto fdefs = db.fields();
+    if (fi >= (int)fdefs.size()) { std::cout << "SEEK: field index out of range.\n"; return; }
+    const char ftype = fdefs[fi].type;
+
+    // If an LMDB environment is open AND the current area has an active order/tag,
+    // prefer LMDB SEEK (exact match) and GOTO the returned RECNO.
+    if (dottalk::lmdbcli::is_open() && orderstate::hasOrder(db)) {
+        const std::string tag = orderstate::activeTag(db);
+        if (!tag.empty()) {
+            std::string err;
+            // Ensure LMDB is pointing at the active tag DB.
+            (void)dottalk::lmdbcli::use_db(tag, err);
+
+            int hit_recno = 0;
+            const std::string needle = upper(trim(spec.value)); // TRIM(UPPER())
+            if (dottalk::lmdbcli::seek_key(needle, hit_recno, err) && hit_recno > 0) {
+                if (db.gotoRec(hit_recno) && db.readCurrent()) {
+                    std::cout << "Found at " << hit_recno << ".\n";
+                    return;
+                }
+                std::cout << "SEEK: LMDB hit recno out of range.\n";
+                return;
+            }
+        }
+        // If LMDB is open but miss, fall through to sequential scan for now.
+    }
+
+    const int total = db.recCount();
+    if (total <= 0) { std::cout << "SEEK: Not found.\n"; return; }
+
+    bool found = false;
+
+    if (ftype == 'N') {
+        // numeric equality (010 == 10, 3 == 3.00)
+        double target = NAN;
+        try {
+            target = std::stod(spec.value);
+        } catch (...) {
+            std::string v = spec.value;
+            v.erase(std::remove_if(v.begin(), v.end(),
+                    [](unsigned char c){ return !(std::isdigit(c) || c=='.' || c=='+' || c=='-'); }),
+                v.end());
+            try { target = std::stod(v); } catch (...) { target = NAN; }
+        }
+
+        for (int rn = 1; rn <= total; ++rn) {
+            if (!db.gotoRec(rn))   continue;
+            if (!db.readCurrent()) continue;
+            double have = xfg::getFieldAsNumber(db, spec.field);
+            if (!std::isnan(target) && std::fabs(have - target) < 1e-9) {
+                std::cout << "Found at " << rn << ".\n";
+                found = true; break;
+            }
+        }
+    } else if (ftype == 'D') {
+        // date equality (20260406 == 2026-04-06 == 2026/04/06)
+        const std::string needle = digits_only(spec.value);
+        for (int rn = 1; rn <= total; ++rn) {
+            if (!db.gotoRec(rn))   continue;
+            if (!db.readCurrent()) continue;
+            std::string have = xfg::getFieldAsString(db, spec.field);
+            if (digits_only(have) == needle) {
+                std::cout << "Found at " << rn << ".\n";
+                found = true; break;
+            }
+        }
+    } else if (ftype == 'L') {
+        // logical equality (T/F/Y/N/1/0)
+        bool target{};
+        if (!parse_logical(spec.value, target)) {
+            std::cout << "SEEK: invalid logical value.\n";
+            return;
+        }
+        for (int rn = 1; rn <= total; ++rn) {
+            if (!db.gotoRec(rn))   continue;
+            if (!db.readCurrent()) continue;
+            std::string have = xfg::getFieldAsString(db, spec.field);
+            bool hv{};
+            if (!parse_logical(have, hv)) continue;
+            if (hv == target) { std::cout << "Found at " << rn << ".\n"; found = true; break; }
+        }
+    } else {
+        // character equality: trim + case-insensitive
+        const std::string needle = upper(trim(spec.value));
+        for (int rn = 1; rn <= total; ++rn) {
+            if (!db.gotoRec(rn))   continue;
+            if (!db.readCurrent()) continue;
+            std::string have = xfg::getFieldAsString(db, spec.field);
+            if (upper(trim(have)) == needle) {
+                std::cout << "Found at " << rn << ".\n";
+                found = true; break;
+            }
+        }
+    }
+
+    if (!found) std::cout << "SEEK: Not found.\n";
+}

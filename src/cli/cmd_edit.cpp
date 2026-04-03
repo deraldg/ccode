@@ -1,4 +1,6 @@
-// src/cli/cmd_edit.cpp
+// src/cli/cmd_edit.cpp — EDIT forwards to REPLACE (single).
+// Locking occurs inside the REPLACE implementation.
+
 #include "xbase.hpp"
 #include <sstream>
 

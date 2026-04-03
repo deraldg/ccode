@@ -1,0 +1,613 @@
+// src/cli/cmd_lmdb.cpp
+// DotTalk++: LMDB diagnostic command (standalone, for backend bring-up)
+//
+// Usage:
+//   LMDB
+//   LMDB OPEN <name>          (creates/opens env in TMP/lmdb/<name>)
+//   LMDB CLOSE
+//   LMDB PUT  <key> <recno>
+//   LMDB DEL  <key> <recno>
+//   LMDB SEEK <key>
+//   LMDB SCAN <low> <high>    (inclusive range)
+//   LMDB CLEAR                (drop all data in DB)
+//   LMDB INFO
+//
+// Notes:
+// - Bring-up tool, not the final indexing layer.
+// - Recno stored as uint64 (8 bytes).
+// - Keys are raw bytes of the provided token (no quoting beyond shell tokenization).
+// - Single DBI (unnamed).
+//
+// Build/link: requires lmdb.h + LMDB link.
+
+#include <cstdint>
+#include <cctype>
+#include <cstring>
+#include <filesystem>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/cmd_setpath.hpp"
+
+#include <lmdb.h>
+
+using xbase::DbArea;
+namespace fs = std::filesystem;
+
+namespace {
+
+struct LmdbState {
+    MDB_env* env = nullptr;
+    MDB_dbi  dbi = 0;
+    fs::path env_dir;
+    bool     open = false;
+};
+
+static LmdbState& S() {
+    static LmdbState st;
+    return st;
+}
+
+// RAII: abort unless committed.
+struct TxnGuard {
+    MDB_txn* txn = nullptr;
+    ~TxnGuard() {
+        if (txn) mdb_txn_abort(txn);
+    }
+    TxnGuard() = default;
+    TxnGuard(const TxnGuard&) = delete;
+    TxnGuard& operator=(const TxnGuard&) = delete;
+
+    bool begin(MDB_env* env, unsigned int flags, std::string* err = nullptr) {
+        txn = nullptr;
+        const int rc = mdb_txn_begin(env, nullptr, flags, &txn);
+        if (rc != MDB_SUCCESS) {
+            if (err) *err = std::string("mdb_txn_begin failed: ") + mdb_strerror(rc);
+            txn = nullptr;
+            return false;
+        }
+        return true;
+    }
+
+    bool commit(std::string* err = nullptr) {
+        if (!txn) return true;
+        const int rc = mdb_txn_commit(txn);
+        if (rc != MDB_SUCCESS) {
+            if (err) *err = std::string("mdb_txn_commit failed: ") + mdb_strerror(rc);
+            // txn is invalid after commit attempt per LMDB? To be safe, null it.
+            txn = nullptr;
+            return false;
+        }
+        txn = nullptr;
+        return true;
+    }
+};
+
+struct CursorGuard {
+    MDB_cursor* cur = nullptr;
+    ~CursorGuard() {
+        if (cur) mdb_cursor_close(cur);
+    }
+    CursorGuard() = default;
+    CursorGuard(const CursorGuard&) = delete;
+    CursorGuard& operator=(const CursorGuard&) = delete;
+
+    bool open(MDB_txn* txn, MDB_dbi dbi, std::string* err = nullptr) {
+        cur = nullptr;
+        const int rc = mdb_cursor_open(txn, dbi, &cur);
+        if (rc != MDB_SUCCESS) {
+            if (err) *err = std::string("mdb_cursor_open failed: ") + mdb_strerror(rc);
+            cur = nullptr;
+            return false;
+        }
+        return true;
+    }
+};
+
+static std::string up(std::string s) {
+    for (auto& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+static fs::path ensure_tmp_dir() {
+    using dottalk::paths::Slot;
+    fs::path tmp = dottalk::paths::get_slot(Slot::TMP);
+    if (tmp.empty()) {
+        // Defensive: default to ./data/tmp if setpath not initialized
+        tmp = fs::current_path() / "data" / "tmp";
+    }
+    std::error_code ec;
+    fs::create_directories(tmp, ec);
+    return tmp;
+}
+
+static bool lmdb_close_quiet() {
+    auto& st = S();
+    if (!st.open) return true;
+
+    try {
+        if (st.env) {
+            if (st.dbi != 0) mdb_dbi_close(st.env, st.dbi);
+            mdb_env_close(st.env);
+        }
+    } catch (...) {
+        // ignore
+    }
+
+    st.env = nullptr;
+    st.dbi = 0;
+    st.env_dir.clear();
+    st.open = false;
+    return true;
+}
+
+static bool is_safe_env_name(const std::string& name) {
+    // Keep it simple: no path separators, no traversal, and only a conservative charset.
+    if (name.empty()) return false;
+    if (name.find("..") != std::string::npos) return false;
+    if (name.find('/') != std::string::npos) return false;
+    if (name.find('\\') != std::string::npos) return false;
+    for (unsigned char c : name) {
+        if (!(std::isalnum(c) || c == '_' || c == '-' )) return false;
+    }
+    return true;
+}
+
+static bool lmdb_open_env(const fs::path& dir, std::string* err) {
+    auto& st = S();
+    lmdb_close_quiet();
+
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec) {
+        if (err) *err = "failed to create directory: " + dir.string();
+        return false;
+    }
+
+    MDB_env* env = nullptr;
+    int rc = mdb_env_create(&env);
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = std::string("mdb_env_create failed: ") + mdb_strerror(rc);
+        return false;
+    }
+
+    // Conservative settings for bring-up.
+    rc = mdb_env_set_mapsize(env, 256ull * 1024ull * 1024ull); // 256MB
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = std::string("mdb_env_set_mapsize failed: ") + mdb_strerror(rc);
+        mdb_env_close(env);
+        return false;
+    }
+
+    rc = mdb_env_set_maxdbs(env, 1);
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = std::string("mdb_env_set_maxdbs failed: ") + mdb_strerror(rc);
+        mdb_env_close(env);
+        return false;
+    }
+
+    // Optional: cap max readers.
+    rc = mdb_env_set_maxreaders(env, 126);
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = std::string("mdb_env_set_maxreaders failed: ") + mdb_strerror(rc);
+        mdb_env_close(env);
+        return false;
+    }
+
+    // Open environment (directory).
+    rc = mdb_env_open(env, dir.string().c_str(), 0, 0664);
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = std::string("mdb_env_open failed: ") + mdb_strerror(rc);
+        mdb_env_close(env);
+        return false;
+    }
+
+    // Open DBI in a write transaction.
+    TxnGuard tg;
+    std::string terr;
+    if (!tg.begin(env, 0, &terr)) {
+        if (err) *err = terr;
+        mdb_env_close(env);
+        return false;
+    }
+
+    MDB_dbi dbi = 0;
+    rc = mdb_dbi_open(tg.txn, nullptr, MDB_CREATE | MDB_DUPSORT | MDB_DUPFIXED, &dbi);
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = std::string("mdb_dbi_open failed: ") + mdb_strerror(rc);
+        // tg aborts
+        mdb_env_close(env);
+        return false;
+    }
+
+    if (!tg.commit(&terr)) {
+        if (err) *err = terr;
+        mdb_dbi_close(env, dbi);
+        mdb_env_close(env);
+        return false;
+    }
+
+    st.env = env;
+    st.dbi = dbi;
+    st.env_dir = dir;
+    st.open = true;
+    return true;
+}
+
+static MDB_val mv_from_string(const std::string& s) {
+    MDB_val mv{};
+    mv.mv_size = s.size();
+    mv.mv_data = (void*)s.data();
+    return mv;
+}
+
+// IMPORTANT: value storage must outlive the LMDB call.
+// Do NOT take by value here (would return a dangling pointer).
+static MDB_val mv_from_u64_ref(const std::uint64_t& v) {
+    MDB_val mv{};
+    mv.mv_size = sizeof(std::uint64_t);
+    mv.mv_data = (void*)&v;
+    return mv;
+}
+
+static bool u64_from_mv(const MDB_val& mv, std::uint64_t& out) {
+    if (mv.mv_size != sizeof(std::uint64_t)) return false;
+    std::uint64_t v = 0;
+    std::memcpy(&v, mv.mv_data, sizeof(std::uint64_t));
+    out = v;
+    return true;
+}
+
+static void print_help() {
+    std::cout
+        << "LMDB command:\n"
+        << "  LMDB\n"
+        << "  LMDB OPEN <name>          (env dir: TMP/lmdb/<name>)\n"
+        << "  LMDB CLOSE\n"
+        << "  LMDB PUT  <key> <recno>\n"
+        << "  LMDB DEL  <key> <recno>\n"
+        << "  LMDB SEEK <key>\n"
+        << "  LMDB SCAN <low> <high>    (inclusive)\n"
+        << "  LMDB CLEAR\n"
+        << "  LMDB INFO\n";
+}
+
+static bool require_open() {
+    if (!S().open || !S().env) {
+        std::cout << "LMDB: not open. Use: LMDB OPEN <name>\n";
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
+void cmd_LMDB(DbArea& /*A*/, std::istringstream& iss)
+{
+    std::string sub;
+    if (!(iss >> sub)) {
+        print_help();
+        return;
+    }
+
+    sub = up(sub);
+
+    if (sub == "OPEN") {
+        std::string name;
+        if (!(iss >> name) || name.empty()) {
+            std::cout << "Usage: LMDB OPEN <name>\n";
+            return;
+        }
+
+        if (!is_safe_env_name(name)) {
+            std::cout << "LMDB OPEN: invalid name (use [A-Za-z0-9_-], no paths).\n";
+            return;
+        }
+
+        const fs::path tmp = ensure_tmp_dir();
+        const fs::path dir = tmp / "lmdb" / name;
+
+        std::string err;
+        if (!lmdb_open_env(dir, &err)) {
+            std::cout << "LMDB OPEN failed: " << err << "\n";
+            return;
+        }
+
+        std::cout << "LMDB: opened env dir: " << S().env_dir.string() << "\n";
+        return;
+    }
+
+    if (sub == "CLOSE") {
+        if (!S().open) {
+            std::cout << "LMDB: already closed.\n";
+            return;
+        }
+        lmdb_close_quiet();
+        std::cout << "LMDB: closed.\n";
+        return;
+    }
+
+    if (sub == "INFO") {
+        if (!require_open()) return;
+
+        MDB_envinfo ei{};
+        MDB_stat st{};
+        const int rc1 = mdb_env_info(S().env, &ei);
+        const int rc2 = mdb_env_stat(S().env, &st);
+
+        std::cout << "LMDB INFO\n";
+        std::cout << "  dir       : " << S().env_dir.string() << "\n";
+        if (rc1 == MDB_SUCCESS) {
+            std::cout << "  mapsize   : " << (unsigned long long)ei.me_mapsize << "\n";
+            std::cout << "  last_pgno : " << (unsigned long long)ei.me_last_pgno << "\n";
+            std::cout << "  last_txnid: " << (unsigned long long)ei.me_last_txnid << "\n";
+        } else {
+            std::cout << "  env_info  : " << mdb_strerror(rc1) << "\n";
+        }
+
+        if (rc2 == MDB_SUCCESS) {
+            std::cout << "  psize     : " << st.ms_psize << "\n";
+            std::cout << "  depth     : " << st.ms_depth << "\n";
+            std::cout << "  entries   : " << (unsigned long long)st.ms_entries << "\n";
+            std::cout << "  branch    : " << (unsigned long long)st.ms_branch_pages << "\n";
+            std::cout << "  leaf      : " << (unsigned long long)st.ms_leaf_pages << "\n";
+            std::cout << "  overflow  : " << (unsigned long long)st.ms_overflow_pages << "\n";
+        } else {
+            std::cout << "  env_stat  : " << mdb_strerror(rc2) << "\n";
+        }
+        return;
+    }
+
+    if (sub == "CLEAR") {
+        if (!require_open()) return;
+
+        TxnGuard tg;
+        std::string err;
+        if (!tg.begin(S().env, 0, &err)) {
+            std::cout << "LMDB CLEAR: " << err << "\n";
+            return;
+        }
+
+        const int rc = mdb_drop(tg.txn, S().dbi, 0 /*del*/);
+        if (rc != MDB_SUCCESS) {
+            std::cout << "LMDB CLEAR: drop failed: " << mdb_strerror(rc) << "\n";
+            return; // tg aborts
+        }
+
+        if (!tg.commit(&err)) {
+            std::cout << "LMDB CLEAR: " << err << "\n";
+            return;
+        }
+
+        std::cout << "LMDB: cleared.\n";
+        return;
+    }
+
+    if (sub == "PUT") {
+        if (!require_open()) return;
+
+        std::string key;
+        std::string recno_s;
+        if (!(iss >> key >> recno_s)) {
+            std::cout << "Usage: LMDB PUT <key> <recno>\n";
+            return;
+        }
+
+        std::uint64_t recno = 0;
+        try {
+            recno = static_cast<std::uint64_t>(std::stoull(recno_s));
+        } catch (...) {
+            std::cout << "LMDB PUT: invalid recno: " << recno_s << "\n";
+            return;
+        }
+
+        TxnGuard tg;
+        std::string err;
+        if (!tg.begin(S().env, 0, &err)) {
+            std::cout << "LMDB PUT: " << err << "\n";
+            return;
+        }
+
+        MDB_val k = mv_from_string(key);
+        MDB_val v = mv_from_u64_ref(recno);
+
+        const int rc = mdb_put(tg.txn, S().dbi, &k, &v, 0);
+        if (rc != MDB_SUCCESS) {
+            std::cout << "LMDB PUT: put failed: " << mdb_strerror(rc) << "\n";
+            return; // tg aborts
+        }
+
+        if (!tg.commit(&err)) {
+            std::cout << "LMDB PUT: " << err << "\n";
+            return;
+        }
+
+        std::cout << "LMDB: " << key << " -> " << (unsigned long long)recno << "\n";
+        return;
+    }
+
+    if (sub == "DEL") {
+        if (!require_open()) return;
+
+        std::string key;
+        std::string recno_s;
+        if (!(iss >> key >> recno_s)) {
+            std::cout << "Usage: LMDB DEL <key> <recno>\n";
+            return;
+        }
+
+        std::uint64_t recno = 0;
+        try {
+            recno = static_cast<std::uint64_t>(std::stoull(recno_s));
+        } catch (...) {
+            std::cout << "LMDB DEL: invalid recno: " << recno_s << "\n";
+            return;
+        }
+
+        TxnGuard tg;
+        std::string err;
+        if (!tg.begin(S().env, 0, &err)) {
+            std::cout << "LMDB DEL: " << err << "\n";
+            return;
+        }
+
+        MDB_val k = mv_from_string(key);
+        MDB_val v = mv_from_u64_ref(recno);
+
+        const int rc = mdb_del(tg.txn, S().dbi, &k, &v);
+        if (rc == MDB_NOTFOUND) {
+            std::cout << "LMDB DEL: not found.\n";
+            return; // tg aborts
+        }
+        if (rc != MDB_SUCCESS) {
+            std::cout << "LMDB DEL: del failed: " << mdb_strerror(rc) << "\n";
+            return; // tg aborts
+        }
+
+        if (!tg.commit(&err)) {
+            std::cout << "LMDB DEL: " << err << "\n";
+            return;
+        }
+
+        std::cout << "LMDB: deleted " << key << " -> " << (unsigned long long)recno << "\n";
+        return;
+    }
+
+    if (sub == "SEEK") {
+        if (!require_open()) return;
+
+        std::string key;
+        if (!(iss >> key)) {
+            std::cout << "Usage: LMDB SEEK <key>\n";
+            return;
+        }
+
+        TxnGuard tg;
+        std::string err;
+        if (!tg.begin(S().env, MDB_RDONLY, &err)) {
+            std::cout << "LMDB SEEK: " << err << "\n";
+            return;
+        }
+
+        CursorGuard cg;
+        if (!cg.open(tg.txn, S().dbi, &err)) {
+            std::cout << "LMDB SEEK: " << err << "\n";
+            return;
+        }
+
+        MDB_val k = mv_from_string(key);
+        MDB_val v{};
+
+        int rc = mdb_cursor_get(cg.cur, &k, &v, MDB_SET);
+        if (rc == MDB_NOTFOUND) {
+            std::cout << "LMDB SEEK: not found.\n";
+            return;
+        }
+        if (rc != MDB_SUCCESS) {
+            std::cout << "LMDB SEEK: cursor_get failed: " << mdb_strerror(rc) << "\n";
+            return;
+        }
+
+        std::uint64_t recno = 0;
+        if (!u64_from_mv(v, recno)) {
+            std::cout << "LMDB SEEK: value format unexpected (size=" << (unsigned long long)v.mv_size << ")\n";
+        } else {
+            std::cout << key << " -> " << (unsigned long long)recno << "\n";
+        }
+
+        // Iterate duplicates (if any)
+        while (true) {
+            MDB_val kk = k;
+            MDB_val vv{};
+            rc = mdb_cursor_get(cg.cur, &kk, &vv, MDB_NEXT_DUP);
+            if (rc == MDB_NOTFOUND) break;
+            if (rc != MDB_SUCCESS) break;
+
+            std::uint64_t r2 = 0;
+            if (u64_from_mv(vv, r2)) {
+                std::cout << key << " -> " << (unsigned long long)r2 << "\n";
+            }
+        }
+
+        return;
+    }
+
+    if (sub == "SCAN") {
+        if (!require_open()) return;
+
+        std::string low, high;
+        if (!(iss >> low >> high)) {
+            std::cout << "Usage: LMDB SCAN <low> <high>\n";
+            return;
+        }
+
+        TxnGuard tg;
+        std::string err;
+        if (!tg.begin(S().env, MDB_RDONLY, &err)) {
+            std::cout << "LMDB SCAN: " << err << "\n";
+            return;
+        }
+
+        CursorGuard cg;
+        if (!cg.open(tg.txn, S().dbi, &err)) {
+            std::cout << "LMDB SCAN: " << err << "\n";
+            return;
+        }
+
+        MDB_val k = mv_from_string(low);
+        MDB_val v{};
+
+        int rc = mdb_cursor_get(cg.cur, &k, &v, MDB_SET_RANGE);
+        if (rc == MDB_NOTFOUND) {
+            std::cout << "(empty)\n";
+            return;
+        }
+        if (rc != MDB_SUCCESS) {
+            std::cout << "LMDB SCAN: cursor_get failed: " << mdb_strerror(rc) << "\n";
+            return;
+        }
+
+        const std::string high_s = high;
+        std::size_t shown = 0;
+
+        while (true) {
+            const std::string key_s(static_cast<const char*>(k.mv_data), static_cast<std::size_t>(k.mv_size));
+            if (key_s > high_s) break;
+
+            std::uint64_t recno = 0;
+            if (u64_from_mv(v, recno)) {
+                std::cout << key_s << " -> " << (unsigned long long)recno << "\n";
+                ++shown;
+            }
+
+            // Print duplicates for current key
+            while (true) {
+                MDB_val kk = k;
+                MDB_val vv{};
+                rc = mdb_cursor_get(cg.cur, &kk, &vv, MDB_NEXT_DUP);
+                if (rc == MDB_NOTFOUND) break;
+                if (rc != MDB_SUCCESS) break;
+
+                std::uint64_t r2 = 0;
+                if (u64_from_mv(vv, r2)) {
+                    std::cout << key_s << " -> " << (unsigned long long)r2 << "\n";
+                    ++shown;
+                }
+            }
+
+            rc = mdb_cursor_get(cg.cur, &k, &v, MDB_NEXT);
+            if (rc == MDB_NOTFOUND) break;
+            if (rc != MDB_SUCCESS) break;
+        }
+
+        if (shown == 0) std::cout << "(empty)\n";
+        return;
+    }
+
+    // Unknown subcommand => show help.
+    print_help();
+}

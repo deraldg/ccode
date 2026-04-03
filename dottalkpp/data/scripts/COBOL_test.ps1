@@ -1,0 +1,9 @@
+
+// ATTEMPT TO OPEN
+USE STUDENTS  
+// FALL BACK IF ALREADY OPEN
+SELECT STUDENTS
+COBOL BUILD first_cobol_test.cob
+COBOL EXPORT STUDENTS
+COBOL RUN   first_cobol_test.exe
+COBOL TEST  first_cobol_test.cob

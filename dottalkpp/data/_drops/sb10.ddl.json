@@ -1,0 +1,66 @@
+{
+  "engine": "DBF",
+  "engine_notes": [
+    "DBF header written"
+  ],
+  "fields": [
+    {
+      "decimals": 0,
+      "length": 9,
+      "name": "SID",
+      "type": "N"
+    },
+    {
+      "decimals": 0,
+      "length": 20,
+      "name": "LNAME",
+      "type": "C"
+    },
+    {
+      "decimals": 0,
+      "length": 15,
+      "name": "FNAME",
+      "type": "C"
+    },
+    {
+      "decimals": 0,
+      "length": 8,
+      "name": "DOB",
+      "type": "D"
+    },
+    {
+      "decimals": 0,
+      "length": 1,
+      "name": "GENDER",
+      "type": "C"
+    },
+    {
+      "decimals": 0,
+      "length": 4,
+      "name": "MAJOR",
+      "type": "C"
+    },
+    {
+      "decimals": 0,
+      "length": 8,
+      "name": "ENROLL_D",
+      "type": "D"
+    },
+    {
+      "decimals": 2,
+      "length": 4,
+      "name": "GPA",
+      "type": "N"
+    },
+    {
+      "decimals": 0,
+      "length": 32,
+      "name": "EMAIL",
+      "type": "C"
+    }
+  ],
+  "indexes": [],
+  "relations": [],
+  "schema_version": "1.0",
+  "table": "sb10"
+}

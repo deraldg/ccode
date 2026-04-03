@@ -1,0 +1,20 @@
+DBAREA
+  DBAREA [VALUES|FULL]
+  Print runtime facts for the current work area.
+
+Examples:
+    DBAREA
+    DBAREA VALUES
+    DBAREA FULL
+
+Notes:
+    Reports:
+      - DBF (abs), DBF dir, Basename, Logical name
+      - Memo path, Memo kind (FPT/DBT/none)
+      - Records, Record length (cpr), Fields
+      - Recno, Deleted flag
+      - Fields table (#, Name, Type, Len, Dec)
+
+    VALUES/FULL: also print current-record values if readable.
+    Index/Order details will appear once DbArea exposes forwarders
+    (container path/kind, active tag, ASC/DESC).

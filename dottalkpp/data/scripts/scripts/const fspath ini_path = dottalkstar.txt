@@ -1,0 +1,5 @@
+const fs::path ini_path = dottalk::startup::get_executable_dir() / "init.ini";
+if (fs::exists(ini_path) && fs::is_regular_file(ini_path)) {
+    std::cout << "INIT: processing " << ini_path.string() << "\n";
+    dottalk::startup::run_script_file(current, ini_path);
+}

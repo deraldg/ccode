@@ -1,2 +1,0 @@
-TEST ..\tests\count_delete_roundtrip.txt VERBOSE
-TEST ..\tests\count_next_rest_predicate.txt VERBOSE

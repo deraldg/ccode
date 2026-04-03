@@ -11,7 +11,7 @@ namespace cli {
  * Aliases are case-insensitive. We store them normalized (upper).
  * Values are current area numbers (0-based).
  *
- * NOTE: Aliases don’t auto-update if an area closes/reopens.
+ * NOTE: Aliases don?t auto-update if an area closes/reopens.
  * We keep the mapping as-is (may become dangling). The resolver
  * reports dangling aliases so callers can emit a helpful message.
  */
@@ -42,3 +42,6 @@ private:
 AliasRegistry& aliases();
 
 } // namespace cli
+
+
+

@@ -1,4 +1,4 @@
-// cmd_order.cpp — consolidated ASCEND and DESCEND commands
+// cmd_order.cpp ? consolidated ASCEND and DESCEND commands
 // Safe to build even if indexing isn't wired yet.
 
 #include "xbase.hpp"
@@ -8,7 +8,7 @@
 #include <iostream>
 #include <string>
 
-#include "order_state.hpp"
+#include "cli/order_state.hpp"
 #include "xbase.hpp"
 #include <sstream>
 #include <iostream>
@@ -29,3 +29,6 @@ static inline bool ensure_table_open(DbArea& A) {
     }
     return false;
 }
+
+
+

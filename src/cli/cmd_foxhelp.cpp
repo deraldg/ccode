@@ -13,21 +13,13 @@
 
 using xbase::DbArea;
 
-// helper: uppercase copy
-static std::string up(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
-    return s;
-}
-
 static void print_item(const foxref::Item& it) {
-    // NAME  [supported/unsupported]
     std::cout << std::left << std::setw(14) << it.name
               << (it.supported ? " " : " (unsupported) ") << "\n";
-    //   syntax
+
     if (it.syntax && *it.syntax)
         std::cout << "  " << it.syntax << "\n";
-    //   summary
+
     if (it.summary && *it.summary)
         std::cout << "  " << it.summary << "\n";
 }
@@ -38,7 +30,6 @@ static void do_foxhelp(std::istringstream& in) {
     rest = textio::trim(rest);
 
     if (rest.empty()) {
-        // no args: list a compact catalog
         std::cout << "FoxPro-style commands (subset):\n";
         for (const auto& it : foxref::catalog()) {
             std::cout << "  " << std::left << std::setw(12) << it.name;
@@ -52,15 +43,11 @@ static void do_foxhelp(std::istringstream& in) {
         return;
     }
 
-    // single token lookups first
-    {
-        if (const auto* hit = foxref::find(rest); hit) {
-            print_item(*hit);
-            return;
-        }
+    if (const auto* hit = foxref::find(rest); hit) {
+        print_item(*hit);
+        return;
     }
 
-    // tokenized search across name/syntax
     auto results = foxref::search(rest);
     if (!results.empty()) {
         std::cout << "Matches for \"" << rest << "\":\n";
@@ -75,7 +62,6 @@ static void do_foxhelp(std::istringstream& in) {
     std::cout << "Try FOXHELP (no args) to list commands.\n";
 }
 
-// Public handlers (what shell.cpp registers)
 void cmd_FOXHELP(DbArea& /*A*/, std::istringstream& in) {
     do_foxhelp(in);
 }

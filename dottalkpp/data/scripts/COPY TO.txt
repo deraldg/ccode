@@ -1,0 +1,143 @@
+Here’s the exact **walk-through for STUDENTS**—nothing extra, no branching.
+
+---
+
+# **Step 1 — Lock baseline (v32 source)**
+
+```text
+SELECT STUDENTS
+AREA
+STRUCT
+COUNT
+```
+
+You want to confirm:
+
+* Flavor = **v32**
+* Record count (expect ~200)
+* Field layout correct
+
+---
+
+# **Step 2 — Copy to v64 target**
+
+Try your syntax (one of these will stick):
+
+```text
+COPY TO xdbf/students.dbf x64
+```
+
+or
+
+```text
+COPY TO xdbf/students.dbf vfp
+```
+
+Do not proceed until this runs clean (no warnings).
+
+---
+
+# **Step 3 — Open migrated table**
+
+```text
+USE xdbf/students.dbf
+AREA
+STRUCT
+COUNT
+```
+
+You are looking for:
+
+* Flavor = **v64**
+* Record count = **same as source**
+* Field structure = **identical**
+
+If any of those differ → stop. Fix copy before anything else.
+
+---
+
+# **Step 4 — Side-by-side sanity (important)**
+
+Flip between them:
+
+```text
+SELECT STUDENTS
+COUNT
+
+SELECT xstudents   && or USE xdbf/students.dbf if no alias
+COUNT
+```
+
+Counts must match exactly.
+
+---
+
+# **Step 5 — Spot-check data (minimal, not exhaustive)**
+
+```text
+TOP
+DISPLAY
+
+SELECT xstudents
+TOP
+DISPLAY
+```
+
+You’re checking:
+
+* names
+* dates
+* numeric fields
+* no truncation / padding issues
+
+---
+
+# **Stop point (intentional)**
+
+Do **NOT**:
+
+* build LMDB
+* trust CDX yet
+* run regression
+
+At this point you are proving only:
+
+> **v32 → v64 copy is clean and deterministic**
+
+---
+
+# **What success looks like**
+
+You should have:
+
+* `dbf/students.dbf` → v32
+* `xdbf/students.dbf` → v64
+* identical data + structure
+* only difference = header flavor
+
+---
+
+# **If something goes wrong**
+
+Tell me exactly which step fails:
+
+* copy fails → syntax / writer issue
+* flavor wrong → header write problem
+* count mismatch → record loop bug
+* data mismatch → field packing/typing issue
+
+I’ll zero in on that layer only.
+
+---
+
+Once STUDENTS is clean, we repeat for:
+
+* TEACHERS (you already partially have this)
+* then bulk the rest
+
+Then we move to:
+**CDX on v64 → then LMDB**
+
+---
+
+Proceed.

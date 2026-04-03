@@ -1,0 +1,116 @@
+SET ECHO OFF
+* ============================================================
+* ORDER_ITERATOR_REGRESSION_001.DTS
+*
+* Purpose:
+*   Standard regression for ordered-iteration commands.
+*
+* Scope:
+*   - SMARTLIST natural / INX / CNX / CDX
+*   - ASC / DESC behavior
+*   - TOP consistency under active order
+*   - SCHEMAS save/load order restoration
+*
+* Notes:
+*   - Assumes STUDENTS exists
+*   - Assumes STUDENTS has:
+*       students.inx
+*       students.cnx
+*       students.cdx
+*     with tag/order LNAME available
+* ============================================================
+
+ECHO ============================================================
+ECHO ORDER ITERATOR REGRESSION 001
+ECHO ============================================================
+
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+
+ECHO.
+ECHO --- Section 1: Natural order baseline ---
+SELECT STUDENTS
+SET ORDER TO 0
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 2: INX baseline ---
+SET INDEX TO STUDENTS.inx
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 3: CNX ascending ---
+SET INDEX TO STUDENTS.cnx
+SET ORDER TO TAG LNAME
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 4: CNX descending ---
+DESCEND
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 5: CNX TOP consistency ---
+ASCEND
+TOP
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 6: CDX ascending ---
+SET INDEX TO STUDENTS.cdx
+SET ORDER TO TAG LNAME
+ASCEND
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 7: CDX descending ---
+DESCEND
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 8: CDX TOP consistency ---
+ASCEND
+TOP
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 9: Workspace save/load with active CDX tag ---
+SCHEMAS SAVE idx_smoke
+SCHEMAS CLOSE
+SCHEMAS LOAD idx_smoke
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 10: Workspace save/load with relations + order ---
+SET RELATIONS CLEAR ALL
+SET RELATIONS ADD STUDENTS ENROLL ON SID
+SET RELATIONS ADD ENROLL CLASSES ON CLS_ID
+REL REFRESH
+REL LIST ALL
+SCHEMAS SAVE rel_idx_smoke
+SCHEMAS CLOSE
+SCHEMAS LOAD rel_idx_smoke
+AREA
+REL LIST ALL
+SMARTLIST 5
+
+ECHO.
+ECHO --- Section 11: Return to natural order ---
+SET ORDER TO 0
+AREA
+SMARTLIST 5
+
+ECHO.
+ECHO ============================================================
+ECHO ORDER ITERATOR REGRESSION COMPLETE
+ECHO ============================================================
+

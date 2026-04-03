@@ -1,0 +1,778 @@
+## CODEX Section — DotTalk++ System Dictionary Roadmap
+
+### Purpose
+
+This document outlines the long-term plan for implementing a **DotTalk++ System Dictionary**: a set of metadata catalogs that describe the structure and capabilities of the DotTalk++ environment itself.
+
+The system dictionary will allow DotTalk++ to:
+
+* inspect its own tables, indexes, and relations
+* expose metadata to users and tools
+* support advanced development utilities
+* move toward a **self-describing database environment**
+
+The current **Help Metadata Workspace** (`commands.dbf`, `cmd_args.dbf`) represents the first component of this architecture.
+
+---
+
+# 1. Concept
+
+A **system dictionary** is a collection of tables describing database objects.
+
+Traditional database systems maintain such catalogs internally. Examples include:
+
+| System     | Metadata storage         |
+| ---------- | ------------------------ |
+| Oracle     | Data dictionary tables   |
+| PostgreSQL | pg_catalog               |
+| SQL Server | system tables            |
+| FoxPro     | DBF headers + DBC tables |
+
+DotTalk++ can implement a similar concept using **ordinary DBF tables**, making the metadata visible and queryable.
+
+General architecture:
+
+```
+DotTalk Engine
+       ↓
+System Dictionary Tables
+       ↓
+User Tools / CLI / SMARTLIST
+```
+
+---
+
+# 2. Existing Dictionary Components
+
+### Command Catalog
+
+Current tables:
+
+```
+commands.dbf
+cmd_args.dbf
+```
+
+Purpose:
+
+* document command structure
+* support HELP functionality
+* enable command discovery
+
+Relation:
+
+```
+COMMANDS.COMMAND → CMD_ARGS.COMMAND
+```
+
+Future improvement:
+
+```
+CMDKEY = CATALOG + "|" + COMMAND
+```
+
+---
+
+# 3. Proposed System Dictionary Tables
+
+The following tables would form the core DotTalk++ system dictionary.
+
+## 3.1 TABLES catalog
+
+```
+tables.dbf
+```
+
+Purpose:
+
+Stores information about known tables.
+
+Suggested fields:
+
+| Field      | Purpose                        |
+| ---------- | ------------------------------ |
+| TABLE_NAME | logical name                   |
+| FILE_PATH  | physical path                  |
+| ENGINE     | DBF format (dBASE, FOX26, VFP) |
+| MEMO_FILE  | memo sidecar                   |
+| RECORDS    | record count                   |
+| CREATED    | creation date                  |
+| UPDATED    | last update                    |
+
+---
+
+## 3.2 FIELDS catalog
+
+```
+fields.dbf
+```
+
+Purpose:
+
+Describes table structures.
+
+Suggested fields:
+
+| Field      | Purpose          |
+| ---------- | ---------------- |
+| TABLE_NAME | table            |
+| FIELD_NAME | field            |
+| TYPE       | data type        |
+| LENGTH     | field length     |
+| DECIMALS   | numeric decimals |
+| ORDINAL    | position         |
+
+Relation:
+
+```
+TABLES.TABLE_NAME → FIELDS.TABLE_NAME
+```
+
+---
+
+## 3.3 INDEXES catalog
+
+```
+indexes.dbf
+```
+
+Purpose:
+
+Describes index containers and tags.
+
+Suggested fields:
+
+| Field      | Purpose         |
+| ---------- | --------------- |
+| TABLE_NAME | owning table    |
+| INDEX_FILE | index container |
+| TAG_NAME   | tag name        |
+| KEY_EXPR   | key expression  |
+| UNIQUE     | unique flag     |
+| ASCENDING  | sort order      |
+
+Relation:
+
+```
+TABLES.TABLE_NAME → INDEXES.TABLE_NAME
+```
+
+---
+
+## 3.4 RELATIONS catalog
+
+```
+relations.dbf
+```
+
+Purpose:
+
+Stores defined relations between tables.
+
+Suggested fields:
+
+| Field        | Purpose         |
+| ------------ | --------------- |
+| PARENT_TABLE | parent          |
+| CHILD_TABLE  | child           |
+| KEY_FIELD    | join key        |
+| ACTIVE       | relation active |
+
+Relation graph representation.
+
+---
+
+## 3.5 SCHEMAS catalog
+
+```
+schemas.dbf
+```
+
+Purpose:
+
+Describes saved workspace environments.
+
+Suggested fields:
+
+| Field       | Purpose             |
+| ----------- | ------------------- |
+| SCHEMA_NAME | schema identifier   |
+| TABLE_COUNT | tables in workspace |
+| REL_COUNT   | relations           |
+| CREATED     | creation date       |
+
+This catalog references schema files such as:
+
+```
+*.dtschemas
+```
+
+---
+
+## 3.6 COMMANDS catalog (existing)
+
+```
+commands.dbf
+```
+
+Purpose:
+
+Command metadata.
+
+---
+
+## 3.7 CMD_ARGS catalog (existing)
+
+```
+cmd_args.dbf
+```
+
+Purpose:
+
+Argument metadata.
+
+---
+
+# 4. Dictionary Organization
+
+The dictionary could live under a dedicated directory.
+
+Example:
+
+```
+data\system\
+```
+
+Structure:
+
+```
+system\
+    tables.dbf
+    fields.dbf
+    indexes.dbf
+    relations.dbf
+    commands.dbf
+    cmd_args.dbf
+```
+
+This separates system catalogs from user data.
+
+---
+
+# 5. Querying the System Dictionary
+
+Once implemented, users could inspect the database environment directly.
+
+Examples:
+
+### List tables
+
+```
+SMARTLIST tables
+```
+
+### List fields
+
+```
+SMARTLIST FOR table_name = "STUDENTS"
+```
+
+### Inspect indexes
+
+```
+SMARTLIST indexes
+```
+
+### Inspect relations
+
+```
+SMARTLIST relations
+```
+
+This creates an introspective environment.
+
+---
+
+# 6. Interaction with Existing Commands
+
+Several DotTalk++ commands would interact with dictionary tables.
+
+| Command | Dictionary impact      |
+| ------- | ---------------------- |
+| CREATE  | add entry to tables    |
+| ALTER   | update fields          |
+| INDEX   | add entry to indexes   |
+| REL ADD | add entry to relations |
+| DROP    | remove entries         |
+
+These updates can be implemented incrementally.
+
+---
+
+# 7. Benefits
+
+### Self-describing database
+
+Users can explore structure without external tools.
+
+### Development utilities
+
+Tools can query metadata for automation.
+
+### Documentation generation
+
+The dictionary can produce schema documentation.
+
+### Debugging
+
+Developers can inspect database state directly.
+
+---
+
+# 8. Compatibility with DotTalk++ Philosophy
+
+Using DBF catalogs aligns with the design goals of DotTalk++:
+
+* lightweight
+* transparent
+* inspectable
+* scriptable
+
+Unlike many systems where catalogs are hidden, DotTalk++ catalogs remain visible.
+
+---
+
+# 9. Incremental Implementation Strategy
+
+The dictionary should be implemented gradually.
+
+Suggested order:
+
+1. commands / cmd_args (already done)
+2. tables catalog
+3. fields catalog
+4. indexes catalog
+5. relations catalog
+6. schema catalog
+
+Each step adds introspection capability without requiring a full redesign.
+
+---
+
+# 10. Long-Term Vision
+
+With a complete system dictionary, DotTalk++ could support advanced tooling such as:
+
+* schema browsers
+* table designers
+* index inspectors
+* relational graph viewers
+* metadata export tools
+
+These capabilities would move DotTalk++ closer to a full development environment while maintaining its lightweight DBF engine core.
+
+---
+
+### Conclusion
+
+The DotTalk++ System Dictionary will provide a structured way to describe the internal state of the database engine.
+
+The existing help metadata system already demonstrates the viability of this approach.
+
+Expanding this concept to tables, fields, indexes, and relations will produce a **fully introspectable DBF database environment.**
+
+## CODEX Specification — DotTalk++ System Dictionary (Formal Spec)
+
+This section defines **precise table specifications and operational behavior** for the proposed DotTalk++ System Dictionary.
+
+The goal is to standardize the metadata schema so that:
+
+* the engine
+* CLI commands
+* future GUI tools
+* documentation generators
+
+all operate from the same metadata source.
+
+---
+
+# 1. Dictionary Storage Location
+
+System dictionary tables live under:
+
+```
+<data_root>\system\
+```
+
+Example:
+
+```
+D:\code\ccode\dottalkpp\data\system\
+```
+
+Directory layout:
+
+```
+system\
+    tables.dbf
+    fields.dbf
+    indexes.dbf
+    relations.dbf
+    schemas.dbf
+    commands.dbf
+    cmd_args.dbf
+```
+
+The **help catalog** may remain in:
+
+```
+data\help\
+```
+
+or optionally be unified into `system\`.
+
+---
+
+# 2. TABLES Catalog Specification
+
+File:
+
+```
+tables.dbf
+```
+
+Purpose:
+
+Tracks all tables known to the DotTalk++ environment.
+
+### Structure
+
+| Field      | Type | Length | Description                      |
+| ---------- | ---- | ------ | -------------------------------- |
+| TABLE_ID   | N    | 10     | unique identifier                |
+| TABLE_NAME | C    | 32     | logical table name               |
+| FILE_PATH  | C    | 128    | absolute path                    |
+| ENGINE     | C    | 8      | DBF format (DBASE / FOX26 / VFP) |
+| MEMO_FILE  | C    | 64     | memo sidecar                     |
+| RECORDS    | N    | 10     | record count                     |
+| CREATED    | D    | 8      | creation date                    |
+| UPDATED    | D    | 8      | last modification                |
+
+### Primary key
+
+```
+TABLE_NAME
+```
+
+Index:
+
+```
+INDEX ON TABLE_NAME TAG TABLE_NAME
+```
+
+---
+
+# 3. FIELDS Catalog Specification
+
+File:
+
+```
+fields.dbf
+```
+
+Purpose:
+
+Describes the field structure of each table.
+
+### Structure
+
+| Field      | Type | Length | Description       |
+| ---------- | ---- | ------ | ----------------- |
+| FIELD_ID   | N    | 10     | unique identifier |
+| TABLE_NAME | C    | 32     | owning table      |
+| FIELD_NAME | C    | 32     | field name        |
+| TYPE       | C    | 1      | data type         |
+| LENGTH     | N    | 4      | field length      |
+| DECIMALS   | N    | 2      | decimal places    |
+| ORDINAL    | N    | 3      | field position    |
+
+### Indexes
+
+```
+INDEX ON TABLE_NAME TAG TABLE
+INDEX ON FIELD_NAME TAG FIELD
+```
+
+### Relationship
+
+```
+TABLES.TABLE_NAME → FIELDS.TABLE_NAME
+```
+
+---
+
+# 4. INDEXES Catalog Specification
+
+File:
+
+```
+indexes.dbf
+```
+
+Purpose:
+
+Tracks all indexes defined for tables.
+
+### Structure
+
+| Field      | Type | Length | Description     |
+| ---------- | ---- | ------ | --------------- |
+| INDEX_ID   | N    | 10     | identifier      |
+| TABLE_NAME | C    | 32     | table           |
+| INDEX_FILE | C    | 128    | index container |
+| TAG_NAME   | C    | 32     | tag name        |
+| KEY_EXPR   | C    | 128    | key expression  |
+| UNIQUE     | L    | 1      | uniqueness      |
+| ASCENDING  | L    | 1      | order direction |
+
+### Index
+
+```
+INDEX ON TABLE_NAME TAG TABLE
+```
+
+### Relationship
+
+```
+TABLES.TABLE_NAME → INDEXES.TABLE_NAME
+```
+
+---
+
+# 5. RELATIONS Catalog Specification
+
+File:
+
+```
+relations.dbf
+```
+
+Purpose:
+
+Stores relation definitions.
+
+### Structure
+
+| Field        | Type | Length | Description |
+| ------------ | ---- | ------ | ----------- |
+| REL_ID       | N    | 10     | identifier  |
+| PARENT_TABLE | C    | 32     | parent      |
+| CHILD_TABLE  | C    | 32     | child       |
+| KEY_FIELD    | C    | 32     | join field  |
+| ACTIVE       | L    | 1      | active flag |
+
+### Index
+
+```
+INDEX ON PARENT_TABLE TAG PARENT
+```
+
+---
+
+# 6. SCHEMAS Catalog Specification
+
+File:
+
+```
+schemas.dbf
+```
+
+Purpose:
+
+Tracks saved workspace schemas.
+
+### Structure
+
+| Field       | Type | Length | Description      |
+| ----------- | ---- | ------ | ---------------- |
+| SCHEMA_ID   | N    | 10     | identifier       |
+| SCHEMA_NAME | C    | 32     | schema name      |
+| TABLE_COUNT | N    | 5      | number of tables |
+| REL_COUNT   | N    | 5      | relations        |
+| CREATED     | D    | 8      | creation date    |
+
+---
+
+# 7. COMMAND Catalog (existing)
+
+File:
+
+```
+commands.dbf
+```
+
+### Structure
+
+| Field     | Type | Length |
+| --------- | ---- | ------ |
+| ID        | N    | 10     |
+| CATALOG   | C    | 8      |
+| COMMAND   | C    | 24     |
+| IMPLEMENT | L    | 1      |
+| SUPPORTED | L    | 1      |
+| USAGE     | M    | memo   |
+| VERBOSE   | M    | memo   |
+
+---
+
+# 8. CMD_ARGS Catalog (existing)
+
+File:
+
+```
+cmd_args.dbf
+```
+
+### Structure
+
+| Field   | Type | Length |
+| ------- | ---- | ------ |
+| ID      | N    | 10     |
+| CATALOG | C    | 8      |
+| COMMAND | C    | 24     |
+| ARG     | C    | 24     |
+| USAGE   | M    | memo   |
+| VERBOSE | M    | memo   |
+
+---
+
+# 9. Composite Command Key
+
+Future improvement.
+
+Add field:
+
+```
+CMDKEY C(64)
+```
+
+Definition:
+
+```
+CMDKEY = CATALOG + "|" + COMMAND
+```
+
+Index:
+
+```
+INDEX ON CMDKEY TAG CMDKEY
+```
+
+Relation:
+
+```
+COMMANDS.CMDKEY → CMD_ARGS.CMDKEY
+```
+
+---
+
+# 10. Engine Interaction Rules
+
+The system dictionary should be **updated automatically by engine commands.**
+
+| Command | Dictionary Action       |
+| ------- | ----------------------- |
+| CREATE  | insert row in tables    |
+| ALTER   | update fields           |
+| INDEX   | insert row in indexes   |
+| REL ADD | insert row in relations |
+| DROP    | remove rows             |
+
+---
+
+# 11. Dictionary Initialization
+
+A bootstrap command could initialize the dictionary.
+
+Example:
+
+```
+SYS INIT
+```
+
+Actions:
+
+```
+create system directory
+create dictionary tables
+create indexes
+```
+
+---
+
+# 12. Metadata Query Examples
+
+### List known tables
+
+```
+SMARTLIST tables
+```
+
+### Show table fields
+
+```
+SMARTLIST FOR table_name="STUDENTS"
+```
+
+### Show indexes
+
+```
+SMARTLIST indexes
+```
+
+### Show relations
+
+```
+SMARTLIST relations
+```
+
+---
+
+# 13. System Dictionary Philosophy
+
+Unlike many databases where catalogs are hidden, DotTalk++ catalogs remain **transparent and user-accessible**.
+
+Advantages:
+
+* inspectable
+* scriptable
+* educational
+* debuggable
+
+---
+
+# 14. Implementation Priority
+
+Recommended development order:
+
+1. commands / cmd_args (done)
+2. tables catalog
+3. fields catalog
+4. indexes catalog
+5. relations catalog
+6. schemas catalog
+
+Each step increases introspection capability.
+
+---
+
+# 15. Long-Term Result
+
+When complete, the system dictionary will allow DotTalk++ to:
+
+* introspect database structure
+* power developer tools
+* generate documentation
+* support advanced browsing environments
+
+This moves DotTalk++ toward a **self-describing DBF database system** while maintaining its lightweight architecture.

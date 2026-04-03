@@ -1,0 +1,221 @@
+// src/cli/cmd_wsreport.cpp
+// WSREPORT (workspace + index summary + path/env report)
+
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>       // std::getenv
+#include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "workareas.hpp"
+#include "index_summary.hpp"
+
+// Path state dump (SETPATH)
+#include "cli/cmd_setpath.hpp"   // expects: dottalk::paths::dump()
+
+// Output routing (PRINT/ALTERNATE/etc)
+#include "cli/output_router.hpp"
+
+using dottalk::IndexSummary;
+
+namespace {
+
+std::string upper(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return s;
+}
+
+const char* kind_str(IndexSummary::OrderKind k) {
+    switch (k) {
+        case IndexSummary::OrderKind::Ascending:  return "ASCEND";
+        case IndexSummary::OrderKind::Descending: return "DESCEND";
+        default:                                  return "PHYSICAL";
+    }
+}
+
+bool is_open(const xbase::DbArea* a) {
+    if (!a) return false;
+    try { return a->isOpen() && !a->filename().empty(); }
+    catch (...) { return false; }
+}
+
+static void print_env_block(std::ostream& os) {
+    os << "Environment\n"
+          "----------------------------------------\n";
+
+    auto one = [&](const char* key) {
+        const char* v = std::getenv(key);
+        os << "  " << std::left << std::setw(16) << key << ": "
+           << (v ? v : "(not set)") << "\n";
+    };
+
+    // DotTalk-ish / CLI-ish candidates
+    one("DOTTALK_DATA");
+    one("DOTTALK_DBF");
+    one("DOTTALK_INDEXES");
+    one("DOTTALK_SCHEMAS");
+    one("DOTTALK_SCRIPTS");
+    one("DOTTALK_TESTS");
+    one("DOTTALK_HELP");
+    one("DOTTALK_LOGS");
+    one("DOTTALK_TMP");
+
+#ifdef _WIN32
+    // Windows useful diagnostics
+    one("USERPROFILE");
+    one("HOMEDRIVE");
+    one("HOMEPATH");
+    one("TEMP");
+    one("TMP");
+    one("ComSpec");
+#else
+    // POSIX useful diagnostics
+    one("HOME");
+    one("PWD");
+    one("TMPDIR");
+#endif
+
+    // Always helpful (but long)
+    one("PATH");
+
+    os << "\n";
+}
+
+static void print_paths_block(std::ostream& os) {
+    os << "Paths\n"
+          "----------------------------------------\n";
+    // dump() already returns human-readable multi-line text.
+    os << dottalk::paths::dump() << "\n";
+}
+
+static void print_process_block(std::ostream& os) {
+    os << "Process\n"
+          "----------------------------------------\n";
+    try {
+        os << "  CWD            : " << std::filesystem::current_path().string() << "\n";
+    } catch (...) {
+        os << "  CWD            : (unknown)\n";
+    }
+    os << "\n";
+}
+
+} // namespace
+
+// WSREPORT [ALL] [VERBOSE] [ENV] [PATHS]
+// - VERBOSE or INDEX => detailed tags table
+// - ENV prints environment variables
+// - PATHS prints SETPATH dump (default ON if not suppressed later)
+void cmd_WSREPORT(xbase::DbArea& /*A*/, std::istringstream& args) {
+    std::ostream& os = cli::OutputRouter::instance().out();
+
+    const std::string raw = upper(args.str());
+    const bool wantAll     = raw.find("ALL")      != std::string::npos;
+    const bool wantVerbose = (raw.find("VERBOSE") != std::string::npos) ||
+                             (raw.find("INDEX")   != std::string::npos);
+
+    const bool wantEnv   = (raw.find("ENV")   != std::string::npos);
+    const bool wantPaths = (raw.find("PATHS") != std::string::npos);
+
+    os << "DotTalk Status Report\n\n";
+
+    // “Environmental variables report” + path report
+    // Default behavior:
+    // - Always print PATHS block (because it’s core DotTalk diagnostics)
+    // - Print ENV block only when asked (ENV)
+    print_process_block(os);
+    print_paths_block(os);
+    if (wantEnv) print_env_block(os);
+
+    // Header + area list
+    os << "Workspace\n"
+          "----------------------------------------\n";
+    os << "  Slot  Name\n"
+          "  ----- --------\n";
+    for (std::size_t i = 0; i < workareas::count(); ++i) {
+        xbase::DbArea* ar = workareas::at(i);
+        if (!is_open(ar)) continue;
+        os << "  " << std::setw(5) << i << " " << ar->filename() << "\n";
+    }
+    os << "\n";
+
+    auto print_one = [&](std::size_t slot, xbase::DbArea& ar) {
+        os << "Area " << slot << ": " << ar.filename() << "\n";
+        os << "Index Summary\n----------------------------------------\n";
+
+        const IndexSummary S = dottalk::summarize_index(ar);
+
+        const bool hasOrder = (S.kind != IndexSummary::OrderKind::Physical);
+
+        os << "Has Order   : " << (hasOrder ? "YES" : "NO") << "\n";
+        os << "Container   : " << (S.index_path.empty() ? "(none)" : S.index_path) << "\n";
+        os << "Tag         : " << (S.active_tag.empty() ? "(none)" : S.active_tag) << "\n";
+        os << "Direction   : " << kind_str(S.kind) << "\n";
+        os << "Record Count: " << ar.recCount() << "\n";
+        os << "Recno       : " << ar.recno() << "\n";
+        os << "Record len  : " << ar.recLength() << "\n";
+        os << "Fields      : " << ar.fieldCount() << "\n\n";
+
+        os << "Tags\n";
+        if (S.tags.empty()) {
+            os << "  (none)\n";
+        } else if (!wantVerbose) {
+            bool first = true;
+            os << "  ";
+            for (const auto& t : S.tags) {
+                if (!first) os << ", ";
+                os << (t.tagName.empty() ? t.fieldName : t.tagName);
+                first = false;
+            }
+            os << "\n";
+        } else {
+            os << "  " << std::left << std::setw(14) << "Field Name"
+               << std::setw(10) << "Type"
+               << std::setw(6)  << "Len"
+               << std::setw(6)  << "Dec"
+               << "Dir\n";
+            os << "  ------------ ---------- ------ ------ ----\n";
+            for (const auto& T : S.tags) {
+                const std::string field_name = !T.fieldName.empty() ? T.fieldName : T.tagName;
+                os << "  " << std::left << std::setw(14) << field_name
+                   << std::setw(10) << (T.type.empty() ? "" : T.type)
+                   << std::setw(6)  << T.len
+                   << std::setw(6)  << T.dec
+                   << (T.asc ? "ASC" : "DESC") << "\n";
+            }
+        }
+        os << "\n";
+    };
+
+    if (wantAll) {
+        for (std::size_t i = 0; i < workareas::count(); ++i) {
+            xbase::DbArea* ar = workareas::at(i);
+            if (!is_open(ar)) continue;
+            print_one(i, *ar);
+        }
+    } else {
+        const std::size_t cur = workareas::current_slot();
+        xbase::DbArea* ar = (cur < workareas::count()) ? workareas::at(cur) : nullptr;
+        if (is_open(ar)) {
+            print_one(cur, *ar);
+        } else {
+            // Match your existing empty state style
+            os << "Area " << cur << ":   ()\n";
+            os << "Index Summary\n----------------------------------------\n";
+            os << "Has Order   : NO\n";
+            os << "Container   : (none)\n";
+            os << "Tag         : (none)\n";
+            os << "Direction   : PHYSICAL\n";
+            os << "Record Count: 0\n";
+            os << "Recno       : 0\n";
+            os << "Record len  : 0\n";
+            os << "Fields      : 0\n\n";
+            os << "Tags\n  (none)\n\n";
+        }
+    }
+}

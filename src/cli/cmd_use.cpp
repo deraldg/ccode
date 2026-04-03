@@ -1,139 +1,398 @@
 // src/cli/cmd_use.cpp
+// DotTalk++ USE command (open DBF in a work area) — duplicate-open guard, NOINDEX, auto-attach
+
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <filesystem>
-#include <fstream>
-#include <algorithm>   // for std::transform, std::toupper
+#include <algorithm>
+#include <cctype>
+#include <type_traits>
 
 #include "xbase.hpp"
 #include "textio.hpp"
-#include "order_state.hpp"
-#include "order_hooks.hpp"
-#include "cli/memo_auto.hpp"
-#include "workareas.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_hooks.hpp"      // to run reconcile_after_mutation()
+#include "cli/cmd_setpath.hpp"
+#include "cli/path_resolver.hpp"
+#include "memo/memo_auto.hpp"
 
+#include "cnx/cnx.hpp"              // reporting helper (CNX is deprecated but still supported)
+
+using namespace xbase;
 namespace fs = std::filesystem;
 
-// ---------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------
-static std::string read_rest_upper_trim(std::istringstream& iss) {
-    std::string rest;
-    std::getline(iss >> std::ws, rest);
-    return textio::up(textio::trim(rest));
+// --- engine access (why: scan all areas to prevent duplicate opens) ---
+extern "C" xbase::XBaseEngine* shell_engine();
+
+namespace {
+
+// ----------------------- path & env helpers ---------------------------------
+
+static fs::path find_data_root_guess()
+{
+    fs::path p = fs::current_path();
+    for (int i = 0; i < 14; ++i) {
+        fs::path cand = p / "data";
+        if (fs::exists(cand) && fs::is_directory(cand)) {
+            return fs::absolute(cand);
+        }
+        if (!p.has_parent_path()) break;
+        fs::path parent = p.parent_path();
+        if (parent == p) break;
+        p = parent;
+    }
+    return fs::absolute(fs::current_path());
 }
 
-// Detect if the DBF on disk uses a memo variant by checking header version byte.
-static bool dbf_header_indicates_memo(const std::string& dbfPath) {
-    std::ifstream f(dbfPath, std::ios::binary);
-    if (!f) return false;
-    unsigned char ver = 0;
-    f.read(reinterpret_cast<char*>(&ver), 1);
-    if (!f) return false;
+static void ensure_setpath_initialized()
+{
+    using dottalk::paths::state;
+    using dottalk::paths::init_defaults;
+    using dottalk::paths::Slot;
+    using dottalk::paths::get_slot;
 
-    switch (ver) {
-        case 0x83: case 0x8B: case 0x8E: case 0xF5: case 0xE5:
-            return true;
-        default:
-            return (ver & 0x80) != 0;
+    if (state().data_root.empty()) {
+        init_defaults(find_data_root_guess());
+        return;
+    }
+    if (get_slot(Slot::DBF).empty() || get_slot(Slot::INDEXES).empty()) {
+        init_defaults(state().data_root);
     }
 }
 
-// Case-insensitive uppercase copy
-static std::string to_upper_copy(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c){ return (char)std::toupper(c); });
+static bool looks_explicit_path(const std::string& s)
+{
+    if (s.find('/')  != std::string::npos) return true;
+    if (s.find('\\') != std::string::npos) return true;
+    if (s.size() >= 2 && std::isalpha((unsigned char)s[0]) && s[1] == ':') return true;
+    if (!s.empty() && s[0] == '.') return true;
+    return false;
+}
+
+static std::string strip_dbf_ext_if_present(std::string s)
+{
+    auto up = [](unsigned char c){ return (char)std::toupper(c); };
+    if (s.size() >= 4) {
+        const char a = up((unsigned char)s[s.size()-4]);
+        const char b = up((unsigned char)s[s.size()-3]);
+        const char c = up((unsigned char)s[s.size()-2]);
+        const char d = up((unsigned char)s[s.size()-1]);
+        if (a=='.' && b=='D' && c=='B' && d=='F') {
+            s.resize(s.size()-4);
+        }
+    }
     return s;
 }
 
-// Simple duplicate-DBF guard: if another area has same filename, close it.
-static void close_if_already_open_elsewhere(const std::string& dbfPath) {
-    // Normalize to just the base filename, case-insensitive
-    const std::string target = to_upper_copy(fs::path(dbfPath).filename().string());
-    const size_t n = workareas::count();
+static std::string up_copy(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return (char)std::toupper(c); });
+    return s;
+}
 
-    for (size_t i = 0; i < n; ++i) {
-        xbase::DbArea* other = workareas::at(i);
-        if (!other || !other->isOpen()) continue;
+static bool contains_noindex(std::istringstream& iss)
+{
+    std::streampos pos = iss.tellg();
+    if (pos == std::streampos(-1)) {
+        return false;
+    }
 
-        // DbArea::filename() returns std::string in your tree
-        const std::string openedFull = other->filename();
-        const std::string openedBase = to_upper_copy(fs::path(openedFull).filename().string());
-
-        if (openedBase == target) {
-            // Tidy up order/memo first so metadata doesn’t linger
-            try { orderstate::clearOrder(*other); } catch (...) {}
-            try { cli_memo::memo_auto_on_close(*other); } catch (...) {}
-
-            // Enforce single-open rule by closing the other area
-            try { other->close(); } catch (...) {}
-
-            // Optionally blank the filename so STATUS can't show stale path
-            try { other->setFilename(std::string()); } catch (...) {}
+    bool found = false;
+    std::string tok;
+    while (iss >> tok) {
+        const std::string u = up_copy(tok);
+        if (u == "NOINDEX" || u == "NOIDX") {
+            found = true;
+            break;
         }
+    }
+
+    iss.clear();
+    iss.seekg(pos);
+    return found;
+}
+
+static void clear_order_best_effort(DbArea& a)
+{
+    // why: ensure physical order if requested
+    try {
+        orderstate::clearOrder(a);
+        return;
+    } catch (...) {}
+
+    try {
+        orderstate::setOrder(a, std::string{});
+        return;
+    } catch (...) {}
+}
+
+// ----------------------- SFINAE setters (optional APIs) ---------------------
+
+template <typename T>
+using has_setFilename_t = decltype(std::declval<T&>().setFilename(std::declval<std::string>()));
+template <typename T, typename = has_setFilename_t<T>>
+static inline void _setFilename(T& a, const std::string& s, int) { a.setFilename(s); }
+template <typename T>
+static inline void _setFilename(T&, const std::string&, long) {}
+
+template <typename T>
+using has_setLogicalName_t = decltype(std::declval<T&>().setLogicalName(std::declval<std::string>()));
+template <typename T, typename = has_setLogicalName_t<T>>
+static inline void _setLogicalName(T& a, const std::string& s, int) { a.setLogicalName(s); }
+template <typename T>
+static inline void _setLogicalName(T&, const std::string&, long) {}
+
+template <typename T>
+using has_setName_t = decltype(std::declval<T&>().setName(std::declval<std::string>()));
+template <typename T, typename = has_setName_t<T>>
+static inline void _setLegacyName(T& a, const std::string& s, int) { a.setName(s); }
+template <typename T>
+static inline void _setLegacyName(T&, const std::string&, long) {}
+
+// ----------------------- area/find helpers ----------------------------------
+
+static inline std::string s8(const fs::path& p) {
+#if defined(_WIN32)
+    auto u = p.u8string(); return std::string(u.begin(), u.end());
+#else
+    return p.string();
+#endif
+}
+
+static fs::path canonicalish(const fs::path& p) {
+    try { return fs::weakly_canonical(p); }
+    catch (...) { return fs::absolute(p); }
+}
+
+static std::string path_key(const fs::path& p) {
+    std::string s = s8(canonicalish(p));
+#if defined(_WIN32)
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+#endif
+    return s;
+}
+
+static int area_slot_of(DbArea& a) {
+    auto* eng = shell_engine(); if (!eng) return -1;
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        if (&eng->area(i) == &a) return i;
+    }
+    return -1;
+}
+
+static int find_open_area_for_path(const fs::path& dbf_path) {
+    auto* eng = shell_engine(); if (!eng) return -1;
+    const std::string target = path_key(dbf_path);
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        try {
+            DbArea& A = eng->area(i);
+            std::string fn = A.filename();
+            if (fn.empty()) continue;
+            if (path_key(fn) == target) return i;
+        } catch (...) { /* ignore bad slot */ }
+    }
+    return -1;
+}
+
+static void populate_dbarea_metadata(DbArea& a, const fs::path& dbf_path) {
+    const std::string abs = fs::absolute(dbf_path).string();
+    const std::string stem = dbf_path.stem().string();
+    _setFilename(a, abs, 0);     // SCHEMAS uses filename() as truth
+    _setLogicalName(a, stem, 0); // optional alias
+    _setLegacyName(a, stem, 0);  // legacy alias
+}
+
+// ----------------------- CNX uniqueness (reporting only) --------------------
+
+static constexpr uint32_t TAGF_UNIQUE = 0x0001; // adjust if your CNX uses a different bit
+
+static bool cnx_tag_is_unique(const std::string& cnx_path, const std::string& tag_upper)
+{
+    if (cnx_path.empty() || tag_upper.empty()) return false;
+
+    cnxfile::CNXHandle* h = nullptr;
+    if (!cnxfile::open(cnx_path, h)) return false;
+
+    std::vector<cnxfile::TagInfo> tags;
+    const bool ok = cnxfile::read_tagdir(h, tags);
+    cnxfile::close(h);
+
+    if (!ok) return false;
+
+    for (const auto& t : tags) {
+        if (up_copy(t.name) == up_copy(tag_upper)) {
+            return (t.flags & TAGF_UNIQUE) != 0;
+        }
+    }
+    return false;
+}
+
+// ----------------------- flavor / valid-index helpers -----------------------
+
+static const char* area_kind_token_local(const DbArea& a)
+{
+    switch (a.kind()) {
+        case AreaKind::V32:  return "v32";
+        case AreaKind::V64:  return "v64";
+        case AreaKind::V128: return "v128";
+        case AreaKind::Tup:  return "tup";
+        case AreaKind::Unknown:
+        default:             return "unknown";
     }
 }
 
-// ---------------------------------------------------------------------
-// USE command
-// ---------------------------------------------------------------------
-void cmd_USE(xbase::DbArea& a, std::istringstream& iss) {
-    // ---- parse required db name ----
-    std::string db;
-    if (!(iss >> db)) {
-        std::cout << "Usage: USE <dbf> [NOINDEX]\n";
+// Current policy helper.
+// If policy changes later (for example LMDB-backed CDX also allowed for v32),
+// change this function only.
+static const char* valid_index_types_for(const DbArea& a)
+{
+    switch (a.kind()) {
+        case AreaKind::V32:  return "INX, CNX";
+        case AreaKind::V64:  return "CDX";
+        case AreaKind::V128: return "CDX";
+        case AreaKind::Tup:  return "TUP";
+        case AreaKind::Unknown:
+        default:             return "(unknown)";
+    }
+}
+
+static std::string open_display_name(const DbArea& a, const fs::path& dbf_path)
+{
+    if (!a.logicalName().empty()) return a.logicalName();
+    if (!a.dbfBasename().empty()) return a.dbfBasename();
+    return dbf_path.stem().string();
+}
+
+} // namespace
+
+// ----------------------- Command entry --------------------------------------
+
+void cmd_USE(DbArea& a, std::istringstream& iss)
+{
+    std::string name;
+    iss >> name;
+
+    if (name.empty()) {
+        std::cout << "USE: missing table name.\n";
         return;
     }
 
-    // ---- parse optional tail (e.g., NOINDEX) ----
-    const std::string rest = read_rest_upper_trim(iss);
-    const bool bypassIndex = (rest.find("NOINDEX") != std::string::npos);
+    const bool noindex = contains_noindex(iss);
+    ensure_setpath_initialized();
 
-    // ---- normalize path (.dbf default) ----
-    fs::path path = xbase::dbNameWithExt(db);
-    if (!fs::exists(path)) {
-        std::cout << "Open failed: file not found\n";
-        return;
+    // Resolve DBF path
+    fs::path dbf_path;
+    if (looks_explicit_path(name)) {
+        // Explicit path: let resolver anchor relative paths and add .dbf if missing.
+        dbf_path = dottalk::paths::resolve_dbf(name);
+    } else {
+        // Logical: "students" or "students.dbf"
+        std::string base = strip_dbf_ext_if_present(name);
+        dbf_path = dottalk::paths::get_slot(dottalk::paths::Slot::DBF) / (base + ".dbf");
     }
 
-    // ---- pre-open cleanup in this area ----
-    cli_memo::memo_auto_on_close(a);
-    try { orderstate::clearOrder(a); } catch (...) { /* ignore */ }
+    // Duplicate-open guard (no-op if already open anywhere)
+    const int cur_slot = area_slot_of(a);
+    const int dup_slot = find_open_area_for_path(dbf_path);
+    if (dup_slot >= 0) {
+        if (dup_slot == cur_slot) {
+            std::cout << "USE: '" << dbf_path.filename().string()
+                      << "' is already open in current area " << cur_slot << ".\n";
+        } else {
+            std::cout << "USE: '" << dbf_path.filename().string()
+                      << "' is already open in area " << dup_slot
+                      << ". Close it first (e.g., SCHEMAS CLOSE " << dup_slot << ").\n";
+        }
+        return; // no-op by design
+    }
 
-    // ---- enforce single-open rule across areas ----
-    close_if_already_open_elsewhere(path.string());
-
-    // ---- open table ----
+    // Open DBF
     try {
-        a.close();
-        a.open(path.string());
-        a.setFilename(path.string());
-
-        std::cout << "Opened " << path.filename().string()
-                  << " with " << a.recCount() << " records.\n";
-    } catch (const std::exception& e) {
-        std::cout << "Open failed: " << e.what() << "\n";
+        a.open(dbf_path.string());
+        populate_dbarea_metadata(a, dbf_path);
+    } catch (const std::exception& ex) {
+        std::cout << "Open failed: " << ex.what() << "\n";
+        return;
+    } catch (...) {
+        std::cout << "Open failed.\n";
         return;
     }
 
-    // ---- memo sidecar auto-open ----
+    // Memo auto-attach (best-effort, never fatal)
     {
-        const bool hasMemoFields = dbf_header_indicates_memo(path.string());
-        std::string memoErr;
-        if (!cli_memo::memo_auto_on_use(a, path.string(), hasMemoFields, memoErr)) {
-            std::cout << "USE: " << memoErr << "\n";
+        bool hasMemoFields = false;
+        for (const auto& f : a.fields()) {
+            if (f.type == 'M' || f.type == 'm') {
+                hasMemoFields = true;
+                break;
+            }
+        }
+
+        const std::string openedPath = a.filename().empty()
+            ? fs::absolute(dbf_path).string()
+            : a.filename();
+
+        std::string memo_err;
+        if (!cli_memo::memo_auto_on_use(a, openedPath, hasMemoFields, memo_err)) {
+            std::cout << "USE: memo attach failed: " << memo_err << "\n";
         }
     }
 
-    // ---- auto-attach <opened>.inx unless NOINDEX ----
-    if (!bypassIndex) {
-        fs::path idx = path;
-        idx.replace_extension(".inx");
+    // Standardized open report
+    std::cout << "Opened " << open_display_name(a, dbf_path)
+              << " (" << area_kind_token_local(a) << ")"
+              << " : Record count " << a.recCount() << "\n";
+    std::cout << "Valid Index/Indices   : " << valid_index_types_for(a) << "\n";
+
+    // NOINDEX → force physical order; stop
+    if (noindex) {
+        clear_order_best_effort(a);
+        std::cout << "NOINDEX: auto-attach skipped (physical order).\n";
+        return;
+    }
+
+    // Auto-attach order (best-effort, never fatal)
+    // Policy (temporary, for dev convenience):
+    //   - only auto-attach INX/IDX if present beside the DBF
+    //   - do NOT auto-attach CNX (deprecated; explicit use only)
+    const fs::path opened_abs = fs::absolute(dbf_path);
+    const fs::path dbf_dir = opened_abs.parent_path();
+    const std::string base = opened_abs.stem().string();
+
+    const fs::path inx_same_dir = dbf_dir / (base + ".inx");
+    const fs::path idx_same_dir = dbf_dir / (base + ".idx");
+
+    auto try_set_order = [&](const fs::path& p) {
         try {
-            if (fs::exists(idx)) {
-                orderstate::setOrder(a, idx.string());
+            orderstate::setOrder(a, p.string());
+
+            // Best-effort: for any order type, allow hooks to reconcile internal state.
+            orderhooks::reconcile_after_mutation(a);
+
+            // Report, including CNX tag/unique status if applicable.
+            // (With current policy, CNX won't be auto-attached here, but keep reporting intact.)
+            if (orderstate::isCnx(a)) {
+                const std::string tag = orderstate::activeTag(a);
+                if (!tag.empty()) {
+                    const bool uniq = cnx_tag_is_unique(orderstate::orderName(a), tag);
+                    std::cout << "Auto-attached order: " << p.filename().string()
+                              << " (tag: " << tag << (uniq ? " [UNIQUE]" : "") << ")\n";
+                } else {
+                    std::cout << "Auto-attached order: " << p.filename().string() << "\n";
+                }
+            } else {
+                std::cout << "Auto-attached order: " << p.filename().string() << "\n";
             }
-        } catch (...) { /* ignore */ }
+        } catch (...) {
+            // best-effort
+        }
+    };
+
+    if (fs::exists(inx_same_dir)) {
+        try_set_order(inx_same_dir);
+    } else if (fs::exists(idx_same_dir)) {
+        try_set_order(idx_same_dir);
     }
 }

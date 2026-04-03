@@ -1,0 +1,4 @@
+std::cout << "Debug: raw header bytes 4-7 after reopen: "
+          << std::hex << (int)headerBlock[4] << " "
+          << (int)headerBlock[5] << " " << (int)headerBlock[6] << " "
+          << (int)headerBlock[7] << " → " << A.recCount() << " recs\n";

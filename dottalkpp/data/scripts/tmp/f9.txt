@@ -1,0 +1,62 @@
+  <!-- PAGE 9: Curriculum Pipeline (Retro Peach) -->
+  <diagram id="p9_diagram" name="Curriculum Pipeline">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFD9CC">
+      <root>
+        <mxCell id="p9_0"/>
+        <mxCell id="p9_1" parent="p9_0"/>
+
+        <!-- CURRICULUM DESIGN -->
+        <mxCell id="p9_design" value="Curriculum Design&#xa;---&#xa;Learning Objectives&#xa;Competency Mapping&#xa;Module Structure&#xa;Difficulty Curve"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="80" y="40" width="380" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CONTENT AUTHORING -->
+        <mxCell id="p9_author" value="Content Authoring&#xa;---&#xa;Chapters&#xa;Sections&#xa;Examples&#xa;Exercises&#xa;Case Studies"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="520" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- DIAGRAM PIPELINE -->
+        <mxCell id="p9_diagrams" value="Diagram Pipeline&#xa;---&#xa;draw.io Assets&#xa;System–Entity Charts&#xa;Architecture Maps&#xa;Flow Diagrams&#xa;Export/Import Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="940" y="40" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BUILD SYSTEM -->
+        <mxCell id="p9_build" value="Build System&#xa;---&#xa;Markdown&#xa;HTML/PDF Export&#xa;Asset Linking&#xa;Cross-References&#xa;Versioning"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="80" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- REVIEW + QA -->
+        <mxCell id="p9_review" value="Review + QA&#xa;---&#xa;Technical Review&#xa;Editorial Review&#xa;Accuracy Checks&#xa;Consistency&#xa;Student Testing"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="520" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- PUBLICATION -->
+        <mxCell id="p9_publish" value="Publication&#xa;---&#xa;Website&#xa;PDF Textbook&#xa;College LMS&#xa;Instructor Guides&#xa;Updates + Errata"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="940" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p9_edge1" edge="1" parent="p9_1" source="p9_design" target="p9_author"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge2" edge="1" parent="p9_1" source="p9_author" target="p9_diagrams"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge3" edge="1" parent="p9_1" source="p9_diagrams" target="p9_build"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge4" edge="1" parent="p9_1" source="p9_build" target="p9_review"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge5" edge="1" parent="p9_1" source="p9_review" target="p9_publish"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

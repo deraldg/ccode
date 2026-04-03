@@ -1,0 +1,62 @@
+Here is a structured summary / analysis of the provided **DotTalk++ regression run** (from the log dated **March 15, 2026**):
+
+### Overall status
+- Build: `dottalk++ beta-0 (Mar 15 2026 14:46:57)`
+- The script is a **public-surface regression harness** — it deliberately avoids destructive operations (no `PACK`, `ZAP`, `DELETE` without recall, no automatic `BUILDLMDB`, etc.)
+- Execution mode: mostly **automated safe core** + some **known-fail canaries** + documentation of **manual / destructive** operations that were **not** executed
+- **Ended with clean shutdown** (`QUIT` → SCHEMAS CLOSE → REL cleared → SHUTDOWN done)
+
+### Major functional areas that appear to work well
+
+| Area                          | Status              | Evidence / Remarks                                                                 |
+|-------------------------------|---------------------|-------------------------------------------------------------------------------------|
+| SET PATH / directory handling | OK                  | Multiple `SET PATH`, `SET PATH RESET`, `DIR` variants show correct paths & content |
+| Date/time functions           | Mostly OK           | `DATE()`, `TODAY()`, `NOW()`, `DATEADD`, `DATEDIFF`, `CTOD`, `DTOC` behave correctly |
+| String functions              | OK                  | `UPPER`, `LOWER`, `PROPER`, `TRIM` family, `LEFT`/`RIGHT`/`SUBSTR`, `STUFF`, `AT`/`ATC`, `LIKE`, `CONCAT`, `STRCAT` all correct |
+| Table navigation              | Good                | `TOP`/`BOTTOM`/`SKIP`/`RECNO`/`LOCATE`/`DISPLAY`/`RECORDVIEW`/`SL`/`SMARTLIST` stable in natural order |
+| Public CDX index workflow     | Strong              | `SET INDEX TO …`, `SET ORDER TO TAG …`, `ASCEND`/`DESCEND`, `SET ORDER TO 0`, `SEEK`/`FIND`/`LOCATE`/`INDEXSEEK` mostly correct |
+| LMDB-backed ordered access    | Functional          | `LIST` / `SMARTLIST` under CDX order shows indexed traversal (recnos not always sequential) |
+| Relation engine (native REL)  | Very good           | `REL ADD`, `REL LIST`, `REL ENUM`, `REL REFRESH`, multi-level chains, `SET RELATION` compatibility layer all work |
+| Buffering / transactional     | Promising           | `TABLE ON` → `REPLACE` → visible in `TUPLE` immediately → `COMMIT` rebuilds tag → visible in index |
+| CALC / CALCWRITE              | Working             | Simple expressions, date math, reversible `GPA ± 0.01` round-trip succeeds |
+| TUPTALK (tuple normalization) | Fully functional    | `PUSH ALL`, `PUSH FILTER`, `PUSH ROW`, `NORMALIZE`, `EXPORT CSV/TSV` all execute cleanly |
+| SQLite smoke                  | OK                  | In-memory and file-based open/exec/select/close cycle works |
+| Help system                   | Present & useful    | `HELP REL`, `HELP TUPLE`, `/FOX SEEK` etc. return meaningful documentation |
+
+### Areas with visible problems / limitations (as of beta-0)
+
+| Issue                                      | Severity     | Seen in log                                                                 | Likely root cause / note                                      |
+|--------------------------------------------|--------------|-----------------------------------------------------------------------------|----------------------------------------------------------------|
+| Date comparisons (`>`, `<`, `=`)           | Broken       | `(DATE()+2 > DATE())` → `.F.`                                               | Date values probably not comparable as numbers yet            |
+| `CALC` with boolean / comparison expr      | Syntax error | `CALC (1+2 = 3)` → complains about unknown field '3'                        | `CALC` expects `CALCWRITE field = expr` only                   |
+| Ordered cursor unstable at SET ORDER entry | Medium       | `SET ORDER TO TAG LNAME` → `TOP` goes to rec 201, initial `LIST` sometimes empty or jumps | LMDB cursor / B-tree re-positioning bug at order change       |
+| `SET FILTER` + ordered access              | Defective    | `SET FILTER TO LNAME="ANDERSON"` → `LIST` shows 0 rows under LNAME order   | Filter not correctly applied during indexed traversal          |
+| `REINDEX` (legacy .inx)                    | Transitional | Works on `.inx` but not `.cdx` tags; mostly diagnostic                      | `.cdx` / LMDB is the real modern path — `.inx` is compatibility|
+| `MULTIREP` / `NORMALIZE` syntax            | Incomplete   | Wrong usage shown (expects field syntax)                                    | Command still evolving                                         |
+| `TRANSFORM`                                | Missing args | Requires 2 arguments (picture + value) — error correct but not demonstrated| Normal for FoxPro-style function                               |
+
+### Summary verdict (beta-0 readiness gate)
+
+The script itself declares these as **pass criteria** for beta-0:
+
+- Public index workflow → **pass**
+- Public relation wiring → **pass**
+- `REL ENUM` emits rows → **pass** (beautiful multi-table example with `REL ENUM … TUPLE`)
+- Buffering + `COMMIT` works → **pass** (GPA round-trip + FNAME replace & index rebuild)
+- Help surfaces present → **pass**
+
+→ **From the log, beta-0 passes its own declared gates.**
+
+Biggest remaining risks before wider usage:
+
+1. Date comparison operators (`< > = >= <= <>`)
+2. Stable cursor positioning right after `SET ORDER TO TAG …`
+3. Correct interaction between `SET FILTER` and CDX/LMDB order
+4. Possibly missing `SEEK`/`FIND` robustness on partial / multiple matches
+
+If you're developing DotTalk++ or evaluating it:
+
+- The core table/index/relation engine already looks surprisingly usable for read-heavy & simple update workloads.
+- The two biggest blockers for production-like use right now appear to be **date logic** and **ordered filtering stability**.
+
+Anything specific you'd like to zoom in on (e.g. relation chaining, buffering behaviour, LMDB tag internals, known defects, …)?

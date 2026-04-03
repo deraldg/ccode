@@ -1,0 +1,13 @@
+ECHO === SCHEMA → EMPTY DBF SMOKE ===
+FOR EACH FILE IN schemas/*.schema.json
+    LET TABLE = BASENAME(%FILE%)
+    ECHO Creating empty DBF for %TABLE%
+    SCHEMA CREATE DBF _drops/%TABLE%.dbf FROM %FILE% OVERWRITE
+    USE _drops/%TABLE%.dbf
+    DISPLAY
+    IF ERROR
+        ECHO FAIL: %TABLE%
+        EXIT 1
+    ENDIF
+ENDFOR
+ECHO OK: All schemas produced empty DBFs

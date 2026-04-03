@@ -1,0 +1,130 @@
+; ============================================================
+; DotTalk++ Date/Time Function Shake-Down (Shell + CALC)
+; Uses STUDENTS.DBF fields: DOB, ENROLL_D
+; ============================================================
+
+set echo on
+echo ===== DATE/TIME SHAKE-DOWN START =====
+
+echo ===== Open STUDENTS and show a sample record =====
+use students
+top
+tup
+
+echo ===== SHELL DIRECT CALLS (no CALC) =====
+
+echo --- zero-arg clock calls ---
+date
+today
+time
+now
+datetime
+
+echo --- optional parentheses form (if enabled in shell dispatcher) ---
+date()
+today()
+time()
+now()
+datetime()
+
+echo --- CTOD: constants (various accepted input styles) ---
+ctod 2000-01-01
+ctod "2000-01-01"
+ctod 2000/01/01
+ctod "2000/01/01"
+ctod 20000101
+ctod "20000101"
+
+echo --- CTOD: from DBF date fields (DOB / ENROLL_D) ---
+; these should round-trip to YYYYMMDD
+ctod dob
+ctod enroll_d
+ctod(dob)
+ctod(enroll_d)
+
+echo --- DATEADD: add/subtract days using fields and constants ---
+; based on DOB
+dateadd dob, 1
+dateadd dob, 30
+dateadd dob, -1
+dateadd dob, -30
+dateadd(dob, 1)
+dateadd(dob, 30)
+dateadd(dob, -1)
+dateadd(dob, -30)
+
+; based on ENROLL_D
+dateadd enroll_d, 1
+dateadd enroll_d, 30
+dateadd enroll_d, -1
+dateadd enroll_d, -30
+dateadd(enroll_d, 1)
+dateadd(enroll_d, 30)
+dateadd(enroll_d, -1)
+dateadd(enroll_d, -30)
+
+; based on today's date (DATE())
+dateadd date(), 1
+dateadd date(), 30
+dateadd date(), -1
+dateadd date(), -30
+
+echo --- DATEDIFF: differences in days (a - b) ---
+; today vs enrollment
+datediff date(), enroll_d
+datediff enroll_d, date()
+
+; enrollment vs DOB
+datediff enroll_d, dob
+datediff dob, enroll_d
+
+; today vs DOB
+datediff date(), dob
+datediff dob, date()
+
+echo ===== CALC CALLS (same functions via expression engine) =====
+
+echo --- zero-arg clock calls in CALC ---
+calc date()
+calc today()
+calc time()
+calc now()
+calc datetime()
+
+echo --- CTOD in CALC: constants ---
+calc ctod("2000-01-01")
+calc ctod("2000/01/01")
+calc ctod("20000101")
+calc ctod(20000101)
+
+echo --- CTOD in CALC: fields ---
+calc ctod(dob)
+calc ctod(enroll_d)
+
+echo --- DATEADD in CALC: fields and constants ---
+calc dateadd(dob, 1)
+calc dateadd(dob, 30)
+calc dateadd(dob, -1)
+calc dateadd(dob, -30)
+
+calc dateadd(enroll_d, 1)
+calc dateadd(enroll_d, 30)
+calc dateadd(enroll_d, -1)
+calc dateadd(enroll_d, -30)
+
+calc dateadd(date(), 1)
+calc dateadd(date(), 30)
+calc dateadd(date(), -1)
+calc dateadd(date(), -30)
+
+echo --- DATEDIFF in CALC ---
+calc datediff(date(), enroll_d)
+calc datediff(enroll_d, date())
+
+calc datediff(enroll_d, dob)
+calc datediff(dob, enroll_d)
+
+calc datediff(date(), dob)
+calc datediff(dob, date())
+
+echo ===== DATE/TIME SHAKE-DOWN END =====

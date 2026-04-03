@@ -1,0 +1,24 @@
+// Self-register NEXT/PREVIOUS (and N/P) without touching shell.cpp.
+#include <sstream>
+#include "command_registry.hpp"
+#include "xbase.hpp"
+#include "set_relations.hpp"
+
+// handlers defined in your extras TU
+void cmd_NEXT     (xbase::DbArea&, std::istringstream&);
+void cmd_PREVIOUS (xbase::DbArea&, std::istringstream&);
+
+namespace {
+struct ExtrasRegistrar {
+    ExtrasRegistrar() {
+        using xbase::DbArea;
+        using std::istringstream;
+        auto refresh = [](){ relations_api::refresh_if_enabled(); };
+
+        dli::registry().add("NEXT",     [](DbArea& A, istringstream& S){ cmd_NEXT(A,S);     refresh(); });
+        dli::registry().add("N",        [](DbArea& A, istringstream& S){ cmd_NEXT(A,S);     refresh(); });
+        dli::registry().add("PREVIOUS", [](DbArea& A, istringstream& S){ cmd_PREVIOUS(A,S); refresh(); });
+        dli::registry().add("P",        [](DbArea& A, istringstream& S){ cmd_PREVIOUS(A,S); refresh(); });
+    }
+} _extras_registrar;
+} // namespace

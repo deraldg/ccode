@@ -1,0 +1,65 @@
+Here’s the clean, canonical answer for **DotTalk++ field sizes**, stated in the same spirit as your codex‑style precision.
+
+---
+
+# 🧩 DotTalk++ Field Size Limits  
+*(Canonical, engine‑level — not FoxPro legacy)*
+
+DotTalk++ inherits its physical storage rules from **SQLite** for table data and **LMDB** for index keys. That means:
+
+## 📌 **1. Character fields (TEXT) have no fixed maximum length**  
+DotTalk++ TEXT fields are **variable‑length UTF‑8 strings** with the same practical limits as SQLite:
+
+### **Maximum TEXT size:**  
+\[
+\text{~1 billion bytes (1 GB)}  
+\]
+
+This is the SQLite `max_length` default. DotTalk++ does not impose a smaller limit.
+
+### What this means in practice  
+- Any DotTalk++ “character” field can store **millions of characters**.  
+- There is **no distinction** between CHAR, VARCHAR, MEMO — everything is TEXT.  
+- The engine does not truncate or pad; it stores exactly what you give it.  
+- The only real constraints are memory and your own schema discipline.
+
+---
+
+## 📌 **2. Primary key fields have a different constraint**  
+If the field is used as a **primary key**, the limit is governed by LMDB’s key size:
+
+### **Maximum primary key size:**  
+\[
+\text{~511 bytes per LMDB key}
+\]
+
+This is the hard LMDB key limit.
+
+### Practical interpretation  
+- A TEXT primary key can safely hold **up to ~511 UTF‑8 bytes**  
+  - ≈ 511 ASCII characters  
+  - ≈ 170–250 characters if mixed Unicode  
+- DotTalk++ enforces this because LMDB index keys must fit.
+
+If you exceed this, DotTalk++ will reject the insert/update with an index‑layer error.
+
+---
+
+## 📌 **3. Recommended DotTalk++ practice**  
+For your codex and curriculum:
+
+| Use Case | Recommended Field Type | Max Safe Size |
+|---------|------------------------|----------------|
+| **Primary key** | TEXT (but keep ≤ 511 bytes) | ~511 bytes |
+| **Foreign key** | TEXT (same limit as PK) | ~511 bytes |
+| **General text** | TEXT | Up to ~1 GB |
+| **Memo‑like fields** | TEXT | Up to ~1 GB |
+
+---
+
+## 🧠 Summary  
+- **General DotTalk++ fields:** up to **1 GB**  
+- **Primary key fields:** limited to **~511 bytes** due to LMDB  
+- DotTalk++ does **not** have FoxPro‑style MEMO blocks or fixed‑width CHAR semantics.
+
+If you want, I can also draft the **canonical Codex entry** for FIELD SIZE, including historical notes (dBASE, FoxPro, Clipper), modern DotTalk++ behavior, and recommended schema patterns for your curriculum.

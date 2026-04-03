@@ -1,0 +1,56 @@
+// include/cli/parse_utils.hpp
+// Lightweight, header-only helpers for common CLI parses.
+// Reuses textio::trim and textio::up (no new trim/up code here).
+
+#pragma once
+#include <string>
+#include <algorithm>
+#include <cctype>
+#include "textio.hpp"   // textio::trim, textio::up
+
+namespace cliutil {
+
+// digits_only: local helper (not exposed)
+inline bool digits_only(const std::string& s) {
+    if (s.empty()) return false;
+    return std::all_of(s.begin(), s.end(),
+                       [](unsigned char c){ return std::isdigit(c) != 0; });
+}
+
+// parse_logical
+// Accepts classic truthy/falsey tokens (case/space-insensitive).
+// True : .T., T, Y, 1, TRUE, ON
+// False: .F., F, N, 0, FALSE, OFF
+inline bool parse_logical(std::string s, bool& out) {
+    s = textio::up(textio::trim(std::move(s)));
+    if (s == ".T." || s == "T" || s == "Y" || s == "1" || s == "TRUE" || s == "ON")  { out = true;  return true; }
+    if (s == ".F." || s == "F" || s == "N" || s == "0" || s == "FALSE"|| s == "OFF") { out = false; return true; }
+    return false;
+}
+
+// parse_date
+// Accepts: YYYYMMDD, YYYY-MM-DD, MM/DD/YYYY
+// Returns canonical YYYYMMDD in yyyymmdd.
+inline bool parse_date(std::string s, std::string& yyyymmdd) {
+    s = textio::trim(std::move(s));
+    // 1) YYYYMMDD (8 digits)
+    if (digits_only(s) && s.size() == 8) { yyyymmdd = s; return true; }
+
+    // 2) YYYY-MM-DD
+    if (s.size() == 10 && s[4]=='-' && s[7]=='-') {
+        std::string y = s.substr(0,4), m = s.substr(5,2), d = s.substr(8,2);
+        std::string cat = y + m + d;
+        if (digits_only(cat)) { yyyymmdd = cat; return true; }
+    }
+
+    // 3) MM/DD/YYYY
+    if (s.size() == 10 && s[2]=='/' && s[5]=='/') {
+        std::string m = s.substr(0,2), d = s.substr(3,2), y = s.substr(6,4);
+        std::string cat = y + m + d;
+        if (digits_only(cat)) { yyyymmdd = cat; return true; }
+    }
+
+    return false;
+}
+
+} // namespace cliutil

@@ -1,0 +1,940 @@
+PowerShell 7.6.0
+PS C:\Users\deral> d:
+PS D:\code\ccode> tree C:\Users\deral\code\ccode\dottalkpp /F /A
+Folder PATH listing for volume OS
+Volume serial number is 7EFB-FD2B
+C:\USERS\DERAL\CODE\CCODE\DOTTALKPP
+Invalid path - \USERS\DERAL\CODE\CCODE\DOTTALKPP
+No subfolders exist
+
+PS D:\code\ccode> tree D:\code\ccode\dottalkpp /F /A
+Folder PATH listing for volume Work
+Volume serial number is 3E78-33A9
+D:\CODE\CCODE\DOTTALKPP
+|   $envVCPKG_ROOT = CUsersderalvcpkg.txt
+|   Agile Manifesto_ Values, principles and benefits.mhtml
+|   datarun.ps1
+|   drawio-libs-review.zip
+|   wslrun.sh
+|
++---bin
+|   |   dottalkpp
+|   |   dottalkpp.bat
+|   |   dottalkpp.exe
+|   |   dottalkpp.ini
+|   |   dottalkpp.ps1
+|   |   dottalkpp.sh
+|   |   lmdb.dll
+|   |   Monitor_2_29626.ico
+|   |   sqlite3.dll
+|   |
+|   \---.relations
++---bin-wsl
+|       dottalk.ini
+|       dottalkpp
+|       wsl_run.txt
+|
++---cmake
+|       MSVCWarnings.cmake
+|
++---data
+|   |   CSV.csv
+|   |   employees.txt
+|   |   run-tests.bat
+|   |   run_tests.bat
+|   |   run_tests.ps1
+|   |   students_norm.csv
+|   |   students_norm.tsv
+|   |   students_ro.dat
+|   |   tassign.csv
+|   |   test_ps1_scripts_inside_dottalkpp.txt
+|   |   tmpsql_regression.sqlite
+|   |   to.csv
+|   |   ZZZZZ.TXT.csv
+|   |
+|   +---.relations
+|   |       relations.json
+|   |       test.json
+|   |
+|   +---backup
+|   |   |   sort_source_by_size.ps1
+|   |   |
+|   |   +---dbf
+|   |   |       BUILDING.DBF
+|   |   |       CLASSES.DBF
+|   |   |       community_college_schema.txt
+|   |   |       COURSES.DBF
+|   |   |       DEPT.DBF
+|   |   |       ENROLL.DBF
+|   |   |       MAJORS.DBF
+|   |   |       MCC Build full relations graph (CNX-backed).dts
+|   |   |       MCC README.txt
+|   |   |       MCC_README.txt
+|   |   |       My Community College Indexing.dts
+|   |   |       README.txt
+|   |   |       ROOMS.DBF
+|   |   |       smoketest.dbf
+|   |   |       STUDENTS.dbf
+|   |   |       STUD_MAJ.DBF
+|   |   |       TASSIGN.DBF
+|   |   |       TEACHERS.dbf
+|   |   |       TERMS.DBF
+|   |   |
+|   |   \---indexes
+|   |       |   BUILDING.cnx
+|   |       |   CLASSES.cnx
+|   |       |   COURSES.cnx
+|   |       |   DEPT.cnx
+|   |       |   ENROLL.cnx
+|   |       |   MAJORS.cnx
+|   |       |   ROOMS.cnx
+|   |       |   STUDENTS.cnx
+|   |       |   STUDENTS.inx
+|   |       |   STUD_MAJ.cnx
+|   |       |   TASSIGN.cnx
+|   |       |   TEACHERS.cnx
+|   |       |   teachers.inx
+|   |       |   TERMS.cnx
+|   |       |
+|   |       \---backups
+|   |               building.cnx
+|   |               CID.inx
+|   |               classes.cnx
+|   |               CMDA.inx
+|   |               CMDP.inx
+|   |               DEPT.cnx
+|   |               ENROLL.cnx
+|   |               gender.inx
+|   |               majors.cnx
+|   |               students.cnx
+|   |               TEACHERS.cnx
+|   |
+|   +---dbf
+|   |   |   BUILDING.DBF
+|   |   |   CLASSES.DBF
+|   |   |   community_college_schema.txt
+|   |   |   COURSES.DBF
+|   |   |   DEPT.DBF
+|   |   |   ENROLL.DBF
+|   |   |   KILOBYTE_REC.dbf
+|   |   |   KILOBYTE_REC.dtx
+|   |   |   KILO_IBYT.dbf
+|   |   |   LOCKTEST.dbf
+|   |   |   MAJORS.DBF
+|   |   |   MCC Build full relations graph (CNX-backed).dts
+|   |   |   MCC README.txt
+|   |   |   MCC_README.txt
+|   |   |   MEMO_X64.dtx
+|   |   |   My Community College Indexing.dts
+|   |   |   README.txt
+|   |   |   ROOMS.DBF
+|   |   |   STUDENTS.dbf
+|   |   |   students.ini
+|   |   |   STUD_MAJ.DBF
+|   |   |   TASSIGN.DBF
+|   |   |   TEACHERS.dbf
+|   |   |   template.ini
+|   |   |   TERMS.DBF
+|   |   |   X64SAMP2.dbf
+|   |   |   X64SAMP2.dtx
+|   |   |   X64_SAMPLE_ALLFIELDS.dbf
+|   |   |   X64_SAMPLE_ALLFIELDS.dtx
+|   |   |
+|   |   \---x64
+|   |           MEMO_FOX26.dbf
+|   |           MEMO_FOX26.dtx
+|   |           MEMO_FOX26.fpt
+|   |           MEMO_MAINT.dbf
+|   |           MEMO_MAINT.dtx
+|   |           MEMO_MSDOS.dbf
+|   |           MEMO_MSDOS.dbt
+|   |           MEMO_MSDOS.dtx
+|   |           MEMO_SIZE_X64.dbf
+|   |           MEMO_SIZE_X64.dtx
+|   |           MEMO_VFP.dbf
+|   |           MEMO_VFP.dtx
+|   |           MEMO_VFP.fpt
+|   |           MEMO_X64.dbf
+|   |           smoketest.dbf
+|   |           smoketest2.dbf
+|   |           X64_ALL_TYPES.dbf
+|   |           X64_ALL_TYPES.dtx
+|   |
+|   +---help
+|   |       cmd_args.dbf
+|   |       cmd_args.dbt
+|   |       commands.dbf
+|   |       commands.dbt
+|   |       DATA_INDEX_README.txt
+|   |
+|   +---indexes
+|   |   |   BUILDING.cdx
+|   |   |   BUILDING.cnx
+|   |   |   CLASSES.cdx
+|   |   |   CLASSES.cnx
+|   |   |   CLIENTS_x64.cdx
+|   |   |   cmd_args.inx
+|   |   |   commands.inx
+|   |   |   COURSES.cdx
+|   |   |   COURSES.cnx
+|   |   |   DEPT.cdx
+|   |   |   DEPT.cnx
+|   |   |   ENROLL.cdx
+|   |   |   ENROLL.cnx
+|   |   |   MAJORS.cdx
+|   |   |   MAJORS.cnx
+|   |   |   ROOMS.cdx
+|   |   |   ROOMS.cnx
+|   |   |   smoketest.cdx
+|   |   |   STUDENTS.cdx
+|   |   |   STUDENTS.cdx.save
+|   |   |   STUDENTS.cnx
+|   |   |   STUDENTS.inx
+|   |   |   STUD_MAJ.cdx
+|   |   |   STUD_MAJ.cnx
+|   |   |   table.cdx
+|   |   |   TASSIGN.cdx
+|   |   |   TASSIGN.cnx
+|   |   |   TEACHERS.cdx
+|   |   |   TEACHERS.cnx.save
+|   |   |   teachers.inx.save
+|   |   |   TERMS.cdx
+|   |   |   TERMS.cnx
+|   |   |
+|   |   +---backups
+|   |   |   |   building.cnx
+|   |   |   |   CID.inx
+|   |   |   |   classes.cnx
+|   |   |   |   CMDA.inx
+|   |   |   |   CMDP.inx
+|   |   |   |   DEPT.cnx
+|   |   |   |   ENROLL.cnx
+|   |   |   |   gender.inx
+|   |   |   |   majors.cnx
+|   |   |   |   students.cnx
+|   |   |   |   TEACHERS.cnx
+|   |   |   |
+|   |   |   +---New folder
+|   |   |   |       BUILDING.cdx
+|   |   |   |       BUILDING.cnx
+|   |   |   |       CLASSES.cdx
+|   |   |   |       CLASSES.cnx
+|   |   |   |       COURSES.cdx
+|   |   |   |       COURSES.cnx
+|   |   |   |       DEPT.cdx
+|   |   |   |       DEPT.cnx
+|   |   |   |       ENROLL.cdx
+|   |   |   |       ENROLL.cnx
+|   |   |   |       MAJORS.cdx
+|   |   |   |       MAJORS.cnx
+|   |   |   |       ROOMS.cdx
+|   |   |   |       ROOMS.cnx
+|   |   |   |       smoketest.cdx
+|   |   |   |       STUDENTS.cdx.save
+|   |   |   |       STUDENTS.cnx
+|   |   |   |       STUDENTS.inx
+|   |   |   |       STUD_MAJ.cdx
+|   |   |   |       STUD_MAJ.cnx
+|   |   |   |       TASSIGN.cdx
+|   |   |   |       TASSIGN.cnx
+|   |   |   |       TEACHERS.cdx
+|   |   |   |       TEACHERS.cnx
+|   |   |   |       teachers.inx
+|   |   |   |       TERMS.cdx
+|   |   |   |       TERMS.cnx
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_190034
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_193853
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_194603
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_202405
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_203424
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_210654
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_225723
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260227_231140
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260228_000948
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260228_085746
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260228_091808
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260228_094029
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---students.cdx.d_20260228_103854
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260301_041719
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260301_042231
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260301_042324
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260308_072912
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260308_083147
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260308_104725
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260308_104847
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260308_110222
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---STUDENTS.cdx.d_20260308_110546
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   \---STUDENTS.cdx.d_20260308_110817
+|   |   |           data.mdb
+|   |   |           lock.mdb
+|   |   |
+|   |   +---BUILDING.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---CLASSES.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---CLIENTS_x64.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---COURSES.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---DEPT.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---ENROLL.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---MAJORS.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---ROOMS.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---smoketest.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---STUDENTS.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---STUD_MAJ.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---TASSIGN.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   +---TEACHERS.cdx.d
+|   |   |       data.mdb
+|   |   |       lock.mdb
+|   |   |
+|   |   \---TERMS.cdx.d
+|   |           data.mdb
+|   |           lock.mdb
+|   |
+|   +---logs
+|   |       cnx_tag_smoke.log
+|   |       full_baseline.log
+|   |       list_order_flip.log
+|   |       my.log
+|   |       output.txt
+|   |       struct_cnx_tags.log
+|   |       struct_inx_active.log
+|   |
+|   +---out
+|   +---projects
+|   |   +---cobol
+|   |   |   |   . cobol build dcodeccodedottalkppda.txt
+|   |   |   |   first_cobol_test..cob.save
+|   |   |   |   mainfrrame cobol.txt
+|   |   |   |
+|   |   |   +---bin
+|   |   |   |       first_cobol_test.exe
+|   |   |   |
+|   |   |   +---data
+|   |   |   |       students_ro.dat
+|   |   |   |
+|   |   |   \---src
+|   |   |           first_cobol_test.cob
+|   |   |
+|   |   +---mcc
+|   |   |   |   manifest.txt
+|   |   |   |
+|   |   |   +---dbf
+|   |   |   +---indexes
+|   |   |   +---logs
+|   |   |   +---schemas
+|   |   |   +---scripts
+|   |   |   +---tests
+|   |   |   \---tmp
+|   |   +---sqlite
+|   |   |   |   manifest.txt
+|   |   |   |
+|   |   |   +---fixtures
+|   |   |   +---logs
+|   |   |   +---notes
+|   |   |   +---scripts
+|   |   |   +---tests
+|   |   |   \---tmp
+|   |   \---tuptalk
+|   |       |   manifest.txt
+|   |       |
+|   |       +---dbf
+|   |       +---fixtures
+|   |       +---indexes
+|   |       +---logs
+|   |       +---notes
+|   |       +---schemas
+|   |       +---scripts
+|   |       +---tests
+|   |       \---tmp
+|   +---schemas
+|   |   |   schema_json_v1.schema.json
+|   |   |   students.schema.json
+|   |   |
+|   |   \---spec
+|   +---scripts
+|   |   |   closefn.txt
+|   |   |   create x64 all field dbf.dts
+|   |   |   CURSOR_FAMILY_REGRESSION_001.DTS
+|   |   |   Derald, this educational angle is n.txt
+|   |   |   design plans.txt
+|   |   |   DotScript mechanics.txt
+|   |   |   DotTalk++ type HELP. USE, SELECT n,.txt
+|   |   |   drawio.txt
+|   |   |   ersatz_rel_enum_browser.dts
+|   |   |   f0.txt
+|   |   |   f1.txt
+|   |   |   f10.txt
+|   |   |   f11.txt
+|   |   |   f12.txt
+|   |   |   f2.txt
+|   |   |   f3.txt
+|   |   |   f4.txt
+|   |   |   f5.txt
+|   |   |   f6.txt
+|   |   |   f7.txt
+|   |   |   f8.txt
+|   |   |   f9.txt
+|   |   |   Good. A clean build with the full.txt
+|   |   |   master.txt
+|   |   |   MCCV6.dts
+|   |   |   mcc_exhaustive_full_regression_canaries_setmodern_v5.dts
+|   |   |   MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_V6B.DTS
+|   |   |   multi_master.txt
+|   |   |   ORDER_ITERATOR_REGRESSION_001.DTS
+|   |   |   ORDER_ITERATOR_REGRESSION_001a_LIST.DTS
+|   |   |   ORDER_ITERATOR_REGRESSION_001_LIST.DTS
+|   |   |   README.txt
+|   |   |   SET ECHO OFF.txt
+|   |   |   smartlist_regression.dts
+|   |   |   start_dottalk_iis.ps1
+|   |   |   test_script.dts
+|   |   |   The new iterator layer is structura.txt
+|   |   |   use_for wsl.txt
+|   |   |   VAR_LOOP_ X64.dts
+|   |   |   x64base_master.drawio
+|   |   |   X64SAMP2_CURRENCY_TEST.DTS
+|   |   |   X64_SAMPLE_ALLFIELDS_CURRENCY.DTS
+|   |   |
+|   |   +---backup
+|   |   |       # From the folder where you saved t.txt
+|   |   |       Advanced_Relations_CNX_Build.dts
+|   |   |       all_cpp_and_hpp_files.py
+|   |   |       Awsome_Combo_Test.dts
+|   |   |       banner_consistency.dts
+|   |   |       beta0_readiness_test.dts
+|   |   |       Build_Full_Rel.dts
+|   |   |       calc_date.dts
+|   |   |       calc_regression_test.dts
+|   |   |       canaries.dts
+|   |   |       CDX_build.log
+|   |   |       clone_dbf_with_memo.py
+|   |   |       cnx_tag_keyword_form.dts
+|   |   |       cnx_tag_smoke.dts
+|   |   |       command_help_test_script.dts
+|   |   |       command_sweep.dts
+|   |   |       command_test_script.dts
+|   |   |       commit_rollback_test.dts
+|   |   |       copilot_script_flatten.py
+|   |   |       create_sample_dbf.dts
+|   |   |       create_sample_dbf_matrix.dts
+|   |   |       data-dictionairy — DotTalk++ System.txt
+|   |   |       data_types_calc_test.dts
+|   |   |       DateStringBool.dts
+|   |   |       date_implementation_dev.dts
+|   |   |       demo_pydottalk.py
+|   |   |       dotnest_test.dts
+|   |   |       dottalk commands on the command line.dts
+|   |   |       DotTalk++ type HELP. USE, SELECT n,.txt
+|   |   |       DotTalkDB_sql.py
+|   |   |       DOTTALK_BETA0_SMOKE_BASELINE_0_1.DTS
+|   |   |       DOTTALK_BETA0_SMOKE_BASELINE_0_1.DTS.dts
+|   |   |       DT VAR_DATE_CONCAT_CALC SMOKETEST (FULL) START.dts
+|   |   |       DT VAR_DATE_CONCAT_CALC SMOKETEST (FULL) START.zip
+|   |   |       dtoc_concat_var.dts
+|   |   |       dtx_app.py
+|   |   |       ECHO -- Phase 2 SET VAR! typedevalu.txt
+|   |   |       echo enum shakedown refresh.dts
+|   |   |       enum_shakedown.v0.dts
+|   |   |       enum_shakedown.v1.dts
+|   |   |       ersatz_mini_test.dts
+|   |   |       FINAL BLOWOUT TEST.dts
+|   |   |       fox_relations_test.dts
+|   |   |       fox_relations_test.txt
+|   |   |       full_baseline.dts
+|   |   |       full_resolver_suite.dts
+|   |   |       gemini_unflatten.py
+|   |   |       generate_codex_chunks.py
+|   |   |       Grok (the web version at grok.x.ai.txt
+|   |   |       grok regression comments.txt
+|   |   |       Here is the real analysis of that r.txt
+|   |   |       inxi_attach_switching.dts
+|   |   |       list_order_flip.dts
+|   |   |       LMDB OPEN shakedown.dts
+|   |   |       LMDB OPEN testenv.txt
+|   |   |       lmdb.dts
+|   |   |       LMDB_NAV_APPEND_SHAKEDOWN_01.DTS
+|   |   |       LMDB_ORDER_GATHER_01.DTS.txt
+|   |   |       lmdb_persist_check.dts
+|   |   |       LMDB_ROUTING_GAP_REPRO.DTS
+|   |   |       Major Shakedown.dts
+|   |   |       MCCBuild_full_relations_graph (CNX-backed).dts
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES.DTS
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_LMDB.DTS
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN.DTS
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_B0.0.DTS
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_B_0_1DTS.txt
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_B_0_2DTS.txt
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_B_0_3DTS.txt
+|   |   |       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_V5.DTS
+|   |   |       MCC_SHAKEDOWN.DTS - My Community College DBFsv2.txt
+|   |   |       MCC_SHAKEDOWN.DTS — My Community College DBFsv2.txt
+|   |   |       MCC_SUPER_REGRESSIVE_SHAKEDOWN_CANARIES.DTS
+|   |   |       mcc_wsl.dtschemas
+|   |   |       MEMO MORE TESTING.dts
+|   |   |       MEMO_shakedown.dts
+|   |   |       MULTI-AREA X64 MEMO HARMONY TEST.dts
+|   |   |       My_Community_College_CDX_Indexing.dts
+|   |   |       My_Community_College_Indexing.dts
+|   |   |       nest_test.dts
+|   |   |       New LMDB test results..txt
+|   |   |       one.dts
+|   |   |       order_engine_shakedown.dts
+|   |   |       pack_test_shakedown.dts
+|   |   |       predicates_help_test_verification.dts
+|   |   |       pydottalk.dts
+|   |   |       README_addons.txt
+|   |   |       regression.dts
+|   |   |       REL_JOIN_ENUM regression.dts
+|   |   |       replace_dates.dts
+|   |   |       reporting_snapshot.dts
+|   |   |       run-pydottalk-smoke.ps1
+|   |   |       schemas.dts
+|   |   |       schema_create_empty_dbf.dts
+|   |   |       schema_validate_all.dts
+|   |   |       script.dts
+|   |   |       seek_permutations.dts
+|   |   |       set_relations_test.dts
+|   |   |       SET_VAR_SHAKEDOWN.dts
+|   |   |       ShakeDown_DotTalkpp.dts
+|   |   |       simple command list.txt
+|   |   |       Single_Dottalk.dts
+|   |   |       smartlist_order_matrix.dts
+|   |   |       SQLITE_SMOKE.DTS
+|   |   |       struct_cnx_tags.dts
+|   |   |       struct_inx_active.dts
+|   |   |       STUDENT.cdx.contract.txt
+|   |   |       surface_env.ps1
+|   |   |       table_buffer.dts
+|   |   |       test2.dts
+|   |   |       test3.dts
+|   |   |       test4.dts
+|   |   |       that is true I opened a second sess.txt
+|   |   |       That's genuinely remarkable..txt
+|   |   |       three.dts
+|   |   |       tuple_buffer_test.dts
+|   |   |       tuptalk.dts
+|   |   |       two.dts
+|   |   |       Variable shake down..txt
+|   |   |       version.dts
+|   |   |       were tests.txt
+|   |   |       workaroun.DTS
+|   |   |       X64 DELETE - RECALL - PACK REGRESSION.txt
+|   |   |       X64 DELETE - RECALL - x64PACK REGRESSION.txt
+|   |   |       X64_MEMO_GROWTH_STAGE2.DTS
+|   |   |       xbase64_risk_review.txt
+|   |   |       ```foxpro.txt
+|   |   |
+|   |   +---canaries
+|   |   |       awsome_combo_test.dts
+|   |   |       canaries.dts
+|   |   |       cnx_tag_smoke.dts
+|   |   |       create_sample_dbf_matrix.dts
+|   |   |       dottalk_beta0_smoke_baseline_0_1.dts
+|   |   |       dottalk_beta0_smoke_baseline_0_1_dts.dts
+|   |   |       dt_var_date_concat_calc_smoketest_full_start.dts
+|   |   |       echo_enum_shakedown_refresh.dts
+|   |   |       enum_shakedown_v0.dts
+|   |   |       enum_shakedown_v1.dts
+|   |   |       final_blowout_test.dts
+|   |   |       full_baseline.dts
+|   |   |       list_order_flip.dts
+|   |   |       lmdb_nav_append_shakedown_01.dts
+|   |   |       lmdb_open_shakedown.dts
+|   |   |       lmdb_persist_check.dts
+|   |   |       lmdb_routing_gap_repro.dts
+|   |   |       major_shakedown.dts
+|   |   |       mcc_exhaustive_full_regression_canaries.dts
+|   |   |       mcc_exhaustive_full_regression_canaries_lmdb.dts
+|   |   |       mcc_exhaustive_full_regression_canaries_setmodern.dts
+|   |   |       mcc_exhaustive_full_regression_canaries_setmodern_b0_0.dts
+|   |   |       mcc_exhaustive_full_regression_canaries_setmodern_v5.dts
+|   |   |       mcc_super_regressive_shakedown_canaries.dts
+|   |   |       memo_shakedown.dts
+|   |   |       order_engine_shakedown.dts
+|   |   |       pack_test_shakedown.dts
+|   |   |       seek_permutations.dts
+|   |   |       set_var_shakedown.dts
+|   |   |       shakedown_dottalkpp.dts
+|   |   |       smartlist_order_matrix.dts
+|   |   |       sqlite_smoke.dts
+|   |   |
+|   |   +---cases
+|   |   |       calc_date.dts
+|   |   |       calc_regression_test.dts
+|   |   |       command_test_script.dts
+|   |   |       create_sample_dbf.dts
+|   |   |       data_types_calc_test.dts
+|   |   |       datestringbool.dts
+|   |   |       date_implementation_dev.dts
+|   |   |       dtoc_concat_var.dts
+|   |   |       ersatz_mini_test.dts
+|   |   |       one.dts
+|   |   |       script.dts
+|   |   |       single_dottalk.dts
+|   |   |       test2.dts
+|   |   |       test3.dts
+|   |   |       test4.dts
+|   |   |       three.dts
+|   |   |       two.dts
+|   |   |       workaroun.dts
+|   |   |
+|   |   +---draw.io
+|   |   +---inc
+|   |   +---legacy
+|   |   |       banner_consistency.dts
+|   |   |       build_full_rel.dts
+|   |   |       cnx_tag_keyword_form.dts
+|   |   |       command_sweep.dts
+|   |   |       dotnest_test.dts
+|   |   |       dottalk_commands_on_the_command_line.dts
+|   |   |       inxi_attach_switching.dts
+|   |   |       lmdb.dts
+|   |   |       memo_more_testing.dts
+|   |   |       multi_area_x64_memo_harmony_test.dts
+|   |   |       nest_test.dts
+|   |   |       struct_cnx_tags.dts
+|   |   |       struct_inx_active.dts
+|   |   |       x64_memo_growth_stage2.dts
+|   |   |
+|   |   +---main
+|   |   |       beta0_readiness_test.dts
+|   |   |       dt_shakedown_main.dts
+|   |   |       full_resolver_suite.dts
+|   |   |       regression.dts
+|   |   |       rel_join_enum_regression.dts
+|   |   |
+|   |   +---manual
+|   |   |       ersatz_rel_enum_browser.dts
+|   |   |
+|   |   +---notes
+|   |   |       manifest.json
+|   |   |       manifest.txt
+|   |   |
+|   |   +---sub
+|   |   |       child_ok.dts
+|   |   |       child_tries_nested.dts
+|   |   |       self_call.dts
+|   |   |
+|   |   \---suites
+|   |           advanced_relations_cnx_build.dts
+|   |           command_help_test_script.dts
+|   |           commit_rollback_test.dts
+|   |           fox_relations_test.dts
+|   |           mccbuild_full_relations_graph_cnx_backed.dts
+|   |           my_community_college_cdx_indexing.dts
+|   |           my_community_college_indexing.dts
+|   |           predicates_help_test_verification.dts
+|   |           pydottalk.dts
+|   |           replace_dates.dts
+|   |           reporting_snapshot.dts
+|   |           schemas.dts
+|   |           schema_create_empty_dbf.dts
+|   |           schema_validate_all.dts
+|   |           set_relations_test.dts
+|   |           table_buffer.dts
+|   |           tuple_buffer_test.dts
+|   |           tuptalk.dts
+|   |           version.dts
+|   |
+|   +---system
+|   +---tests
+|   |   |   date_shakedown.dts
+|   |   |   index_shakedown.dts
+|   |   |   MyCommunityCollege.zip
+|   |   |   README_TEST.md
+|   |   |   README_TESTING.md
+|   |   |   rel_enum.dts
+|   |   |   schemas.dts
+|   |   |   smart_browser_test.dts
+|   |   |   version.dts
+|   |   |
+|   |   \---smoketest
+|   |       +---_smoketest
+|   |       |   \---__pycache__
+|   |       \---__pycache__
+|   +---tmp
+|   |   |   ALT_TEST.TXT
+|   |   |   dt_probe.txt
+|   |   |   dt_probe2.txt
+|   |   |   lmdb_persist_check.dts
+|   |   |   lmdb_persist_check3.dts
+|   |   |   mini_regression.dts
+|   |   |   PRN_TEST.TXT
+|   |   |   sql_regression.sqlite
+|   |   |   students_norm.csv
+|   |   |   students_norm.tsv
+|   |   |   test.jpg
+|   |   |
+|   |   +---lmdb
+|   |   |   +---shakedown
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---test1
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---test2
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   +---test3
+|   |   |   |       data.mdb
+|   |   |   |       lock.mdb
+|   |   |   |
+|   |   |   \---testenv
+|   |   |           data.mdb
+|   |   |           lock.mdb
+|   |   |
+|   |   \---lmdb_smoke_backend
+|   |           data.mdb
+|   |           lock.mdb
+|   |
+|   +---workspaces
+|   |       bigtest.dtschemas
+|   |       college.dtschemas
+|   |       help.dtschemas
+|   |       idx_smoke.dtschema
+|   |       mcc.dtschema
+|   |       mcc.dtschemas
+|   |       mcc2.dtschemas
+|   |       mcc_wsl.dtschemas
+|   |       mem64_test.dtschemas
+|   |       mem64_vars_test.dtschemas
+|   |       rel_idx_smoke.dtschema
+|   |       rel_smoke.dtschema
+|   |       sample.dtschemas
+|   |       tags.dtschemas
+|   |       test.dtschemas
+|   |       test1.dtschema
+|   |       x64.dtschema
+|   |
+|   +---xdbf
+|   |       BUILDING.DBF
+|   |       CLASSES.DBF
+|   |       COURSES.DBF
+|   |       DEPT.DBF
+|   |       ENROLL.DBF
+|   |       MAJORS.DBF
+|   |       mcc_schema.txt
+|   |       MyCommunityCollege.zip
+|   |       ROOMS.DBF
+|   |       STUDENTS.DBF
+|   |       STUD_MAJ.DBF
+|   |       TASSIGN.DBF
+|   |       TEACHERS.DBF
+|   |       TERMS.DBF
+|   |
+|   \---_drops
+|           sb10.dbf
+|           sb10.ddl.json
+|           sb10.indexes.json
+|           sb10.load.json
+|           sb10.schema.copy.json
+|           students.dbf
+|           students.ddl.json
+|           students.indexes.json
+|           students.load.json
+|           students.schema.copy.json
+|           students_blank5.dbf
+|           students_blank5.ddl.json
+|           students_blank5.indexes.json
+|           students_blank5.load.json
+|           students_blank5.schema.copy.json
+|           students_empty.dbf
+|           students_empty.ddl.json
+|           students_empty.indexes.json
+|           students_empty.load.json
+|           students_empty.schema.copy.json
+|           students_seed.dbf
+|
++---docs
+|       ## Getting Started (Windows + MSVC.txt
+|       Advanced Relations.txt
+|       Below is the matching contracted bu.txt
+|       calc.docx
+|       cnx_cnx2.docx
+|       CODEX Section DotTalk++ System Dictionary Roadmap.txt
+|       Complete FoxPro CLI Command List Editing.txt
+|       cs101.txt
+|       date_implementation_dev.txt
+|       Developer Manual.docx
+|       dottalk scripting language.docx
+|       DotTalkpp_Homegrown_Command_Reference_2026-02-08_v6 (1).docx
+|       dottalkpp_lmdb_index_integration_v2.docx
+|       DotTalkpp_Technical_Shakedown_Report_2026-02-08_v4 (1).docx
+|       Entire Andi Document.pdf
+|       erzats contracted versi.txt
+|       foxpro_go.help.txt
+|       Frankenstein_Integrated_integrated_v7.docx
+|       Getting Started (Windows + MSVC.txt
+|       Here’s a full shake-down DotTalk++.txt
+|       Here’s the clean, authoritative plan.txt
+|       Homegrown_Merged_Assembled_2026-02-09.docx
+|       I located the archive in `mntdatash.txt
+|       Join _Missing Features in x64base Compared to FoxPro_ group with Copilot.mhtml
+|       MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_B_0_1DTS.txt
+|       My Community College Indexing.txt
+|       My_Comminty_College_Data_Schema_README.txt
+|       My_Comminty_College_README.txt
+|       PyDottalk Env.docx
+|       pydottalk interface.docx
+|       pyDottalk Plans.docx
+|       pyDottalk.docx
+|       pydottalk_tech_notes_20260211.docx
+|       README.txt
+|       SQLENGINE Developer Diagrams.docx
+|       UBUNTU - Dottalkpp Build Plan.docx
+|       Unifying Expression Handling in Dot.txt
+|       xindex library pydottalk.docx
+|
++---etc
+|   +---system
+|   |       cmd_args.dbf
+|   |       cmd_args.dbt
+|   |       commands.dbf
+|   |       commands.dbt
+|   |
+|   +---use
+|   |       cmd_args.dbf
+|   |       cmd_args.dbt
+|   |       commands.dbf
+|   |       commands.dbt
+|   |
+|   \---zap
+|           cmd_args.dbf
+|           cmd_args.dbt
+|           commands.dbf
+|           commands.dbt
+|
++---help
+|       dbarea.txt
+|       find_repo_string.ps1
+|       Frankenstein_Integrated_integrated_v5.docx
+|       INDEXING_HELP_PACK.txt
+|       MyCommunityCollege.zip
+|       predicate_help.txt
+|       SET_ORDER_HELP.txt
+|       SQLite Mini Guide.docx
+|
++---junk
+|       students_rel.dbf
+|       students_rel.ddl.json
+|       students_rel.indexes.json
+|       students_rel.load.json
+|       students_rel.schema.copy.json
+|       students_seed.dbf
+|
++---New folder
++---user
+|   +---derald
+|   |   +---documents
+|   |   +---downloads
+|   |   \---media
+|   \---public
+|       +---documents
+|       +---downloads
+|       \---media
+\---__pycache__
+PS D:\code\ccode>

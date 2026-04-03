@@ -1,0 +1,11 @@
+cd /mnt/d/code/ccode
+
+cmake -S . -B build-wsl -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DDOTTALK_WITH_TV=OFF \
+  -DDOTTALK_WITH_INDEX=ON \
+  -DDOTTALK_WITH_SQLITE=ON
+
+cmake --build build-wsl -j
+
+./build-wsl/src/dottalkpp

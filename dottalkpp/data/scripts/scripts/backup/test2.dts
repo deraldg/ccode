@@ -1,0 +1,363 @@
+* ============================================================
+* MCC_SHAKEDOWN.DTS - My Community College DBFs
+* CALC Function/Operator Test Suite (expanded)
+*
+* Rules (based on current engine behavior):
+*  - Use CALC for functions.
+*  - If an expression contains "=", ">=", "<=" then wrap it:
+*        CALC ( ... )
+*    so it does NOT fall into CALCWRITE routing.
+*  - Keep BOOLEAN for field-only predicates (no function calls).
+* ============================================================
+
+SET ECHO ON
+ECHO ===== DotTalk++ MCC SHAKE-DOWN START =====
+
+COLOR DEFAULT
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+SCHEMAS
+
+* ------------------------------------------------------------
+ECHO ===== CALC: LITERALS / ARITH / PRECEDENCE =====
+CALC 1
+CALC 1 + 2
+CALC 10 - 3
+CALC 6 * 7
+CALC 8 / 2
+CALC (1 + 2) * 3
+CALC 1 + 2 * 3
+CALC 7 / 2
+CALC 7.0 / 2
+CALC 0 - 5
+CALC -5 + 2
+CALC 1 + -2
+CALC (0 - 2) * 3
+
+* OPTIONAL: error-path sanity (uncomment when you want noise)
+* CALC 1 / 0
+
+* ------------------------------------------------------------
+ECHO ===== CALC: BOOLEAN OPS / COMPARISONS (PARENTHESIZE WHEN USING '=') =====
+
+* basic compares (no '=' token)
+CALC (1 < 2)
+CALC (2 > 1)
+
+* equality / inequality (MUST be parenthesized)
+CALC (1 = 1)
+CALC (1 = 2)
+
+* >= and <= (contain '=' so MUST be parenthesized)
+CALC (2 >= 2)
+CALC (2 <= 2)
+CALC (2 >= 3)
+CALC (2 <= 1)
+
+* logic
+CALC (NOT (1 = 2))
+CALC ((1 = 1) AND (2 = 2))
+CALC ((1 = 1) OR (1 = 2))
+CALC ((1 = 2) OR (2 = 2))
+
+* precedence sanity
+CALC ((1 + 2 * 3) = 7)
+CALC (((1 + 2) * 3) = 9)
+
+* if "<>" isn't supported, keep as a canary (commented by default)
+* CALC (1 <> 2)
+
+* ------------------------------------------------------------
+ECHO ===== CALC: CLOCK / DATE-TIME (NO DBF REQUIRED) =====
+CALC DATE()
+CALC TODAY()
+CALC TIME()
+CALC NOW()
+CALC DATETIME()
+
+* identity sanity (wrap '=')
+CALC (DATE() = TODAY())
+CALC (NOW() = DATETIME())
+
+* date +/- days
+CALC DATE() + 2
+CALC DATE() - 2
+CALC ( (DATE() + 2) > DATE() )
+CALC ( (DATE() - 2) < DATE() )
+
+* CTOD parsing (string/numeric)
+CALC CTOD(2000-01-01)
+CALC CTOD("2000/01/01")
+CALC CTOD(20000101)
+
+* CTOD comparisons + arithmetic (wrap '=')
+CALC (CTOD(2000-01-01) = 20000101)
+CALC (CTOD("2000/01/01") = 20000101)
+CALC (CTOD(20000101) = 20000101)
+CALC CTOD(2000-01-01) + 1
+CALC CTOD(2000-01-01) - 1
+CALC ((CTOD(2000-01-01) + 1) = 20000102)
+CALC ((CTOD(2000-01-01) - 1) = 19991231)
+
+* OPTIONAL: DTOC/DTOS if registered
+* CALC DTOC(DATE())
+* CALC DTOS(DATE())
+* CALC (CTOD(DTOC(DATE())) = DATE())
+* CALC (CTOD(DTOS(DATE())) = DATE())
+
+* OPTIONAL: date parts if registered
+* CALC YEAR(DATE())
+* CALC MONTH(DATE())
+* CALC DAY(DATE())
+* CALC DOW(DATE())
+
+* ------------------------------------------------------------
+ECHO ===== BASIC COMMAND SANITY =====
+HELP
+AREA
+
+* ------------------------------------------------------------
+ECHO ===== BUILDING =====
+SELECT BUILDING
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== ROOMS =====
+SELECT ROOMS
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== DEPT =====
+SELECT DEPT
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== MAJORS =====
+SELECT MAJORS
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== TERMS =====
+SELECT TERMS
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== COURSES =====
+SELECT COURSES
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== TEACHERS =====
+SELECT TEACHERS
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== CLASSES =====
+SELECT CLASSES
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== STUDENTS =====
+SELECT STUDENTS
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== ENROLL =====
+SELECT ENROLL
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== STUD_MAJ =====
+SELECT STUD_MAJ
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+ECHO ===== TASSIGN =====
+SELECT TASSIGN
+AREA
+STRUCT
+COUNT
+LIST 5
+TUP
+
+* ------------------------------------------------------------
+ECHO ===== CALC: FIELD READS / TYPE PATHS (STUDENTS) =====
+SELECT STUDENTS
+LIST 1
+TUP SID
+TUP LNAME
+TUP FNAME
+TUP DOB
+TUP ENROLL_D
+TUP GPA
+TUP EMAIL
+
+CALC SID
+CALC LNAME
+CALC FNAME
+CALC DOB
+CALC ENROLL_D
+CALC GPA
+CALC EMAIL
+
+* numeric ops on field
+ECHO -- NUMERIC OPS (GPA)
+CALC GPA + 1
+CALC GPA - 1
+CALC GPA * 2
+CALC GPA / 2
+CALC (GPA > 3)
+CALC ((GPA >= 2) AND (GPA <= 4))   && uses '=' inside >=/<= so it is already parenthesized
+
+* OPTIONAL numeric builtins (uncomment once you confirm these are registered)
+* CALC ABS(-5)
+* CALC INT(3.9)
+* CALC ROUND(3.14159, 2)
+* CALC MOD(7, 3)
+* CALC SQRT(9)
+* CALC POW(2, 8)
+* CALC MIN(2, 9)
+* CALC MAX(2, 9)
+
+* ------------------------------------------------------------
+ECHO ===== CALC: DATE FIELDS + DATE ALGEBRA (STUDENTS) =====
+SELECT STUDENTS
+LIST 1
+
+CALC DOB
+CALC ENROLL_D
+
+* operator path
+CALC DOB + 1
+CALC DOB - 1
+CALC ((DOB + 1) > DOB)
+CALC ((DOB - 1) < DOB)
+
+* DATEADD / DATEDIFF
+CALC DATEADD(DOB, 30)
+CALC DATEADD(DOB, -30)
+CALC DATEADD(DATE(), 30)
+CALC DATEADD(DATE(), -30)
+CALC DATEDIFF(DATE(), DOB)
+CALC DATE() - DOB
+CALC (DATEDIFF(DATE(), DOB) = (DATE() - DOB))
+CALC (DATEDIFF(DATE(), DOB) > 0)
+
+* OPTIONAL: ensure ENROLL_D is after DOB (wrap '=' not needed; it's '>')
+CALC (ENROLL_D > DOB)
+
+* ------------------------------------------------------------
+ECHO ===== CALC: STRING BUILTINS (FIELD + LITERAL) =====
+SELECT STUDENTS
+LIST 1
+
+* field-based (your existing working path)
+CALC TUPLE UPPER(LNAME)
+CALC TUPLE LOWER(LNAME)
+CALC TUPLE PROPER(LNAME)
+CALC TUPLE LEFT(LNAME, 3)
+CALC TUPLE RIGHT(FNAME, 2)
+CALC TUPLE ALLTRIM(EMAIL)
+
+* literal-based (wrap '=')
+CALC (UPPER("aBc") = "ABC")
+CALC (LOWER("aBc") = "abc")
+CALC (PROPER("joHN") = "John")
+CALC (LEFT("ABCDE", 3) = "ABC")
+CALC (RIGHT("ABCDE", 2) = "DE")
+CALC (ALLTRIM("  hi  ") = "hi")
+
+* trim family (OPTIONAL)
+* CALC TRIM("  hi  ")
+* CALC LTRIM("  hi  ")
+* CALC RTRIM("  hi  ")
+* CALC (TRIM("  hi  ") = "hi")
+* CALC (LTRIM("  hi  ") = "hi  ")
+* CALC (RTRIM("  hi  ") = "  hi")
+
+* OPTIONAL: string extras (uncomment if registered)
+* CALC LEN("ABCDE")
+* CALC LEN(EMAIL)
+* CALC SUBSTR("ABCDE", 2, 3)           && "BCD"
+* CALC AT("CD", "ABCDE")               && 3
+* CALC RAT("A", "BANANA")              && last A position
+* CALC REPLICATE("x", 5)               && "xxxxx"
+* CALC SPACE(3)                        && "   "
+* CALC STRTRAN("BANANA","NA","*")      && if you have it
+
+* ------------------------------------------------------------
+ECHO ===== BOOLEAN / PREDICATE (FIELD-ONLY COVERAGE) =====
+* IMPORTANT: BOOLEAN stays field-only; no DATE(), CTOD(), UPPER(), etc.
+SELECT STUDENTS
+LIST 1
+BOOLEAN GPA > 3
+BOOLEAN GPA < 3
+BOOLEAN GPA >= 2 AND GPA <= 4
+BOOLEAN LNAME = "Qui"
+BOOLEAN LNAME = "Davis" OR LNAME = "Qui"
+BOOLEAN GPA > 0 AND GPA < 10
+
+* ------------------------------------------------------------
+ECHO ===== LOCATE SMOKE (STUDENTS) =====
+SELECT STUDENTS
+LOCATE FOR LNAME = DAVIS
+TUP
+LOCATE FOR LNAME = TAYLOR
+TUP
+
+* ------------------------------------------------------------
+ECHO ===== CALCWRITE: REVERSIBLE WRITE TEST (GPA += .01 then -= .01) =====
+* NOTE: verify via TUP GPA (not CALC GPA)
+SELECT STUDENTS
+LOCATE FOR LNAME = TAYLOR
+LIST 1
+TUP GPA
+CALC GPA = GPA + 0.01
+TUP GPA
+CALC GPA = GPA - 0.01
+TUP GPA
+
+* ------------------------------------------------------------
+ECHO ===== COLOR SANITY =====
+COLOR GREEN
+COLOR AMBER
+COLOR DEFAULT
+
+ECHO ===== CLEAN SHUTDOWN =====
+SCHEMAS
+SCHEMAS CLOSE
+ECHO ===== DotTalk++ MCC SHAKE-DOWN END =====
+QUIT

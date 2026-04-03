@@ -1,0 +1,197 @@
+// src/cli/cmd_setorder.cpp ? CNX-aware SETORDER command.
+//
+// Supported forms:
+//
+//   SETORDER
+//     - Show current order (physical / INX / CNX + tag + direction)
+//
+//   SETORDER 0
+//     - Clear any active order (back to physical order)
+//
+//   SETORDER <container.cnx> [<tag>] [--asc|--desc]
+//     - e.g. SETORDER students.cnx LNAME --asc
+//     - Path is resolved beside the current DBF if relative.
+//     - Tag is stored uppercased; direction defaults to ASC.
+//
+// Numeric INX-style SETORDER <n> is reserved for future use and currently
+// prints a stub message (non-fatal).
+
+#include <sstream>
+#include <string>
+#include <iostream>
+#include <filesystem>
+#include <cctype>
+#include <limits>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_hooks.hpp"
+#include "cli/path_resolver.hpp"
+
+namespace fs = std::filesystem;
+using namespace textio;
+
+// ---------- helpers ----------------------------------------------------------
+
+static inline std::string up_copy(std::string s) {
+    for (auto &c : s) {
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+static inline bool is_integer(const std::string& s, int& outVal) {
+    if (s.empty()) return false;
+    std::size_t i = 0;
+    if (s[0] == '+' || s[0] == '-') i = 1;
+    if (i >= s.size()) return false;
+    for (; i < s.size(); ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
+    }
+    try {
+        long long v = std::stoll(s);
+        if (v < std::numeric_limits<int>::min() ||
+            v > std::numeric_limits<int>::max()) return false;
+        outVal = static_cast<int>(v);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+static inline bool ends_with_iex(const std::string& s, const char* ext3 /*"CNX"*/) {
+    const std::size_t n = s.size();
+    if (n < 4) return false;
+    if (s[n-4] != '.') return false;
+    const unsigned char c1 = static_cast<unsigned char>(s[n-3]);
+    const unsigned char c2 = static_cast<unsigned char>(s[n-2]);
+    const unsigned char c3 = static_cast<unsigned char>(s[n-1]);
+    return std::toupper(c1) == static_cast<unsigned char>(ext3[0]) &&
+           std::toupper(c2) == static_cast<unsigned char>(ext3[1]) &&
+           std::toupper(c3) == static_cast<unsigned char>(ext3[2]);
+}
+
+static fs::path resolve_cnx_path(const xbase::DbArea& area,
+                                 const std::string& firstToken)
+{
+    // Default: <INDEXES>/<dbfBasename>.cnx (or logical name)
+    if (firstToken.empty()) {
+        const std::string stem = !area.dbfBasename().empty() ? area.dbfBasename()
+                                                              : area.logicalName();
+        fs::path p = dottalk::paths::resolve_index(stem);
+        if (!p.has_extension()) p.replace_extension(".cnx");
+        return p;
+    }
+
+    fs::path p = dottalk::paths::resolve_index(firstToken);
+    if (!p.has_extension()) p.replace_extension(".cnx");
+    return p;
+}
+
+// ---------- command implementation -------------------------------------------
+
+void cmd_SETORDER(xbase::DbArea& area, std::istringstream& args)
+{
+    std::string first;
+    args >> first;
+
+    // No arguments: report current state.
+    if (first.empty()) {
+        if (!orderstate::hasOrder(area)) {
+            std::cout << "SET ORDER: none (physical order).\n";
+            return;
+        }
+
+        const std::string name   = orderstate::orderName(area);
+        const bool       asc    = orderstate::isAscending(area);
+        const bool       isCnx  = orderstate::isCnx(area);
+        const std::string tag   = isCnx ? orderstate::activeTag(area) : std::string();
+
+        if (!isCnx) {
+            std::cout << "SET ORDER: file '" << name << "' ("
+                      << (asc ? "ASC" : "DESC") << ")\n";
+        } else {
+            std::cout << "SET ORDER: CNX '" << name << "'";
+            if (!tag.empty()) {
+                std::cout << " TAG '" << tag << "'";
+            }
+            std::cout << " (" << (asc ? "ASC" : "DESC") << ")\n";
+        }
+        return;
+    }
+
+    // Integer form (0 / n) ? keep minimal semantics for now.
+    int n = 0;
+    if (is_integer(first, n)) {
+        if (n == 0) {
+            orderstate::clearOrder(area);
+            orderhooks::reconcile_after_mutation(area);
+            std::cout << "SET ORDER: cleared (physical order).\n";
+            return;
+        }
+
+        // Placeholder: numeric INX-style SETORDER not wired yet.
+        std::cout << "SET ORDER: numeric orders not yet implemented (requested "
+                  << n << ").\n";
+        return;
+    }
+
+    // CNX form: first token is treated as a CNX container path/name.
+    fs::path containerPath = resolve_cnx_path(area, first);
+
+    // Optional: <tag> [--asc|--desc]
+    std::string tag;
+    args >> tag;
+    std::string dirToken;
+    args >> dirToken;
+
+    bool ascending = true;  // default ASC
+    if (!dirToken.empty()) {
+        const std::string DIR = up_copy(dirToken);
+        if (DIR == "--DESC" || DIR == "DESC" || DIR == "DESCEND") {
+            ascending = false;
+        } else if (DIR == "--ASC" || DIR == "ASC" || DIR == "ASCEND") {
+            ascending = true;
+        }
+    }
+
+    // Normalize tag: store uppercased if provided.
+    std::string normTag;
+    if (!tag.empty()) {
+        normTag = up_copy(tag);
+    }
+
+    // File must exist (we do not create here).
+    if (!fs::exists(containerPath)) {
+        std::cout << "SET ORDER: file not found: " << containerPath.string() << "\n";
+        return;
+    }
+
+    // Apply to per-area order state.
+    const std::string pathStr = containerPath.string();
+    orderstate::setOrder(area, pathStr);
+    orderstate::setAscending(area, ascending);
+    if (!normTag.empty()) {
+        orderstate::setActiveTag(area, normTag);
+    }
+
+    // Reconcile with filesystem (and any hooks that may clear the order).
+    orderhooks::reconcile_after_mutation(area);
+
+    // Only report success if order is still active after reconcile.
+    if (!orderstate::hasOrder(area) || !orderstate::isCnx(area)) {
+        std::cout << "SET ORDER: unable to activate CNX order.\n";
+        return;
+    }
+
+    std::cout << "SET ORDER: using CNX '" << orderstate::orderName(area) << "'";
+    const std::string activeTag = orderstate::activeTag(area);
+    if (!activeTag.empty()) {
+        std::cout << " TAG '" << activeTag << "'";
+    }
+    std::cout << " (" << (orderstate::isAscending(area) ? "ASC" : "DESC") << ")\n";
+}
+
+
+

@@ -1,0 +1,350 @@
+* ============================================================
+* LIST_EXHAUSTIVE_CURSOR_ORDER_BASELINE_V1.DTS
+*
+* Purpose:
+*   Baseline regression for LIST cursor/reporting + order behavior
+*   before SMARTLIST changes.
+*
+* Scope:
+*   - natural order
+*   - ordered/CDX/LMDB-backed order where available
+*   - cursor anchoring
+*   - cursor restore behavior
+*   - physical recno vs logical row reporting
+*   - TOP/BOTTOM/SKIP/GO/LIST/LIST TOP/LIST BOTTOM/LIST ALL
+*   - SET ORDER TO 0 / TAG ordering
+*   - SET FILTER TO interactions
+*   - FOR clause interactions
+*   - DELETED visibility behavior
+*   - zero-visible-row behavior
+*   - duplicates in ordered keys
+*
+* Notes:
+*   - LIST is the gold-standard reference for this phase.
+*   - Do not change this script casually once you accept it.
+*   - Use transcript diffing across builds.
+* ============================================================
+
+SET ECHO OFF
+ECHO ===== LIST EXHAUSTIVE CURSOR ORDER BASELINE START =====
+
+COLOR DEFAULT
+VERSION
+WSREPORT
+
+* ------------------------------------------------------------
+* SECTION 0: OPEN / SANITY
+* ------------------------------------------------------------
+ECHO ===== SECTION 0: OPEN / SANITY =====
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+STATUS
+WSREPORT
+
+* ------------------------------------------------------------
+* SECTION 1: NATURAL ORDER / ROOMS
+* area 9 in current sample set
+* ------------------------------------------------------------
+ECHO ===== SECTION 1: NATURAL ORDER / ROOMS =====
+SELECT 9
+AREA
+FIELDS
+COUNT
+SET ORDER TO 0
+TOP
+LIST 5
+LIST 5
+SKIP 5
+LIST 5
+LIST 5
+GO 1
+LIST 5
+BOTTOM
+LIST 5
+LIST TOP
+LIST BOTTOM
+LIST ALL
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 2: NATURAL ORDER / STUD_MAJ
+* larger table, no ordered dependency
+* ------------------------------------------------------------
+ECHO ===== SECTION 2: NATURAL ORDER / STUD_MAJ =====
+SELECT 10
+AREA
+FIELDS
+COUNT
+SET ORDER TO 0
+TOP
+LIST 5
+LIST 5
+SKIP 2
+LIST 5
+GO 1
+LIST 5
+BOTTOM
+LIST 5
+LIST TOP
+LIST BOTTOM
+LIST ALL
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 3: FILTER TO ZERO VISIBLE ROWS
+* intentionally invalid field for this table shape
+* ------------------------------------------------------------
+ECHO ===== SECTION 3: FILTER TO ZERO VISIBLE ROWS =====
+SELECT 9
+SET ORDER TO 0
+TOP
+SET DELETED ON
+SET FILTER TO MAJOR = "CS"
+TOP
+LIST 5
+LIST 5
+COUNT
+SKIP 2
+LIST 5
+SET FILTER TO
+TOP
+LIST 5
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 4: FOR CLAUSE IN NATURAL ORDER
+* use valid fields on ROOMS
+* ------------------------------------------------------------
+ECHO ===== SECTION 4: FOR CLAUSE / NATURAL ORDER =====
+SELECT 9
+SET ORDER TO 0
+TOP
+LIST FOR CAP > 50
+TOP
+LIST FOR BLDG = "BLDG03"
+TOP
+LIST 10 FOR ROOM = "BLDG04-1"
+TOP
+LIST ALL FOR CAP < 30
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 5: ORDERED STREAM / STUDENTS LNAME
+* area 11 in current sample set
+* this is the critical ordered baseline
+* ------------------------------------------------------------
+ECHO ===== SECTION 5: ORDERED STREAM / STUDENTS LNAME =====
+SELECT 11
+AREA
+FIELDS
+COUNT
+SET ORDER TO TAG LNAME
+AREA
+TOP
+LIST 5
+LIST 5
+SKIP 5
+LIST 5
+LIST 5
+TOP
+LIST 5
+BOTTOM
+LIST 5
+LIST TOP
+LIST BOTTOM
+LIST ALL
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 6: ORDERED STREAM / SEEK ANCHORING
+* prove LIST honors current cursor after ordered nav
+* ------------------------------------------------------------
+ECHO ===== SECTION 6: ORDERED SEEK ANCHORING =====
+SELECT 11
+SET ORDER TO TAG LNAME
+TOP
+SEEK "ANDERSON"
+LIST 5
+LIST 5
+SKIP 1
+LIST 5 
+SEEK "BROWN"
+LIST 5
+SEEK "CLARK"
+LIST 5
+SEEK "DAVIS"
+LIST 5
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 7: ORDERED STREAM / DUPLICATE KEY ZONE
+* exercise same-key cluster behavior
+* ------------------------------------------------------------
+ECHO ===== SECTION 7: ORDERED DUPLICATE KEY ZONE =====
+SELECT 11
+SET ORDER TO TAG LNAME
+SEEK "ANDERSON"
+LIST 5
+SKIP 1
+LIST 5
+SKIP 1
+LIST 5
+SKIP 1
+LIST 5
+SKIP 1
+LIST 5
+SKIP 1
+LIST 5
+TOP
+LIST 5
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 8: ORDERED + FOR
+* exercise ordered stream with classic FOR predicates
+* ------------------------------------------------------------
+ECHO ===== SECTION 8: ORDERED + FOR =====
+SELECT 11
+SET ORDER TO TAG LNAME
+TOP
+LIST FOR LNAME = "ANDERSON"
+TOP
+LIST 10 FOR MAJOR = "CSCI"
+TOP
+LIST ALL FOR GENDER = "F"
+SEEK "CLARK"
+LIST FOR LNAME = "CLARK"
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 9: ORDERED + SET FILTER TO
+* visible stream under active order
+* ------------------------------------------------------------
+ECHO ===== SECTION 9: ORDERED + SET FILTER TO =====
+SELECT 11
+SET ORDER TO TAG LNAME
+SET FILTER TO LNAME = "CLARK"
+TOP
+LIST 5
+LIST 5
+SKIP 2
+LIST 5
+COUNT
+SET FILTER TO
+TOP
+LIST 5
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 10: ORDER RESET / PHYSICAL RETURN
+* prove SET ORDER TO 0 reverts stream semantics
+* ------------------------------------------------------------
+ECHO ===== SECTION 10: ORDER RESET / PHYSICAL RETURN =====
+SELECT 11
+SET ORDER TO TAG LNAME
+TOP
+LIST 5
+SET ORDER TO 0
+TOP
+LIST 5
+SKIP 5
+LIST 5
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 11: DESCENDING ORDER
+* only if your active tag/order infrastructure honors DESC here
+* if DESC command differs in your build, adjust accordingly
+* ------------------------------------------------------------
+ECHO ===== SECTION 11: DESCENDING ORDER =====
+SELECT 11
+SET ORDER TO TAG LNAME DESCEND
+AREA
+TOP
+LIST 5
+SKIP 5
+LIST 5
+BOTTOM
+LIST 5
+LIST TOP
+LIST BOTTOM
+SET ORDER TO TAG LNAME ASCEND
+TOP
+LIST
+AREA
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 12: CROSS-AREA CURSOR SANITY
+* confirms cursor line area numbering remains stable
+* ------------------------------------------------------------
+ECHO ===== SECTION 12: CROSS-AREA CURSOR SANITY =====
+SELECT 9
+TOP
+LIST 5
+SELECT 10
+TOP
+LIST 5
+SELECT 11
+SET ORDER TO TAG LNAME
+TOP
+LIST 5
+SELECT 2
+SET ORDER TO 0
+TOP
+LIST 5
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 13: EMPTY / EDGE TABLES IF PRESENT
+* safe probes only; adjust area numbers if needed in your set
+* ------------------------------------------------------------
+ECHO ===== SECTION 13: EDGE TABLE PROBES =====
+SELECT 5
+AREA
+COUNT
+TOP
+LIST 5
+LIST ALL
+STATUS
+
+SELECT 6
+AREA
+COUNT
+TOP
+LIST 5
+LIST ALL
+STATUS
+
+SELECT 7
+AREA
+COUNT
+TOP
+LIST
+LIST ALL
+STATUS
+
+* ------------------------------------------------------------
+* SECTION 14: FINAL RESTORATION
+* leave system in predictable state
+* ------------------------------------------------------------
+ECHO ===== SECTION 14: FINAL RESTORATION =====
+SELECT 11
+SET FILTER TO
+SET ORDER TO 0
+TOP
+AREA
+STATUS
+WSREPORT
+
+ECHO ===== LIST EXHAUSTIVE CURSOR ORDER BASELINE END =====

@@ -1,0 +1,62 @@
+  <!-- PAGE 3: DotTalk++ Command Engine (Retro Green) -->
+  <diagram id="p3_diagram" name="DotTalk++ Command Engine">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCFFCC">
+      <root>
+        <mxCell id="p3_0"/>
+        <mxCell id="p3_1" parent="p3_0"/>
+
+        <!-- COMMAND PARSER -->
+        <mxCell id="p3_parser" value="Command Parser&#xa;---&#xa;Tokenize&#xa;Normalize&#xa;Resolve Aliases&#xa;Syntax Validation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="80" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- COMMAND DISPATCHER -->
+        <mxCell id="p3_dispatcher" value="Command Dispatcher&#xa;---&#xa;Lookup Handler&#xa;Bind Parameters&#xa;Execute&#xa;Return Status"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="480" y="40" width="360" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- COMMAND HANDLERS -->
+        <mxCell id="p3_handlers" value="Command Handlers&#xa;---&#xa;Navigation&#xa;Record Ops&#xa;Index Ops&#xa;Query Ops&#xa;System Ops"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="900" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- EXPRESSION ENGINE -->
+        <mxCell id="p3_expr" value="Expression Engine&#xa;---&#xa;Lexer&#xa;Parser&#xa;Evaluator&#xa;Type System&#xa;Runtime Functions"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="80" y="340" width="340" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- CURSOR MANAGER -->
+        <mxCell id="p3_cursor" value="Cursor Manager&#xa;---&#xa;Active Cursor&#xa;Record Pointer&#xa;Buffer&#xa;Dirty Flags&#xa;Navigation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="480" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- ERROR SYSTEM -->
+        <mxCell id="p3_errors" value="Error System&#xa;---&#xa;Codes&#xa;Messages&#xa;Recovery&#xa;Logging&#xa;User Feedback"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="900" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p3_edge1" edge="1" parent="p3_1" source="p3_parser" target="p3_dispatcher"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge2" edge="1" parent="p3_1" source="p3_dispatcher" target="p3_handlers"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge3" edge="1" parent="p3_1" source="p3_handlers" target="p3_cursor"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge4" edge="1" parent="p3_1" source="p3_handlers" target="p3_expr"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge5" edge="1" parent="p3_1" source="p3_dispatcher" target="p3_errors"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

@@ -1,0 +1,36 @@
+set echo on
+echo REL ENUM ersatz browser demo
+
+schemas close
+schemas open dbf
+
+rel clear all
+rel add students enroll on sid
+rel add enroll classes on cls_id
+rel add classes tassign on cls_id
+rel add tassign teachers on tid
+rel refresh
+
+select students
+locate for sid = 50000020
+echo CURRENT STUDENT (parent)
+tup
+
+echo REL LIST (one hop)
+rel list
+
+echo REL LIST ALL (tree)
+rel list all
+
+echo REL ENUM (LIMIT 10) — show ENROLL rows traced to TEACHERS
+rel enum limit 10 enroll classes tassign teachers tuple students.sid,students.lname,students.fname,enroll.cls_id,enroll.grade,classes.cid,classes.sec,teachers.tid,teachers.lname,teachers.fname
+
+echo WALK FIRST 3 STUDENTS — each with up to 3 traced rows
+select students
+top
+loop 3 times
+  echo ---- STUDENT ----
+  tup
+  rel enum limit 3 enroll classes tassign teachers tuple students.sid,students.lname,students.fname,enroll.cls_id,enroll.grade,classes.cid,classes.sec,teachers.tid,teachers.lname,teachers.fname
+  skip 1
+endloop

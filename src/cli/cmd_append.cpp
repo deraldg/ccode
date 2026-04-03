@@ -1,119 +1,140 @@
-// src/cli/cmd_append.cpp  (drop-in replacement, hardened)
-// Consolidates APPEND and APPEND_BLANK behavior and guards bad input.
+// src/cli/cmd_append.cpp — APPEND
 //
-// Supports:
-//   APPEND                         -> append 1 blank record
-//   APPEND BLANK                   -> append 1 blank record
-//   APPEND -B                      -> append 1 blank record
-//   APPEND N                       -> append N blank records
-//   APPEND BLANK N | APPEND -B N   -> append N blank records
+// Supported forms:
+//   APPEND
+//   APPEND RAW
+//   APPEND MANY <count>
+//   APPEND RAW MANY <count>
+//   APPEND <count>
 //
-// Errors out (no crash) on garbage like: APPEND FROG, APPEND -B X, APPEND -7
-// Uses DbArea::appendBlank(). Calls order_notify_mutation(db) after success.
+// Behavior:
+//   APPEND              -> smart append (keys + inline active index update)
+//   APPEND RAW          -> raw one-record append (keys, no inline index update)
+//   APPEND MANY <n>     -> smart batch append under one lock
+//   APPEND RAW MANY <n> -> raw batch append under one lock
+//   APPEND <n>          -> shorthand for APPEND MANY <n>
 
-#include "xbase.hpp"
-#include "textio.hpp"
-#include "order_hooks.hpp"
+#include <cctype>
+#include <cstdint>
+#include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
-#include <cctype>
-#include <iostream>
 
-using namespace xbase;
+#include "xbase.hpp"
+#include "cli/append_support.hpp"
 
-namespace {
-
-inline std::string uptrim(std::string s) {
-    return textio::up(textio::trim(s));
-}
-
-inline bool try_parse_int_strict(const std::string& s, int& out) {
-    if (s.empty()) return false;
-    // Only digits, positive
-    for (char c : s) if (c < '0' || c > '9') return false;
-    try {
-        out = std::stoi(s);
-        return out > 0;
-    } catch (...) { return false; }
-}
-
-// Append N blank records; return false if any append fails
-static bool append_n_blank(DbArea& db, int n) {
-    if (n <= 0) return true;
-    for (int i = 0; i < n; ++i) {
-        if (!db.appendBlank()) return false;
+namespace
+{
+    static std::string upcase_copy(std::string s)
+    {
+        for (char& ch : s)
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        return s;
     }
-    return true;
+
+    static bool parse_count_token(const std::string& s, std::size_t& out)
+    {
+        if (s.empty()) return false;
+
+        for (unsigned char ch : s)
+            if (!std::isdigit(ch)) return false;
+
+        try
+        {
+            const unsigned long long v = std::stoull(s);
+            if (v == 0) return false;
+            if (v > static_cast<unsigned long long>(std::numeric_limits<std::size_t>::max()))
+                return false;
+
+            out = static_cast<std::size_t>(v);
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
 }
 
-} // namespace
-
-// APPEND [BLANK|-B] [n]
-void cmd_APPEND(DbArea& db, std::istringstream& iss) {
-
-    if (!db.isOpen()) {                       //  early guard
-        std::cout << "No table open.\n";
+void cmd_APPEND(xbase::DbArea& A, std::istringstream& iss)
+{
+    std::string tok1;
+    if (!(iss >> tok1))
+    {
+        std::istringstream none;
+        (void)dottalk_append_blank_core(A, none);
         return;
     }
 
-    std::string t1; // first token after APPEND
-    std::string t2; // optional second token (n)
-
-    // read tokens loosely
-    iss >> t1;
-    iss >> t2;
-
-    const std::string a1 = uptrim(t1);
-    const std::string a2 = uptrim(t2);
-
-    int  count   = 1;     // default number of records
-    bool doBlank = true;  // classic drop-through
-
-    // Validate / interpret args
-    if (a1.empty()) {
-        // APPEND -> BLANK 1
-        doBlank = true;
-        count   = 1;
-    } else if (a1 == "BLANK" || a1 == "-B") {
-        // APPEND BLANK [n]  or  APPEND -B [n]
-        if (!a2.empty()) {
-            int n{};
-            if (!try_parse_int_strict(a2, n)) {
-                std::cout << "Usage: APPEND [BLANK|-B] [n]\n";
-                return;
-            }
-            count = n;
-        }
-        doBlank = true;
-    } else {
-        // APPEND N  (N must be positive integer)
-        int n{};
-        if (!try_parse_int_strict(a1, n)) {
-            std::cout << "Usage: APPEND [BLANK|-B] [n]\n";
-            return;
-        }
-        count   = n;
-        doBlank = true;
-    }
-
-    // Execute
-    try {
-        if (doBlank) {
-            if (!append_n_blank(db, count)) {
-                std::cout << "APPEND failed.\n";
-                return;
-            }
-            // Safe no-op by default; plug in real notifier later.
-            order_notify_mutation(db);
-            std::cout << "Appended " << count
-                      << " blank record" << (count == 1 ? "" : "s")
-                      << ".\n";
-            return;
-        }
-    } catch (...) {
-        std::cout << "APPEND failed (exception).\n";
+    std::size_t count = 0;
+    if (parse_count_token(tok1, count))
+    {
+        (void)dottalk_append_many_core(A, count);
         return;
     }
 
-    std::cout << "APPEND: interactive mode not yet implemented.\n";
+    const std::string u1 = upcase_copy(tok1);
+
+    if (u1 == "RAW")
+    {
+        std::string tok2;
+        if (!(iss >> tok2))
+        {
+            std::uint32_t rn = 0;
+            (void)dottalk_append_blank_raw(A, rn);
+            return;
+        }
+
+        const std::string u2 = upcase_copy(tok2);
+
+        if (u2 == "MANY")
+        {
+            std::string tok3;
+            if (!(iss >> tok3))
+            {
+                std::cout << "Usage: APPEND RAW MANY <count>\n";
+                return;
+            }
+
+            if (!parse_count_token(tok3, count))
+            {
+                std::cout << "APPEND: invalid count '" << tok3 << "'\n";
+                return;
+            }
+
+            (void)dottalk_append_many_raw(A, count);
+            return;
+        }
+
+        std::cout << "Usage: APPEND RAW | APPEND RAW MANY <count>\n";
+        return;
+    }
+
+    if (u1 == "MANY")
+    {
+        std::string tok2;
+        if (!(iss >> tok2))
+        {
+            std::cout << "Usage: APPEND MANY <count>\n";
+            return;
+        }
+
+        if (!parse_count_token(tok2, count))
+        {
+            std::cout << "APPEND: invalid count '" << tok2 << "'\n";
+            return;
+        }
+
+        (void)dottalk_append_many_core(A, count);
+        return;
+    }
+
+    std::cout
+        << "Usage:\n"
+        << "  APPEND\n"
+        << "  APPEND RAW\n"
+        << "  APPEND MANY <count>\n"
+        << "  APPEND RAW MANY <count>\n"
+        << "  APPEND <count>\n";
 }

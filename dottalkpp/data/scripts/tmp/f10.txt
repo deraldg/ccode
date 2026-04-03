@@ -1,0 +1,62 @@
+  <!-- PAGE 10: Codex Pipeline (Retro Peach) -->
+  <diagram id="p10_diagram" name="Codex Pipeline">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFD9CC">
+      <root>
+        <mxCell id="p10_0"/>
+        <mxCell id="p10_1" parent="p10_0"/>
+
+        <!-- SOURCE MATERIAL -->
+        <mxCell id="p10_source" value="Source Material&#xa;---&#xa;System Specs&#xa;Engine Specs&#xa;Storage Specs&#xa;UI Specs&#xa;Historical Notes"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="80" y="40" width="380" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- STRUCTURAL OUTLINE -->
+        <mxCell id="p10_outline" value="Structural Outline&#xa;---&#xa;Chapters&#xa;Sections&#xa;Subsections&#xa;Canonical Ordering&#xa;Cross-Era Mapping"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="520" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CANONICAL FORM -->
+        <mxCell id="p10_canonical" value="Canonical Form&#xa;---&#xa;Terminology&#xa;Naming Rules&#xa;Formatting Rules&#xa;Examples&#xa;Reference Blocks"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="940" y="40" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- DIAGRAM INTEGRATION -->
+        <mxCell id="p10_diagramint" value="Diagram Integration&#xa;---&#xa;draw.io Assets&#xa;System–Entity Charts&#xa;Architecture Maps&#xa;Flow Diagrams&#xa;Export Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="80" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BUILD SYSTEM -->
+        <mxCell id="p10_build" value="Build System&#xa;---&#xa;Markdown&#xa;HTML/PDF Export&#xa;Asset Linking&#xa;Cross-References&#xa;Versioning"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="520" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- PUBLICATION -->
+        <mxCell id="p10_publish" value="Publication&#xa;---&#xa;Codex Website&#xa;PDF Codex&#xa;Developer Docs&#xa;Instructor Guides&#xa;Updates + Errata"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="940" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p10_edge1" edge="1" parent="p10_1" source="p10_source" target="p10_outline"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge2" edge="1" parent="p10_1" source="p10_outline" target="p10_canonical"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge3" edge="1" parent="p10_1" source="p10_canonical" target="p10_diagramint"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge4" edge="1" parent="p10_1" source="p10_diagramint" target="p10_build"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge5" edge="1" parent="p10_1" source="p10_build" target="p10_publish"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

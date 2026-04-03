@@ -1,0 +1,194 @@
+Here’s the **clean, authoritative plan**, distilled and stabilized. This is what we’re doing and why.
+
+---
+
+## 1) Directory & Launch Model (locked)
+
+**Goal:** predictable relative paths, FoxPro-style ergonomics.
+
+**Layout**
+
+```
+dottalkpp/
+  bin/            dottalkpp.exe, sqlite3.dll
+  data/           ← working directory (CWD)
+    dbf/
+    indexes/
+    scripts/
+    schemas/
+    help/
+    out/
+    tmp/
+    logs/
+  docs/
+  tests/
+  etc/
+```
+
+**Rule**
+
+* DotTalk++ **always runs with CWD = `data/`**
+* Executable location is irrelevant to user commands
+
+**How**
+
+* Launch via `datarun.ps1` (or shortcut with “Start in: data”)
+* Never run from `bin/` directly
+
+**Result**
+
+* Commands use short paths: `dbf\students`, `out\file.csv`
+* No `..\` path gymnastics
+* Portable, zip-friendly runtime
+
+---
+
+## 2) Command Surface (language stability)
+
+**Public, documented commands**
+
+* `SET ORDER TO ...`
+* `SET INDEX TO ...`
+* `USE`, `AREA`, `REINDEX`, `LIST`, etc.
+
+**Internal only (never advertised)**
+
+* `SETORDER`
+
+  * Execution target used by SET engine
+  * Callable, but undocumented and unsupported
+  * Not part of the language
+
+**Principle**
+
+> Language is orthogonal; plumbing stays hidden.
+
+---
+
+## 3) Index Resolution Rules (unified)
+
+When a user specifies `<base>` (no extension):
+
+**Probe order**
+
+1. `indexes\<base>.cnx`   (preferred)
+2. `indexes\<base>.inx`
+3. `dbf\<base>.idx`       (legacy)
+4. Sibling of DBF (last resort)
+
+If a path **is supplied**, use it exactly—no relocation.
+
+---
+
+## 4) CNX vs INX Semantics
+
+### `SET ORDER TO`
+
+* Canonical way to activate ordering
+* Works with CNX and INX
+* Requires `TAG <name>` when multiple tags exist
+* Implicit `GO TOP`
+
+### `SET INDEX TO`
+
+* Legacy convenience
+* Intended for INX / IDX
+* If CNX is supplied:
+
+  * Accepted
+  * Internally treated as `SET ORDER TO`
+  * Error/help text never mentions `SETORDER`
+
+---
+
+## 5) USE auto-attach behavior
+
+On:
+
+```
+USE students
+```
+
+DotTalk++ automatically tries:
+
+1. `indexes\students.cnx`
+2. `indexes\students.inx`
+3. `dbf\students.idx`
+
+If found:
+
+* Attaches index
+* Prints a one-line notice
+* Does not override later `SET ORDER`
+
+---
+
+## 6) REINDEX (corrected behavior)
+
+`REINDEX` always targets the **active order in the current AREA**:
+
+* CNX + TAG active → rebuild that tag in that CNX
+* INX active → rebuild that INX
+* No active order:
+
+  * Rebuild best match using the same probe order as `USE`
+* Never assumes `dbf\` paths
+* Always reports exactly what was rebuilt and where
+
+---
+
+## 7) AREA reporting (truthful)
+
+After any order change:
+
+* Implicit refresh / `GO TOP`
+* AREA displays:
+
+  * DBF path
+  * Record counts
+  * Order type (CNX / INX / IDX)
+  * Active tag
+  * Resolved path (relative to `data/`)
+
+No more “NATURAL” when an order is active.
+
+---
+
+## 8) Known edge cases to harden (next pass)
+
+* Blank / NULL keys sorting to top
+* Cursor refresh after order change
+* Consistent CNX path reporting (no dbf/ leakage)
+* Default tag selection rules
+* Optional future: `SET NULLORDER FIRST|LAST`
+
+---
+
+## 9) What’s already working (validated)
+
+* Correct CWD model (`data/`)
+* `USE` + auto index attach
+* `SET ORDER` works with CNX and INX
+* `REINDEX` operates on current AREA
+* Index switching updates listing order
+* Directory reorg is stable
+
+---
+
+## Bottom line
+
+You are:
+
+* **Freezing the language surface**
+* **Normalizing runtime layout**
+* **Separating user semantics from implementation mechanics**
+
+That’s exactly the right order of operations.
+
+Next logical steps (when you’re ready):
+
+1. Fix path resolver + AREA reporting
+2. Tighten REINDEX target selection
+3. Polish HELP text to match reality
+
+You’re no longer “cleaning up a mess” — you’re **locking a spec**.

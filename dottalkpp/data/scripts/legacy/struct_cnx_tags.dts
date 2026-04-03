@@ -1,0 +1,20 @@
+* CNX tags + active tag movement
+COLOR DEFAULT
+USE students noindex
+SETCNX students.cnx
+STATUS
+* pick LNAME asc
+SETORDER students.cnx TAG LNAME --asc
+STATUS
+STRUCT INDEX
+LIST
+* flip to GPA desc
+SETORDER students.cnx TAG GPA --desc
+STATUS
+STRUCT INDEX
+LIST
+* go back to LNAME asc (ASCEND only flips direction, not tag)
+SETORDER students.cnx TAG LNAME --asc
+STATUS
+LIST
+* end

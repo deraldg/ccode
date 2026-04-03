@@ -1,0 +1,23 @@
+DTSHEMA 2
+AREA 0 | dbf=BUILDING.DBF | index=BUILDING.cdx | indextype=CDX | tag=none | alias=BUILDING
+AREA 1 | dbf=CLASSES.DBF | index=CLASSES.cdx | indextype=CDX | tag=none | alias=CLASSES
+AREA 2 | dbf=CLIENTS.dbf | index=none | indextype=NONE | tag=none | alias=CLIENTS
+AREA 3 | dbf=COURSES.DBF | index=COURSES.cdx | indextype=CDX | tag=none | alias=COURSES
+AREA 4 | dbf=DEPT.DBF | index=DEPT.cdx | indextype=CDX | tag=none | alias=DEPT
+AREA 5 | dbf=EMP1.dbf | index=none | indextype=NONE | tag=none | alias=EMP1
+AREA 6 | dbf=EMP2.dbf | index=none | indextype=NONE | tag=none | alias=EMP2
+AREA 7 | dbf=EMPLOYEES.dbf | index=none | indextype=NONE | tag=none | alias=EMPLOYEES
+AREA 8 | dbf=ENROLL.DBF | index=ENROLL.cdx | indextype=CDX | tag=none | alias=ENROLL
+AREA 9 | dbf=fx1.dbf | index=none | indextype=NONE | tag=none | alias=FX1
+AREA 10 | dbf=m1.dbf | index=none | indextype=NONE | tag=none | alias=M1
+AREA 11 | dbf=MAJORS.DBF | index=MAJORS.cdx | indextype=CDX | tag=none | alias=MAJORS
+AREA 12 | dbf=ROOMS.DBF | index=ROOMS.cdx | indextype=CDX | tag=none | alias=ROOMS
+AREA 13 | dbf=smoketest.dbf | index=smoketest.cdx | indextype=CDX | tag=none | alias=SMOKETEST
+AREA 14 | dbf=smoketest2.dbf | index=none | indextype=NONE | tag=none | alias=SMOKETEST2
+AREA 15 | dbf=STUD_MAJ.DBF | index=STUD_MAJ.cdx | indextype=CDX | tag=none | alias=STUD_MAJ
+AREA 16 | dbf=STUDENTS.dbf | index=STUDENTS.cdx | indextype=CDX | tag=LNAME | alias=STUDENTS
+AREA 17 | dbf=TASSIGN.DBF | index=TASSIGN.cdx | indextype=CDX | tag=none | alias=TASSIGN
+AREA 18 | dbf=TEACHERS.dbf | index=TEACHERS.cdx | indextype=CDX | tag=FNAME | alias=TEACHERS
+AREA 19 | dbf=TERMS.DBF | index=TERMS.cdx | indextype=CDX | tag=none | alias=TERMS
+AREA 20 | dbf=tmp1.dbf | index=none | indextype=NONE | tag=none | alias=TMP1
+AREA 21 | dbf=vf1.dbf | index=none | indextype=NONE | tag=none | alias=VF1

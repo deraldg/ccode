@@ -1,0 +1,151 @@
+// Modern C++ port of classic xBase dialect (dBase/FoxPro/Clipper-inspired)
+// "a and b" – assuming you're asking for logical AND operator behavior
+// in DotTalk++ / xBase-style expressions (CALC, FOR clauses, predicates, etc.)
+
+#include <iostream>
+#include <string>
+#include <cctype>
+#include <optional>
+
+// -----------------------------------------------------------------------------
+// xBase-style boolean logic in modern C++
+// - .T. / .F. as true/false
+// - "AND", "OR", "NOT" case-insensitive
+// - Short-circuit evaluation (like FoxPro)
+// - Supports field refs via lambda (simplified model)
+// -----------------------------------------------------------------------------
+
+namespace xbase {
+
+// Boolean type alias (mimics xBase .T./.F.)
+using Logical = bool;
+
+// String helpers (case-insensitive compare)
+bool iequals(std::string_view a, std::string_view b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Simplified expression context (can hold current record fields)
+struct RecordContext {
+    // Example: map field name → value (string for simplicity)
+    std::unordered_map<std::string, std::string> fields;
+
+    // Get field value (case-insensitive lookup)
+    std::optional<std::string> get(std::string_view field) const {
+        std::string key{field};
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        auto it = fields.find(key);
+        return (it != fields.end()) ? std::optional{it->second} : std::nullopt;
+    }
+};
+
+// Forward declaration
+Logical eval_expr(std::string_view expr, const RecordContext& ctx);
+
+// Evaluate "a AND b" style expressions (very simplified parser)
+Logical eval_logical(std::string_view expr, const RecordContext& ctx) {
+    std::string s{expr};
+    std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+    s.erase(std::remove_if(s.begin(), s.end(), ::isspace), s.end());
+
+    if (s == ".T." || s == "TRUE")  return true;
+    if (s == ".F." || s == "FALSE") return false;
+
+    // Handle AND / OR with short-circuit
+    size_t pos_and = s.find("AND");
+    size_t pos_or  = s.find("OR");
+
+    if (pos_and != std::string::npos) {
+        std::string left  = s.substr(0, pos_and);
+        std::string right = s.substr(pos_and + 3);
+        Logical l = eval_expr(left, ctx);
+        if (!l) return false;           // short-circuit: false AND anything = false
+        return eval_expr(right, ctx);   // continue only if left is true
+    }
+
+    if (pos_or != std::string::npos) {
+        std::string left  = s.substr(0, pos_or);
+        std::string right = s.substr(pos_or + 2);
+        Logical l = eval_expr(left, ctx);
+        if (l) return true;             // short-circuit: true OR anything = true
+        return eval_expr(right, ctx);
+    }
+
+    // NOT
+    if (s.starts_with("NOT")) {
+        std::string inner = s.substr(3);
+        return !eval_expr(inner, ctx);
+    }
+
+    // Field name or literal
+    if (auto val = ctx.get(expr)) {
+        std::string v = *val;
+        std::transform(v.begin(), v.end(), v.begin(), ::toupper);
+        return v == ".T." || v == "TRUE" || v == "YES" || v == "T";
+    }
+
+    // Fallback: treat as false (xBase conservative)
+    return false;
+}
+
+// Recursive entry point (can be extended for parentheses, etc.)
+Logical eval_expr(std::string_view expr, const RecordContext& ctx) {
+    return eval_logical(expr, ctx);
+}
+
+} // namespace xbase
+
+// -----------------------------------------------------------------------------
+// Demo: "a and b" in xBase style
+// -----------------------------------------------------------------------------
+
+int main()
+{
+    using namespace xbase;
+
+    RecordContext rec;
+    rec.fields["paid"]     = ".T.";
+    rec.fields["shipped"]  = ".F.";
+    rec.fields["status"]   = "Pending";
+
+    struct Test {
+        std::string expr;
+        bool        expected;
+    };
+
+    std::vector<Test> tests = {
+        { "paid AND shipped",          false },   // true AND false = false
+        { "paid OR shipped",           true  },   // true OR false = true
+        { "paid AND .T.",              true  },
+        { "NOT paid",                  false },
+        { "status = 'Pending'",        true  },   // would need full predicate parser
+        { "PAID and SHIPPED",          false },   // case-insensitive
+        { ".F. AND .T.",               false },   // short-circuit
+    };
+
+    std::cout << "xBase-style logical evaluation demo (AND / OR short-circuit)\n";
+    std::cout << "Record: paid=.T., shipped=.F., status=\"Pending\"\n\n";
+
+    for (const auto& t : tests) {
+        Logical result = eval_expr(t.expr, rec);
+        std::cout << "  " << t.expr << "  →  "
+                  << (result ? ".T." : ".F.")
+                  << (result == t.expected ? "  [OK]" : "  [FAIL]")
+                  << "\n";
+    }
+
+    // Real-world xBase-style usage example
+    std::cout << "\nTypical filter expression:\n";
+    std::string filter = "paid AND NOT shipped";
+    std::cout << "  " << filter << "  →  "
+              << (eval_expr(filter, rec) ? ".T." : ".F.") << "\n";
+
+    return 0;
+}

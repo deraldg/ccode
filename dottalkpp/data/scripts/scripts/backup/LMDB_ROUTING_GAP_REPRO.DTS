@@ -1,0 +1,52 @@
+* ============================================================
+* LMDB_ROUTING_GAP_REPRO.DTS
+* Purpose: Prove/record the current routing gap:
+*   - SETLMDB sets orderstate to <cdx> + <tag>
+*   - LIST/TOP/SMARTLIST still route through legacy CDX open
+*     and emit: "Failed to open index: ... (unable to read index)"
+*
+* Keep ASCII only.
+* ============================================================
+
+SET ECHO OFF
+ECHO ===== LMDB ROUTING GAP REPRO START =====
+
+* --- Clean slate
+SCHEMAS CLOSE
+SELECT 0
+
+* --- Open target table
+USE STUDENTS
+AREA
+
+* --- Ensure physical first
+SETLMDB 0
+ECHO --- Baseline LIST in physical order (should NOT try CDX) ---
+LIST 3
+
+* --- Activate LMDB order (this sets orderstate to .cdx + TAG)
+ECHO --- Activate SETLMDB (expect: state prints OK) ---
+SETLMDB students LNAME
+SETLMDB
+
+* --- Now trigger the gap on purpose:
+*     Any command that consults orderstate and tries to open CDX will emit the error.
+ECHO --- Trigger legacy CDX open via TOP ---
+TOP
+
+ECHO --- Trigger legacy CDX open via LIST ---
+LIST 5
+
+ECHO --- Trigger legacy CDX open via SMARTLIST (if implemented) ---
+SMARTLIST 5
+
+* --- Flip tag and repeat (shows gap is independent of chosen tag)
+ECHO --- Switch tag to SID and trigger again ---
+SETLMDB students SID
+SETLMDB
+TOP
+LIST 5
+SMARTLIST 5
+
+* --- Clean exit
+ECHO ===== LMDB ROUTING GAP REPRO END =====

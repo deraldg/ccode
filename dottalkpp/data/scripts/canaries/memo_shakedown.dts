@@ -1,0 +1,211 @@
+ECHO OFF
+SET TALK ON
+
+* =========================================================
+* CLEAN START
+* =========================================================
+CLOSE ALL
+SCHEMAS CLOSE
+
+ERASE LOCKTEST CONFIRM
+ERASE MEMO_MSDOS CONFIRM
+ERASE MEMO_FOX26 CONFIRM
+ERASE MEMO_VFP CONFIRM
+ERASE MEMO_X64 CONFIRM
+
+* =========================================================
+* 0) BASIC APPEND / LOCK SANITY
+* =========================================================
+ECHO [0] BASIC TABLE SANITY
+CREATE LOCKTEST (ID N(4,0), NAME C(20))
+APPEND
+REPLACE ID WITH 1
+REPLACE NAME WITH LOCKOK
+TUP
+DISPLAY
+CLOSE
+
+USE LOCKTEST
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 1) MSDOS + legacy memo slot
+* =========================================================
+ECHO [1] MSDOS LEGACY MEMO
+CREATE MSDOS MEMO_MSDOS (ID N(4,0), TITLE C(20), NOTES M)
+STRUCT
+FIELDS
+
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH MSDOS1
+REPLACE NOTES WITH "msdos memo one"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_MSDOS
+TUP
+DISPLAY
+STRUCT
+FIELDS
+CLOSE
+
+* =========================================================
+* 2) FOX26 + legacy memo slot
+* =========================================================
+ECHO [2] FOX26 LEGACY MEMO
+CREATE FOX26 MEMO_FOX26 (ID N(4,0), TITLE C(20), NOTES M)
+STRUCT
+FIELDS
+
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH FOX261
+REPLACE NOTES WITH "fox26 memo one"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_FOX26
+TUP
+DISPLAY
+STRUCT
+FIELDS
+CLOSE
+
+* =========================================================
+* 3) VFP + legacy memo slot
+* =========================================================
+ECHO [3] VFP LEGACY MEMO
+CREATE VFP MEMO_VFP (ID N(4,0), TITLE C(20), NOTES M)
+STRUCT
+FIELDS
+
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH VFP1
+REPLACE NOTES WITH "vfp memo one"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_VFP
+TUP
+DISPLAY
+STRUCT
+FIELDS
+CLOSE
+
+* =========================================================
+* 4) X64 + real memo store
+* =========================================================
+ECHO [4] X64 MEMO CREATE / RESOLVE
+CREATE X64 MEMO_X64 (ID N(8,0), TITLE C(20), NOTES M)
+STRUCT
+FIELDS
+
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH X641
+REPLACE NOTES WITH "first x64 memo"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+STRUCT
+FIELDS
+CLOSE
+
+* =========================================================
+* 5) X64 update cycle
+* =========================================================
+ECHO [5] X64 MEMO UPDATE
+USE MEMO_X64
+REPLACE NOTES WITH "second x64 memo"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 6) X64 clear cycle
+* =========================================================
+ECHO [6] X64 MEMO CLEAR
+USE MEMO_X64
+REPLACE NOTES WITH ""
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 7) X64 reinsert after clear
+* =========================================================
+ECHO [7] X64 MEMO REINSERT
+USE MEMO_X64
+REPLACE NOTES WITH "third x64 memo after clear"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 8) X64 multiple updates on same record
+* =========================================================
+ECHO [8] X64 MEMO MULTI-UPDATE
+USE MEMO_X64
+REPLACE NOTES WITH "fourth x64 memo"
+TUP
+DISPLAY
+REPLACE NOTES WITH "fifth x64 memo"
+TUP
+DISPLAY
+REPLACE NOTES WITH "sixth x64 memo"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 9) X64 second record
+* =========================================================
+ECHO [9] X64 SECOND RECORD
+USE MEMO_X64
+APPEND
+REPLACE ID WITH 2
+REPLACE TITLE WITH X642
+REPLACE NOTES WITH "second record memo"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+GO TOP
+DISPLAY
+GO BOTTOM
+DISPLAY
+CLOSE
+
+ECHO DONE

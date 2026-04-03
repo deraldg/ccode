@@ -1,0 +1,227 @@
+// src/cli/cmd_copy.cpp
+#include <filesystem>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+
+using namespace xbase;
+
+namespace {
+
+static inline std::string up(std::string s) { return textio::up(std::move(s)); }
+static inline std::string trim(std::string s) { return textio::trim(std::move(s)); }
+
+static bool token_is(const std::string& t, const char* u) { return up(t) == u; }
+
+static void usage_copy() {
+    std::cout
+        << "Usage:\n"
+        << "  COPY TO <DBFNAME> [WITH SIDECARS] [OVERWRITE]\n"
+        << "  COPY FILE <SRC> TO <DST> [OVERWRITE]\n"
+        << "\n"
+        << "SIDECARS (if present next to the DBF): .inx .cnx .dtx .dti.json\n";
+}
+
+static bool copy_file_binary(const std::filesystem::path& src,
+                             const std::filesystem::path& dst,
+                             bool overwrite,
+                             std::string* err = nullptr) {
+    std::error_code ec;
+
+    if (!std::filesystem::exists(src, ec) || ec) {
+        if (err) *err = "Source does not exist: " + src.string();
+        return false;
+    }
+
+    if (std::filesystem::exists(dst, ec) && !overwrite) {
+        if (err) *err = "Destination exists (use OVERWRITE): " + dst.string();
+        return false;
+    }
+
+    // Ensure destination directory exists (if any)
+    if (dst.has_parent_path() && !dst.parent_path().empty()) {
+        std::filesystem::create_directories(dst.parent_path(), ec);
+        ec.clear();
+    }
+
+    const auto opt = overwrite ? std::filesystem::copy_options::overwrite_existing
+                               : std::filesystem::copy_options::none;
+
+    if (!std::filesystem::copy_file(src, dst, opt, ec) || ec) {
+        if (err) *err = "Copy failed: " + src.string() + " -> " + dst.string();
+        return false;
+    }
+
+    return true;
+}
+
+static std::filesystem::path ensure_dbf_path(const std::filesystem::path& p) {
+    // xbase::dbNameWithExt normalizes ".dbf"
+    return std::filesystem::path(xbase::dbNameWithExt(p.string()));
+}
+
+static std::filesystem::path resolve_dst_for_copy_to(const DbArea& a, const std::string& dstToken) {
+    // If dstToken includes a directory, honor it; otherwise write next to the open DBF.
+    std::filesystem::path dstp(trim(dstToken));
+    const std::filesystem::path srcp(a.filename());
+
+    // Normalize leaf to .dbf
+    std::filesystem::path leaf = dstp.filename();
+    leaf = ensure_dbf_path(leaf);
+
+    const bool has_dir =
+        dstp.has_parent_path() &&
+        !dstp.parent_path().empty() &&
+        dstp.parent_path().string() != ".";
+
+    if (has_dir) return dstp.parent_path() / leaf;
+    return srcp.parent_path() / leaf;
+}
+
+static bool exists_file(const std::filesystem::path& p) {
+    std::error_code ec;
+    return std::filesystem::exists(p, ec) && !ec;
+}
+
+// Sidecar naming rule:
+//   src: <dir>/<SRCSTEM>.dbf  -> sidecars: <dir>/<SRCSTEM>.(inx|cnx|dtx|dti.json)
+//   dst: <dir>/<DSTSTEM>.dbf  -> sidecars: <dir>/<DSTSTEM>.(inx|cnx|dtx|dti.json)
+static void copy_sidecars(const std::filesystem::path& src_dbf,
+                          const std::filesystem::path& dst_dbf,
+                          bool overwrite) {
+    const auto src_dir  = src_dbf.parent_path();
+    const auto dst_dir  = dst_dbf.parent_path();
+    const auto src_stem = src_dbf.stem().string(); // STUDENTS
+    const auto dst_stem = dst_dbf.stem().string(); // CLIENTS
+
+    struct SidecarSpec {
+        // suffix appended to stem, including leading dot if needed
+        const char* suffix;
+    };
+
+    // Keep this small & traditional: only the common “artifact” companions.
+    const SidecarSpec specs[] = {
+        { ".inx" },
+        { ".cnx" },
+        { ".dtx" },
+        { ".dti.json" },
+    };
+
+    int found = 0;
+    int copied = 0;
+    int failed = 0;
+
+    for (const auto& s : specs) {
+        const std::filesystem::path src_side = src_dir / (src_stem + s.suffix);
+        if (!exists_file(src_side)) continue;
+        ++found;
+
+        const std::filesystem::path dst_side = dst_dir / (dst_stem + s.suffix);
+
+        std::string err;
+        if (copy_file_binary(src_side, dst_side, overwrite, &err)) {
+            ++copied;
+        } else {
+            ++failed;
+            std::cout << "COPY SIDECAR failed: " << err << "\n";
+        }
+    }
+
+    if (found == 0) {
+        std::cout << "COPY SIDECARS: none found.\n";
+    } else {
+        std::cout << "COPY SIDECARS: found " << found << ", copied " << copied;
+        if (failed) std::cout << ", failed " << failed;
+        std::cout << ".\n";
+    }
+}
+
+} // namespace
+
+void cmd_COPY(DbArea& a, std::istringstream& iss) {
+    std::vector<std::string> tok;
+    {
+        std::string t;
+        while (iss >> t) tok.push_back(t);
+    }
+
+    if (tok.empty()) { usage_copy(); return; }
+
+    bool overwrite = false;
+    bool with_sidecars = false;
+
+    // Strip OVERWRITE, WITH, SIDECARS tokens (flexibly)
+    {
+        std::vector<std::string> kept;
+        kept.reserve(tok.size());
+
+        for (size_t i = 0; i < tok.size(); ++i) {
+            const std::string u = up(tok[i]);
+
+            if (u == "OVERWRITE") { overwrite = true; continue; }
+
+            // Allow: "WITH SIDECARS" or just "SIDECARS"
+            if (u == "WITH") {
+                // peek next token
+                if (i + 1 < tok.size() && up(tok[i + 1]) == "SIDECARS") {
+                    with_sidecars = true;
+                    ++i; // consume SIDECARS too
+                    continue;
+                }
+                // ignore bare WITH (keep parsing other tokens)
+                continue;
+            }
+            if (u == "SIDECARS") { with_sidecars = true; continue; }
+
+            kept.push_back(tok[i]);
+        }
+
+        tok.swap(kept);
+    }
+
+    if (tok.empty()) { usage_copy(); return; }
+
+    // COPY FILE <src> TO <dst>
+    if (token_is(tok[0], "FILE")) {
+        if (tok.size() < 4 || !token_is(tok[2], "TO")) { usage_copy(); return; }
+        const std::filesystem::path src = trim(tok[1]);
+        const std::filesystem::path dst = trim(tok[3]);
+
+        std::string err;
+        if (copy_file_binary(src, dst, overwrite, &err)) {
+            std::cout << "Copied file to " << dst.string() << "\n";
+        } else {
+            std::cout << "COPY FILE failed: " << err << "\n";
+        }
+        return;
+    }
+
+    // COPY TO <dbf>
+    if (token_is(tok[0], "TO")) {
+        if (!a.isOpen()) { std::cout << "COPY TO: no file open.\n"; return; }
+        if (tok.size() < 2) { usage_copy(); return; }
+
+        const std::filesystem::path srcp(a.filename());
+        const std::filesystem::path dstp = resolve_dst_for_copy_to(a, tok[1]);
+
+        std::string err;
+        if (!copy_file_binary(srcp, dstp, overwrite, &err)) {
+            std::cout << "COPY TO failed: " << err << "\n";
+            return;
+        }
+
+        std::cout << "Copied DBF to " << dstp.string() << "\n";
+
+        if (with_sidecars) {
+            copy_sidecars(srcp, dstp, overwrite);
+        }
+
+        return;
+    }
+
+    usage_copy();
+}

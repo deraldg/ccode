@@ -10,10 +10,18 @@ file(GLOB_RECURSE MEMO_SOURCES CONFIGURE_DEPENDS
 
 add_library(memo STATIC ${MEMO_SOURCES})
 
-target_include_directories(memo
+target_include_directories(xbase
   PUBLIC
     ${CMAKE_SOURCE_DIR}/include
 )
+
+target_compile_definitions(xbase
+  PUBLIC DOTTALK_WITH_INDEX=$<BOOL:${DOTTALK_WITH_INDEX}>
+)
+
+if (DOTTALK_WITH_INDEX AND TARGET xindex)
+  target_link_libraries(memo PUBLIC xindex)
+endif()
 
 if (MSVC)
   target_compile_options(memo PRIVATE /W4 /permissive-)

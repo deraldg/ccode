@@ -1,0 +1,24 @@
+{
+  "engine": {
+    "name": "dottalkpp",
+    "platform": "dbf-header-v1",
+    "version": "alpha-8"
+  },
+  "operation": "CREATE",
+  "result": {
+    "rows_rejected": 0,
+    "rows_written": 0
+  },
+  "schema": {
+    "name": "students_empty",
+    "path": "..\\schemas\\students.schema.json",
+    "version": "1.0"
+  },
+  "source": {
+    "type": "NONE"
+  },
+  "table": "students_empty",
+  "timestamps": {
+    "finished": "2025-12-12T04:33:47Z"
+  }
+}

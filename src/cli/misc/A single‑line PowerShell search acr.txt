@@ -1,0 +1,33 @@
+A single‑line PowerShell search across your whole repo looks like this:
+
+```powershell
+Get-ChildItem -Recurse -File | Select-String -Pattern "Failed to open index:"
+```
+
+This scans every file under the current directory, recurses into subfolders, and prints matching filename, line number, and text.
+
+---
+
+### Variants you may find useful
+
+- **Limit to source files only (.cpp/.hpp/.ps1/etc.):**
+```powershell
+Get-ChildItem -Recurse -Include *.cpp,*.hpp,*.h,*.ps1 -File |
+    Select-String "Failed to open index:"
+```
+
+- **Show only filenames that contain the match:**
+```powershell
+Get-ChildItem -Recurse -File |
+    Select-String "Failed to open index:" |
+    Select-Object -ExpandProperty Path -Unique
+```
+
+- **Case‑insensitive (default) but explicit:**
+```powershell
+Select-String -Pattern "Failed to open index:" -CaseInsensitive -Path (Get-ChildItem -Recurse -File).FullName
+```
+
+---
+
+If you want, I can tailor this to your repo layout (e.g., exclude `build/`, search only `src/`, or filter by file type).

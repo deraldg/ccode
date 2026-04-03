@@ -1,0 +1,25 @@
+#pragma once
+
+namespace dottalkpp::import
+{
+
+    enum ImportCode
+    {
+        IMP001_FILE_NOT_FOUND = 1,
+        IMP010_HEADER_MISSING = 10,
+        IMP012_COLUMN_COUNT_MISMATCH = 12,
+
+        IMP020_MIXED_COLUMN_TYPES = 20,
+
+        IMP040_INVALID_NUMERIC = 40,
+        IMP042_INVALID_DATE = 42,
+
+        IMP060_MAP_FILE_MISSING = 60,
+        IMP066_REQUIRED_COLUMN_MISSING = 66,
+
+        IMP083_TARGET_WIDTH_INSUFFICIENT = 83,
+
+        IMP100_ROW_CONVERSION_FAILURE = 100
+    };
+
+}

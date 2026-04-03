@@ -1,0 +1,35 @@
+set echo on
+echo REL ENUM ersatz browser (per-hop)
+
+schemas close
+schemas open dbf
+
+rel clear all
+rel add students enroll on sid
+rel add enroll classes on cls_id
+rel add classes tassign on cls_id
+rel add tassign teachers on tid
+rel refresh
+
+select students
+goto 1
+
+loop 5 times
+  echo =========================
+  echo STUDENT (parent)
+  tup
+
+  echo ---- ENROLL rows (distinct) ----
+  rel enum distinct limit 20 enroll tuple enroll.enr_id,enroll.cls_id,enroll.grade,enroll.status,enroll.enr_date
+
+  echo ---- CLASSES rows (distinct) ----
+  rel enum distinct limit 20 enroll classes tuple classes.cls_id,classes.sec,classes.room,classes.days,classes.time,classes.tid
+
+  echo ---- TEACHERS rows (distinct) ----
+  rel enum distinct limit 20 enroll classes tassign teachers tuple teachers.tid,teachers.lname,teachers.fname,teachers.dept_id
+
+  echo ---- FULL TRACE (leaf combos; limited) ----
+  rel enum limit 30 enroll classes tassign teachers tuple students.sid,students.lname,students.fname,enroll.cls_id,classes.sec,teachers.tid,teachers.lname,teachers.fname,enroll.grade
+
+  skip 1
+endloop

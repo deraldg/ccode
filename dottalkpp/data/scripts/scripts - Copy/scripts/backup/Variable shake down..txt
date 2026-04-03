@@ -1,0 +1,707 @@
+DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, ABOUT, QUIT.
+. ```text
+Unknown command: ```TEXT
+. ECHO -- Phase 1: SET VAR! typed/evaluated values --
+. SET VAR! n = 1
+. SET VAR! step = 1
+. SET VAR! cutoff = CTOD("2026-01-01")
+. SET VAR! who = "Grimwood"
+. SET VAR! s = "20260101"
+.
+. SHOW VAR
+VARS: 5 defined.
+ CUTOFF = "20260101"
+ N = 1
+ S = "20260101"
+ STEP = 1
+ WHO = "Grimwood"
+. SHOW VAR n
+N = 1
+. SHOW VAR cutoff
+CUTOFF = "20260101"
+. SHOW VAR who
+WHO = "Grimwood"
+. SHOW VAR s
+S = "20260101"
+.
+. ECHO -- Phase 2: build three x64 memo tables --
+. CREATE X64 X64_A (ID N(8,0), TITLE C(20), NOTES M)
+[CREATE RAW] CREATE X64 X64_A (ID N(8,0), TITLE C(20), NOTES M)
+[CREATE DEBUG] parsed fields: 3
+  ID N(8,0)
+  TITLE C(20,0)
+  NOTES M(8,0)
+Created D:\code\ccode\dottalkpp\data\dbf\X64_A.dbf [X64] (+ memo)
+Opened D:\code\ccode\dottalkpp\data\dbf\X64_A.dbf with 0 records.
+. APPEND
+Appended blank record 1
+. REPLACE ID WITH 1
+Replaced field #1 at rec 1.
+. REPLACE TITLE WITH "A1"
+Replaced field #2 at rec 1.
+. REPLACE NOTES WITH "alpha one"
+Replaced field #3 at rec 1.
+. CLOSE
+Closed.
+.
+. CREATE X64 X64_B (ID N(8,0), TITLE C(20), NOTES M)
+[CREATE RAW] CREATE X64 X64_B (ID N(8,0), TITLE C(20), NOTES M)
+[CREATE DEBUG] parsed fields: 3
+  ID N(8,0)
+  TITLE C(20,0)
+  NOTES M(8,0)
+Created D:\code\ccode\dottalkpp\data\dbf\X64_B.dbf [X64] (+ memo)
+Opened D:\code\ccode\dottalkpp\data\dbf\X64_B.dbf with 0 records.
+. APPEND
+Appended blank record 1
+. REPLACE ID WITH 1
+Replaced field #1 at rec 1.
+. REPLACE TITLE WITH "B1"
+Replaced field #2 at rec 1.
+. REPLACE NOTES WITH "bravo one"
+Replaced field #3 at rec 1.
+. CLOSE
+Closed.
+.
+. CREATE X64 X64_C (ID N(8,0), TITLE C(20), NOTES M)
+[CREATE RAW] CREATE X64 X64_C (ID N(8,0), TITLE C(20), NOTES M)
+[CREATE DEBUG] parsed fields: 3
+  ID N(8,0)
+  TITLE C(20,0)
+  NOTES M(8,0)
+Created D:\code\ccode\dottalkpp\data\dbf\X64_C.dbf [X64] (+ memo)
+Opened D:\code\ccode\dottalkpp\data\dbf\X64_C.dbf with 0 records.
+. APPEND
+Appended blank record 1
+. REPLACE ID WITH 1
+Replaced field #1 at rec 1.
+. REPLACE TITLE WITH "C1"
+Replaced field #2 at rec 1.
+. REPLACE NOTES WITH "charlie one"
+Replaced field #3 at rec 1.
+. CLOSE
+Closed.
+.
+. ECHO -- Phase 3: open tables into known slots --
+. SELECT 0
+Selected area 0.
+Current area: 0
+  (no file open)
+. USE X64_A
+Opened X64_A with 1 records.
+. SELECT 1
+Selected area 1.
+Current area: 1
+  (no file open)
+. USE X64_B
+Opened X64_B with 1 records.
+. SELECT 2
+Selected area 2.
+Current area: 2
+  (no file open)
+. USE X64_C
+Opened X64_C with 1 records.
+.
+. SCHEMAS
+SCHEMAS: Listing open work areas...
+  Area 0: D:\code\ccode\dottalkpp\data\dbf\X64_A.dbf
+  Area 1: D:\code\ccode\dottalkpp\data\dbf\X64_B.dbf
+  Area 2: D:\code\ccode\dottalkpp\data\dbf\X64_C.dbf
+SCHEMAS: 3 area(s) open.
+. WSREPORT ALL
+DotTalk Status Report
+
+Workspace
+----------------------------------------
+  Slot  Cur  Name                         File
+  ----- ---- ---------------------------- ------------------------------
+      0      X64_A                        X64_A.dbf
+      1      X64_B                        X64_B.dbf
+      2    * X64_C                        X64_C.dbf
+
+LMDB (per-area)
+----------------------------------------
+  STATE             : NONE
+
+Environment
+----------------------------------------
+  CWD               : D:\code\ccode\dottalkpp\data
+  OS                : Windows
+  USER              : deral
+  HOME              : C:\Users\deral
+  TEMP              : C:\Users\deral\AppData\Local\Temp
+
+DotTalk / Build variables
+----------------------------------------
+  DOTTALK_DATA      : (not set)
+  DOTTALK_DBF       : (not set)
+  DOTTALK_INDEXES   : (not set)
+  DOTTALK_SCHEMAS   : (not set)
+  DOTTALK_SCRIPTS   : D:\code\ccode\dottalkpp\data\scripts
+  DOTTALK_TESTS     : (not set)
+  DOTTALK_HELP      : (not set)
+  DOTTALK_LOGS      : (not set)
+  DOTTALK_TMP       : D:\code\ccode\dottalkpp\data\tmp
+  TVISION_ROOT      : (not set)
+  VCPKG_ROOT        : C:\Users\deral\vcpkg
+  VCPKG_DEFAULT_TRIPLET: (not set)
+  CMAKE_GENERATOR   : (not set)
+  CMAKE_TOOLCHAIN_FILE: (not set)
+
+Paths (SETPATH)
+----------------------------------------
+SETPATH state:
+  DATA = D:\code\ccode\dottalkpp\data
+  DBF = D:\code\ccode\dottalkpp\data\dbf
+  INDEXES = D:\code\ccode\dottalkpp\data\indexes
+  WORKSPACES = D:\code\ccode\dottalkpp\data\workspaces
+  SCHEMAS = D:\code\ccode\dottalkpp\data\schemas
+  SCRIPTS = D:\code\ccode\dottalkpp\data\scripts
+  TESTS = D:\code\ccode\dottalkpp\data\tests
+  HELP = D:\code\ccode\dottalkpp\data\help
+  LOGS = D:\code\ccode\dottalkpp\data\logs
+  TMP = D:\code\ccode\dottalkpp\data\tmp
+
+SET / Runtime Settings
+----------------------------------------
+  SET TALK          : ON
+  STATUS            : OFF
+  TIME              : OFF
+  CLOCK             : OFF
+  CONSOLE           : ON
+  BELL              : OFF
+
+  SAFETY            : ON
+  DELETED           : ON
+  EXACT             : OFF
+  ESCAPE            : ON
+  CARRY             : OFF
+  CONFIRM           : OFF
+  EXCLUSIVE         : OFF
+  MULTILOCKS        : OFF
+
+  CENTURY           : OFF
+  DATE              : MDY
+  DECIMALS          : 2
+  FIXED             : OFF
+  MEMOWIDTH         : 50
+  MEMOERROR         : ON
+
+  DEFAULT           : (none)
+  PATH              : (none)
+
+Output Routing
+----------------------------------------
+  CONSOLE           : ON
+  PRINT             : OFF
+  ALTERNATE         : OFF
+  ROUTER TALK       : OFF
+  ECHO              : OFF
+  PRINT TO          : (none)
+  ALTERNATE TO      : (none)
+
+Areas / Index Summary
+----------------------------------------
+Area 0: X64_A
+  FILE              : D:\code\ccode\dottalkpp\data\dbf\X64_A.dbf
+  BASENAME          : X64_A.dbf
+
+Index / Order
+----------------------------------------
+Order       : ASCEND
+Index file  : (none)
+Active tag  :
+Sort        :
+  Tags              : (none)
+  Records           : 1
+  Recno             : 1
+  Record len        : 37
+  Fields            : 3
+
+Area 1: X64_B
+  FILE              : D:\code\ccode\dottalkpp\data\dbf\X64_B.dbf
+  BASENAME          : X64_B.dbf
+
+Index / Order
+----------------------------------------
+Order       : ASCEND
+Index file  : (none)
+Active tag  :
+Sort        :
+  Tags              : (none)
+  Records           : 1
+  Recno             : 1
+  Record len        : 37
+  Fields            : 3
+
+Area 2 [current]: X64_C
+  FILE              : D:\code\ccode\dottalkpp\data\dbf\X64_C.dbf
+  BASENAME          : X64_C.dbf
+
+Index / Order
+----------------------------------------
+Order       : ASCEND
+Index file  : (none)
+Active tag  :
+Sort        :
+  Tags              : (none)
+  Records           : 1
+  Recno             : 1
+  Record len        : 37
+  Fields            : 3
+
+.
+. ECHO -- Phase 4: true counter loop (n should step up) --
+. LOOP 5
+..   ECHO n=&n
+..   SET VAR! n = (&n + &step)
+..
+..   ECHO -- slot 0 / X64_A --
+..   SELECT 0
+..   REPLACE NOTES WITH ("alpha loop " + STR(&n))
+..   DISPLAY
+..   TUP
+..
+..   ECHO -- slot 1 / X64_B --
+..   SELECT 1
+..   REPLACE NOTES WITH ("bravo loop " + STR(&n))
+..   DISPLAY
+..   TUP
+..
+..   ECHO -- slot 2 / X64_C --
+..   SELECT 2
+..   REPLACE NOTES WITH ("charlie loop " + STR(&n))
+..   DISPLAY
+..   TUP
+.. ENDLOOP
+LOOP: buffering commands FOR 5. Type ENDLOOP to execute.
+Selected area 0.
+Current area: 0
+  File: X64_A  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("alpha loop " + STR(2))
+1 | A1 | alpha one
+Selected area 1.
+Current area: 1
+  File: X64_B  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("bravo loop " + STR(2))
+1 | B1 | bravo one
+Selected area 2.
+Current area: 2
+  File: X64_C  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("charlie loop " + STR(2))
+1 | C1 | ("charlie loop " + STR(2))
+Selected area 0.
+Current area: 0
+  File: X64_A  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("alpha loop " + STR(2))
+1 | A1 | alpha one
+Selected area 1.
+Current area: 1
+  File: X64_B  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("bravo loop " + STR(2))
+1 | B1 | bravo one
+Selected area 2.
+Current area: 2
+  File: X64_C  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("charlie loop " + STR(2))
+1 | C1 | ("charlie loop " + STR(2))
+Selected area 0.
+Current area: 0
+  File: X64_A  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("alpha loop " + STR(2))
+1 | A1 | alpha one
+Selected area 1.
+Current area: 1
+  File: X64_B  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("bravo loop " + STR(2))
+1 | B1 | bravo one
+Selected area 2.
+Current area: 2
+  File: X64_C  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("charlie loop " + STR(2))
+1 | C1 | ("charlie loop " + STR(2))
+Selected area 0.
+Current area: 0
+  File: X64_A  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("alpha loop " + STR(2))
+1 | A1 | alpha one
+Selected area 1.
+Current area: 1
+  File: X64_B  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("bravo loop " + STR(2))
+1 | B1 | bravo one
+Selected area 2.
+Current area: 2
+  File: X64_C  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("charlie loop " + STR(2))
+1 | C1 | ("charlie loop " + STR(2))
+Selected area 0.
+Current area: 0
+  File: X64_A  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("alpha loop " + STR(2))
+1 | A1 | alpha one
+Selected area 1.
+Current area: 1
+  File: X64_B  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("bravo loop " + STR(2))
+1 | B1 | bravo one
+Selected area 2.
+Current area: 2
+  File: X64_C  Recs: 1  Recno: 1
+Replaced field #3 at rec 1.
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("charlie loop " + STR(2))
+1 | C1 | ("charlie loop " + STR(2))
+ENDLOOP: 16 buffered line(s), FOR 5 -> 5 iteration(s)
+.
+. SHOW VAR n
+N = 2
+.
+. ECHO -- Phase 5: save workspace --
+. SCHEMAS SAVE mem64_vars_test.dtschemas
+SCHEMAS SAVE: wrote D:\code\ccode\dottalkpp\data\workspaces\mem64_vars_test.dtschemas
+.
+. ECHO -- Phase 6: reload workspace cleanly --
+. SCHEMAS CLOSE
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 3 area(s) closed.
+. SCHEMAS LOAD mem64_vars_test.dtschemas
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SCHEMAS LOAD: restored 3 area(s) and 0 relation(s).
+.
+. SCHEMAS
+SCHEMAS: Listing open work areas...
+  Area 0: D:\code\ccode\dottalkpp\data\dbf\X64_A.dbf
+  Area 1: D:\code\ccode\dottalkpp\data\dbf\X64_B.dbf
+  Area 2: D:\code\ccode\dottalkpp\data\dbf\X64_C.dbf
+SCHEMAS: 3 area(s) open.
+. WSREPORT ALL
+DotTalk Status Report
+
+Workspace
+----------------------------------------
+  Slot  Cur  Name                         File
+  ----- ---- ---------------------------- ------------------------------
+      0      X64_A                        X64_A.dbf
+      1      X64_B                        X64_B.dbf
+      2    * X64_C                        X64_C.dbf
+
+LMDB (per-area)
+----------------------------------------
+  STATE             : NONE
+
+Environment
+----------------------------------------
+  CWD               : D:\code\ccode\dottalkpp\data
+  OS                : Windows
+  USER              : deral
+  HOME              : C:\Users\deral
+  TEMP              : C:\Users\deral\AppData\Local\Temp
+
+DotTalk / Build variables
+----------------------------------------
+  DOTTALK_DATA      : (not set)
+  DOTTALK_DBF       : (not set)
+  DOTTALK_INDEXES   : (not set)
+  DOTTALK_SCHEMAS   : (not set)
+  DOTTALK_SCRIPTS   : D:\code\ccode\dottalkpp\data\scripts
+  DOTTALK_TESTS     : (not set)
+  DOTTALK_HELP      : (not set)
+  DOTTALK_LOGS      : (not set)
+  DOTTALK_TMP       : D:\code\ccode\dottalkpp\data\tmp
+  TVISION_ROOT      : (not set)
+  VCPKG_ROOT        : C:\Users\deral\vcpkg
+  VCPKG_DEFAULT_TRIPLET: (not set)
+  CMAKE_GENERATOR   : (not set)
+  CMAKE_TOOLCHAIN_FILE: (not set)
+
+Paths (SETPATH)
+----------------------------------------
+SETPATH state:
+  DATA = D:\code\ccode\dottalkpp\data
+  DBF = D:\code\ccode\dottalkpp\data\dbf
+  INDEXES = D:\code\ccode\dottalkpp\data\indexes
+  WORKSPACES = D:\code\ccode\dottalkpp\data\workspaces
+  SCHEMAS = D:\code\ccode\dottalkpp\data\schemas
+  SCRIPTS = D:\code\ccode\dottalkpp\data\scripts
+  TESTS = D:\code\ccode\dottalkpp\data\tests
+  HELP = D:\code\ccode\dottalkpp\data\help
+  LOGS = D:\code\ccode\dottalkpp\data\logs
+  TMP = D:\code\ccode\dottalkpp\data\tmp
+
+SET / Runtime Settings
+----------------------------------------
+  SET TALK          : ON
+  STATUS            : OFF
+  TIME              : OFF
+  CLOCK             : OFF
+  CONSOLE           : ON
+  BELL              : OFF
+
+  SAFETY            : ON
+  DELETED           : ON
+  EXACT             : OFF
+  ESCAPE            : ON
+  CARRY             : OFF
+  CONFIRM           : OFF
+  EXCLUSIVE         : OFF
+  MULTILOCKS        : OFF
+
+  CENTURY           : OFF
+  DATE              : MDY
+  DECIMALS          : 2
+  FIXED             : OFF
+  MEMOWIDTH         : 50
+  MEMOERROR         : ON
+
+  DEFAULT           : (none)
+  PATH              : (none)
+
+Output Routing
+----------------------------------------
+  CONSOLE           : ON
+  PRINT             : OFF
+  ALTERNATE         : OFF
+  ROUTER TALK       : OFF
+  ECHO              : OFF
+  PRINT TO          : (none)
+  ALTERNATE TO      : (none)
+
+Areas / Index Summary
+----------------------------------------
+Area 0: X64_A
+  FILE              : D:\code\ccode\dottalkpp\data\dbf\X64_A.dbf
+  BASENAME          : X64_A.dbf
+
+Index / Order
+----------------------------------------
+Order       : ASCEND
+Index file  : (none)
+Active tag  :
+Sort        :
+  Tags              : (none)
+  Records           : 1
+  Recno             : 1
+  Record len        : 37
+  Fields            : 3
+
+Area 1: X64_B
+  FILE              : D:\code\ccode\dottalkpp\data\dbf\X64_B.dbf
+  BASENAME          : X64_B.dbf
+
+Index / Order
+----------------------------------------
+Order       : ASCEND
+Index file  : (none)
+Active tag  :
+Sort        :
+  Tags              : (none)
+  Records           : 1
+  Recno             : 1
+  Record len        : 37
+  Fields            : 3
+
+Area 2 [current]: X64_C
+  FILE              : D:\code\ccode\dottalkpp\data\dbf\X64_C.dbf
+  BASENAME          : X64_C.dbf
+
+Index / Order
+----------------------------------------
+Order       : ASCEND
+Index file  : (none)
+Active tag  :
+Sort        :
+  Tags              : (none)
+  Records           : 1
+  Recno             : 1
+  Record len        : 37
+  Fields            : 3
+
+.
+. ECHO -- Phase 7: verify final values after reload --
+. SELECT 0
+Selected area 0.
+Current area: 0
+  File: X64_A  Recs: 1  Recno: 1
+. DISPLAY
+Record 1
+  ID = 1
+  TITLE = A1
+  NOTES = alpha one
+. TUP
+1 | A1 | alpha one
+. MEMO STATUS
+MEMO STATUS
+  area           : 0
+  table          : X64_A
+  backend        : DTX
+  x64 memo fields: 1
+  records        : 1
+  memo refs      : 1
+  live objects   : 4
+  orphan objects : 3
+  missing refs   : 0
+  empty refs     : 0
+  dtx bytes      : 4496
+  largest memo   : 13
+  status         : WARN
+. MEMO VERIFY
+MEMO VERIFY
+  area           : 0
+  table          : X64_A
+  x64 memo fields: 1
+  records scanned: 1
+  memo refs found: 1
+  empty refs     : 0
+  bad ids        : 0
+  missing objects: 0
+  orphan objects : 3
+VERIFY: warnings found.
+.
+. SELECT 1
+Selected area 1.
+Current area: 1
+  File: X64_B  Recs: 1  Recno: 1
+. DISPLAY
+Record 1
+  ID = 1
+  TITLE = B1
+  NOTES = bravo one
+. TUP
+1 | B1 | bravo one
+. MEMO STATUS
+MEMO STATUS
+  area           : 1
+  table          : X64_B
+  backend        : DTX
+  x64 memo fields: 1
+  records        : 1
+  memo refs      : 1
+  live objects   : 4
+  orphan objects : 3
+  missing refs   : 0
+  empty refs     : 0
+  dtx bytes      : 4496
+  largest memo   : 13
+  status         : WARN
+. MEMO VERIFY
+MEMO VERIFY
+  area           : 1
+  table          : X64_B
+  x64 memo fields: 1
+  records scanned: 1
+  memo refs found: 1
+  empty refs     : 0
+  bad ids        : 0
+  missing objects: 0
+  orphan objects : 3
+VERIFY: warnings found.
+.
+. SELECT 2
+Selected area 2.
+Current area: 2
+  File: X64_C  Recs: 1  Recno: 1
+. DISPLAY
+Record 1
+  ID = 1
+  TITLE = C1
+  NOTES = ("charlie loop " + STR(2))
+. TUP
+1 | C1 | ("charlie loop " + STR(2))
+. MEMO STATUS
+MEMO STATUS
+  area           : 2
+  table          : X64_C
+  backend        : DTX
+  x64 memo fields: 1
+  records        : 1
+  memo refs      : 1
+  live objects   : 19
+  orphan objects : 18
+  missing refs   : 0
+  empty refs     : 0
+  dtx bytes      : 5776
+  largest memo   : 26
+  status         : WARN
+. MEMO VERIFY
+MEMO VERIFY
+  area           : 2
+  table          : X64_C
+  x64 memo fields: 1
+  records scanned: 1
+  memo refs found: 1
+  empty refs     : 0
+  bad ids        : 0
+  missing objects: 0
+  orphan objects : 18
+VERIFY: warnings found.
+.
+. ECHO -- Phase 8: expected final loop values --
+. ECHO EXPECT X64_A -> alpha loop 6
+. ECHO EXPECT X64_B -> bravo loop 6
+. ECHO EXPECT X64_C -> charlie loop 6
+. ECHO EXPECT n = 6
+. ```
+Unknown command: ```
+.

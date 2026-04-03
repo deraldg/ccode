@@ -1,0 +1,454 @@
+Here is a **codex-ready manual section** for DotTalk++ / x64base field types and validation. It is structured for direct inclusion in your manuals.
+
+---
+
+# DotTalk++ / x64base Field Types & Validation System
+
+*(Codex Section — vCurrent)*
+
+---
+
+# 1. Purpose
+
+This section defines:
+
+* the **field type system** used by DotTalk++ / x64base
+* the **validation and normalization rules** applied at runtime
+* the **command-surface behavior** across `MULTIREP`, `REPLACE`, and `CALCWRITE`
+* the **current design direction and constraints**
+
+This is the authoritative reference for **data correctness at write time**.
+
+---
+
+# 2. Field Families
+
+## 2.1 Classic DBF-compatible types
+
+| Type | Name      | Description               |
+| ---- | --------- | ------------------------- |
+| C    | Character | Text field (length-bound) |
+| N    | Numeric   | Fixed-width numeric       |
+| F    | Float     | Floating numeric          |
+| D    | Date      | 8-byte date (YYYYMMDD)    |
+| L    | Logical   | Boolean (T/F)             |
+| M    | Memo      | External text storage     |
+
+---
+
+## 2.2 X64 extended types
+
+| Type | Name     | Description                     |
+| ---- | -------- | ------------------------------- |
+| I    | Int32    | 32-bit integer                  |
+| B    | Double   | 64-bit floating point           |
+| Y    | Currency | 8-byte fixed (4 decimal places) |
+
+---
+
+## 2.3 Currency pairing convention
+
+DotTalk++ enforces a **paired currency model**:
+
+```text
+<AMOUNT_FIELD>   Y
+<AMOUNT_FIELD>_CU   C(3)
+```
+
+Example:
+
+```text
+AMOUNT      Y
+AMOUNT_CU   C(3)
+```
+
+### Rules
+
+* `_CU` stores a **3-letter currency code**
+* automatically normalized to uppercase
+* validated independently but logically tied to the `Y` field
+
+### Important constraint
+
+Because DBF field names are limited:
+
+* `_CUR` may truncate → `_CU`
+* `_CU` is the canonical suffix
+
+---
+
+# 3. Validation vs Normalization
+
+## 3.1 Validation
+
+Validation answers:
+
+> “Is this value allowed for this field?”
+
+If validation fails:
+
+* write is rejected
+* existing data is preserved
+
+---
+
+## 3.2 Normalization
+
+Normalization answers:
+
+> “What is the canonical stored form of this value?”
+
+Examples:
+
+| Input | Stored   |
+| ----- | -------- |
+| TODAY | 20260325 |
+| TRUE  | T        |
+| usd   | USD      |
+
+---
+
+## 3.3 Execution model
+
+All write paths now follow:
+
+```text
+User Input
+   ↓
+Candidate Value
+   ↓
+Normalization (type-aware)
+   ↓
+Validation (strict)
+   ↓
+Memo bridge (if M)
+   ↓
+Write
+```
+
+---
+
+# 4. Field Validation Rules
+
+## 4.1 Date (`D`)
+
+### Accepted forms
+
+* `YYYYMMDD`
+* `TODAY`
+* `MM/DD/YYYY`
+
+### Canonical storage
+
+```text
+YYYYMMDD
+```
+
+### Validation rules
+
+* must be 8 digits after normalization
+* month/day ranges enforced
+* leap year supported
+
+---
+
+## 4.2 Logical (`L`)
+
+### Accepted values
+
+True:
+
+* `T`, `.T.`, `TRUE`, `Y`, `1`
+
+False:
+
+* `F`, `.F.`, `FALSE`, `N`, `0`
+
+### Canonical storage
+
+```text
+T or F
+```
+
+---
+
+## 4.3 Numeric (`N`)
+
+### Rules
+
+* optional sign
+* digits only
+* optional single decimal point
+* decimals ≤ field decimals
+* total width ≤ field length
+
+### Rejected
+
+```text
+abc
+123abc
+1.2.3
+```
+
+---
+
+## 4.4 Float (`F`)
+
+Same structural rules as `N`, but:
+
+* used for floating values
+* error message: *invalid float*
+
+### Key rule
+
+No partial parsing allowed:
+
+```text
+0.12.5 → reject
+```
+
+---
+
+## 4.5 Int32 (`I`)
+
+### Rules
+
+* strict integer only
+* no trailing characters
+* must fit int32
+
+### Rejected
+
+```text
+123abc
+1.5
+```
+
+---
+
+## 4.6 Double (`B`)
+
+### Rules
+
+* strict floating parse
+* must be finite
+* no trailing junk
+
+---
+
+## 4.7 Currency (`Y`)
+
+### Rules
+
+* numeric input only
+* scaled to 4 decimal places
+* stored as fixed-precision value
+
+### Example
+
+```text
+88.125 → 88.1250
+```
+
+---
+
+## 4.8 Currency Code (`_CU`)
+
+### Rules
+
+* exactly 3 characters
+* alphabetic
+* auto-uppercase
+
+### Accepted
+
+```text
+usd → USD
+eur → EUR
+```
+
+### Rejected
+
+```text
+US
+USDX
+12$
+```
+
+---
+
+## 4.9 Memo (`M`)
+
+### Behavior
+
+* not validated as text
+* stored via memo backend
+* DBF field stores object ID
+
+### X64 memo detection
+
+* version check
+* field width = 8 bytes
+
+---
+
+## 4.10 Character (`C`)
+
+### Current state
+
+* permissive
+* length-limited only
+
+### Future direction
+
+* optional validation rules
+* pattern/range support
+
+---
+
+# 5. Command-Surface Behavior
+
+## 5.1 MULTIREP
+
+* first command upgraded
+* baseline for validation system
+
+### Behavior
+
+* strict validation
+* normalization applied
+* no partial coercion
+
+---
+
+## 5.2 REPLACE
+
+* brought to parity with MULTIREP
+
+### Behavior
+
+* same validation rules
+* same normalization
+
+---
+
+## 5.3 CALCWRITE
+
+### Special case
+
+CALCWRITE required refactoring because:
+
+* originally used coercive formatting
+* evaluated expressions before validation
+
+### Current model
+
+* builds candidate value from expression
+* normalizes per field type
+* validates strictly
+* rejects malformed input
+
+---
+
+### Known subtlety (recent fix area)
+
+Expression parser may partially interpret malformed literals.
+
+Example:
+
+```text
+0.12.5 → 0.12 (incorrect)
+```
+
+Fix:
+
+* direct literal path for `N/F/D/L`
+* bypass partial evaluation
+
+---
+
+# 6. X64 Field System Design Principles
+
+## 6.1 Strict correctness over convenience
+
+* no silent repair of bad input
+* no truncation-based “success”
+
+---
+
+## 6.2 DBF compatibility preserved
+
+* field widths honored
+* naming limits enforced
+* behavior aligns with FoxPro expectations
+
+---
+
+## 6.3 Extensibility
+
+System is designed to support:
+
+* future field types
+* validation rules per field
+* pattern/range constraints
+* object-backed fields
+
+---
+
+## 6.4 Separation of concerns
+
+| Layer      | Responsibility    |
+| ---------- | ----------------- |
+| Parser     | interpret input   |
+| Normalizer | canonical form    |
+| Validator  | enforce rules     |
+| Storage    | write to DBF/memo |
+
+---
+
+# 7. Known Gaps / Next Steps
+
+## 7.1 Remaining work
+
+* unify normalization across all commands
+* eliminate all coercive formatting paths
+* finalize CALCWRITE literal handling
+
+---
+
+## 7.2 Planned enhancements
+
+* field-level validation rules
+* schema-driven constraints
+* currency conversion layer (optional)
+* stronger `C` field validation
+
+---
+
+# 8. Summary
+
+The current DotTalk++ validation system is:
+
+* **strict**
+* **type-aware**
+* **command-consistent (mostly)**
+* **DBF-compatible**
+* **X64-extended**
+
+The major milestone achieved:
+
+> All core field types now validate correctly across MULTIREP, REPLACE, and nearly all of CALCWRITE.
+
+The system is now suitable for:
+
+* data integrity enforcement
+* educational demonstration
+* DBF/X64 conversion pipelines
+* future schema-driven enhancements
+
+---
+
+If you want next, I can:
+
+* integrate this directly into your **Student Edition vs Developer Codex split**
+* or generate a **.docx formatted manual section** ready for your field manuals

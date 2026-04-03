@@ -1,0 +1,190 @@
+**migrating the script estate**
+
+## Recommended structure
+
+Use:
+
+```text
+data/scripts/
+  main/
+  suites/
+  cases/
+  canaries/
+  manual/
+```
+
+I would also add one more if you do much reuse:
+
+```text
+  inc/
+```
+
+for tiny include-like fragments or shared setup blocks, though with your current one-level rule I would keep `inc` use conservative.
+
+## What each directory should mean
+
+### `main/`
+
+Only top-level entry scripts a human normally runs directly.
+
+Examples:
+
+* `regression_safe.dts`
+* `regression_full.dts`
+* `index_shakedown.dts`
+* `dotscript_shakedown.dts`
+
+These orchestrate, not contain everything.
+
+### `suites/`
+
+Medium-sized themed test groups.
+
+Examples:
+
+* `paths_and_init.dts`
+* `index_workflow.dts`
+* `relations_engine.dts`
+* `buffer_commit.dts`
+* `sqlite_smoke.dts`
+
+These are the main workhorses.
+
+### `cases/`
+
+Small focused probes or reversible scenarios.
+
+Examples:
+
+* `students_seek_lname.dts`
+* `students_seek_fname.dts`
+* `calcwrite_gpa_roundtrip.dts`
+* `buffer_visibility_taylor.dts`
+
+### `canaries/`
+
+Known-fail, unstable, alpha-dev, or observation-only material.
+
+Examples:
+
+* `while_until_buffering.dts`
+* `filter_under_order.dts`
+* `date_comparison_failures.dts`
+* `show_filter_observation.dts`
+
+These should not be confused with stable regression passes.
+
+### `manual/`
+
+Interactive, hang-risk, destructive, or human-inspection tasks.
+
+Examples:
+
+* `buildlmdb_workflow.dts`
+* `browser_manual_checks.dts`
+* `destructive_ops_reference.dts`
+
+## The next practical move
+
+Take your big regression script and split it in this order:
+
+### 1. Create a clean top-level runner
+
+For example:
+
+`main/regression_safe.dts`
+
+with lines like:
+
+```text
+SET ECHO OFF
+ECHO ===== SAFE REGRESSION START =====
+
+DOTSCRIPT ../suites/paths_and_init.dts
+DOTSCRIPT ../suites/schema_bringup.dts
+DOTSCRIPT ../suites/index_workflow.dts
+DOTSCRIPT ../suites/relations_engine.dts
+DOTSCRIPT ../suites/buffer_commit.dts
+DOTSCRIPT ../suites/sqlite_smoke.dts
+
+ECHO ===== SAFE REGRESSION END =====
+```
+
+### 2. Move unstable sections out of the safe runner
+
+Your `WHILE`, `UNTIL`, `SHOW FILTER`, and filter-under-order material should go into `canaries/`.
+
+### 3. Keep manual/destructive material separate
+
+Do not leave `BUILDLMDB`, browsers, or destructive ops in the same script humans use for “safe regression.”
+
+## Naming rule
+
+Keep names plain and short.
+
+Prefer:
+
+* `index_workflow.dts`
+* `relations_engine.dts`
+* `students_order_canaries.dts`
+
+Avoid very long ceremonial names.
+
+## My recommendation for immediate first set
+
+I would create these first:
+
+### `main/`
+
+* `regression_safe.dts`
+* `regression_full.dts`
+* `dotscript_shakedown.dts`
+
+### `suites/`
+
+* `paths_and_init.dts`
+* `schema_bringup.dts`
+* `table_navigation_core.dts`
+* `index_workflow.dts`
+* `seek_find_locate.dts`
+* `relations_engine.dts`
+* `buffer_commit.dts`
+* `sqlite_smoke.dts`
+* `tuptalk_smoke.dts`
+* `lmdb_dev_probes.dts`
+
+### `canaries/`
+
+* `date_comparison_failures.dts`
+* `filter_under_order.dts`
+* `while_until_buffering.dts`
+* `show_filter_observation.dts`
+
+### `manual/`
+
+* `buildlmdb_workflow.dts`
+* `manual_interactive_commands.dts`
+
+## Suggested policy from here
+
+* only run `main/*.dts` directly
+* let `main/` call `suites/`
+* let `main/` call `canaries/` only in “full” runs
+* keep `manual/` out of automated runs
+
+That gives you a proper hierarchy without breaking your one-level subscript rule.
+
+## What I would do next with you
+
+The best next step is probably to draft:
+
+* `main/regression_safe.dts`
+* `main/regression_full.dts`
+
+and decide which existing blocks belong in:
+
+* `suites/`
+* `canaries/`
+* `manual/`
+
+That is the moment where DotScript becomes genuinely maintainable.

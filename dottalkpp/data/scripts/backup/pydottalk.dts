@@ -1,0 +1,7 @@
+$dottalk = "D:\code\ccode\build\src\Release\dottalkpp.exe"
+$script  = "D:\code\ccode\scripts\MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_VB_0_1.DTS"
+$py12    = "D:\code\ccode\build\vcpkg_installed\x64-windows\tools\python3\python.exe"
+$pysmoke = "D:\code\ccode\bindings\pydottalk_smoke.py"
+
+& $dottalk $script
+& $py12 $pysmoke

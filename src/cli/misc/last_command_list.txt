@@ -1,0 +1,173 @@
+. ch
+Unknown command: CH
+. command help
+Unknown command: COMMAND
+. cmdhelp
+CMDHELP Report (last CMDHELP BUILD): 149 command rows, 150 arg rows -> .
+Switches mined from: (existing DBFs)
+
+Commands (registry U foxref)
+-------------------------------------------------------------
+ID   NAME               IMPLEMENTED  FOXREF     SUMMARY/USAGE
+120  !                  yes          no         Homegrown command.
+56   $                  yes          no         Homegrown command.
+38   ALLTRIM            yes          no         Homegrown command.
+11   APPEND             yes          yes        Append a new record (interactive in future).
+41   APPEND_BLANK       yes          no         Homegrown command.
+113  AREA               yes          no         Homegrown command.
+78   AREA51             yes          no         Homegrown command.
+30   ASC                yes          no         Homegrown command.
+98   ASCEND             yes          no         Homegrown command.
+54   AT                 yes          no         Homegrown command.
+55   ATC                yes          no         Homegrown command.
+121  BANG               yes          no         Homegrown command.
+124  BOOLEAN            yes          no         Homegrown command.
+10   BOTTOM             yes          yes        Go to last record.
+29   BROWSE             yes          no         Table browser.
+74   BROWSER            yes          no         Homegrown command.
+44   BROWSETUI          yes          no         Homegrown command.
+82   BROWSETV           yes          no         Homegrown command.
+122  CALC               yes          no         Homegrown command.
+123  CALCWRITE          yes          no         Homegrown command.
+59   CHR                yes          no         Homegrown command.
+107  CLEAR              yes          no         Homegrown command.
+76   CLOSE              yes          no         Homegrown command.
+148  CMDARGCHK          yes          no         Homegrown command.
+145  CMDHELP            yes          no         Homegrown command.
+39   CMDHELPCHK         yes          no         Homegrown command.
+147  CMDREL             yes          no         Homegrown command.
+96   CNX                yes          no         Homegrown command.
+119  COLOR              yes          no         Homegrown command.
+146  COMMANDSHELP       yes          no         Homegrown command.
+112  CONTINUE           yes          no         Homegrown command.
+63   COPY               yes          no         Homegrown command.
+21   COUNT              yes          yes        Count matching records.
+108  CREATE             yes          no         Homegrown command.
+134  DBAREA             yes          no         Homegrown command.
+14   DELETE             yes          yes        Mark record(s) deleted.
+99   DESCEND            yes          no         Homegrown command.
+118  DIR                yes          no         Homegrown command.
+81   DISPLAY            yes          no         Homegrown command.
+33   DO                 yes          no         Homegrown command.
+32   DOTSCRIPT          yes          no         Homegrown command.
+42   DUMP               yes          no         Homegrown command.
+62   ECHO               yes          no         Homegrown command.
+109  EDIT               yes          no         Homegrown command.
+137  ENDLOOP            yes          no         Homegrown command.
+111  ENDSCAN            yes          no         Homegrown command.
+141  ENDUNTIL           yes          no         Homegrown command.
+116  ENDWHILE           yes          no         Homegrown command.
+133  ERASE              yes          no         Homegrown command.
+72   EVAL               yes          no         Homegrown command.
+17   EXPORT             yes          yes        Export to CSV.
+2    FIELDS             yes          yes        Show structure (field list).
+6    FIND               yes          yes        Find value in current order (when wired).
+102  FORMULA            yes          no         Homegrown command.
+144  FOXHELP            yes          no         Homegrown command.
+85   FOXPRO             yes          no         Homegrown command.
+86   FOXTALK            yes          no         Homegrown command.
+88   GENERIC            yes          no         Homegrown command.
+69   GO                 yes          no         Homegrown command.
+8    GOTO               yes          yes        Go to record number.
+143  HELP               yes          no         Homegrown command.
+18   IMPORT             yes          yes        Import from CSV.
+3    INDEX              yes          yes        Create simple .IDX index.
+100  INDEXSEEK          yes          no         Homegrown command.
+129  INSERT             yes          no         Homegrown command.
+48   LEFT               yes          no         Homegrown command.
+52   LEN                yes          no         Homegrown command.
+70   LIKE               yes          no         Homegrown command.
+5    LIST               yes          yes        List records (optionally filtered).
+110  LOCATE             yes          no         Homegrown command.
+105  LOCK               yes          no         Homegrown command.
+136  LOOP               yes          no         Homegrown command.
+139  LOOP_BUFFER        yes          no         Homegrown command.
+45   LOWER              yes          no         Homegrown command.
+46   LTRIM              yes          no         Homegrown command.
+57   MULTIREP           yes          no         Homegrown command.
+125  NORMALIZE          yes          no         Homegrown command.
+16   PACK               yes          yes        Permanently remove deleted rows (see notes).
+68   PADC               yes          no         Homegrown command.
+66   PADL               yes          no         Homegrown command.
+67   PADR               yes          no         Homegrown command.
+34   PREDHELP           yes          no         Homegrown command.
+37   PREDICATES         yes          no         Homegrown command.
+73   PROPER             yes          no         Homegrown command.
+15   RECALL             yes          yes        Un-delete record(s).
+114  RECNO              yes          no         Homegrown command.
+53   RECORD             yes          no         Homegrown command.
+80   RECORDVIEW         yes          no         Homegrown command.
+115  REFRESH            yes          no         Homegrown command.
+26   REINDEX            yes          yes        Rebuild indexes.
+101  REL_LIST           yes          no         Homegrown command.
+103  REL_REFRESH        yes          no         Homegrown command.
+13   REPLACE            yes          yes        Replace field value in current record.
+61   REPLICATE          yes          no         Homegrown command.
+50   RIGHT              yes          no         Homegrown command.
+47   RTRIM              yes          no         Homegrown command.
+31   RUN                yes          no         Homegrown command.
+71   SBR                yes          no         Homegrown command.
+130  SCAN               yes          no         Homegrown command.
+138  SCAN_BUFFER        yes          no         Homegrown command.
+117  SCHEMA             yes          no         Homegrown command.
+35   SCHEMAS            yes          no         Homegrown command.
+7    SEEK               yes          yes        Seek exact match in index (when wired).
+77   SELECT             yes          no         Homegrown command.
+93   SET                yes          no         Homegrown command.
+27   SET RELATION       yes          yes        Relate tables.
+94   SET UNIQUE         yes          no         Homegrown command.
+36   SETCASE            yes          no         Homegrown command.
+97   SETCNX             yes          no         Homegrown command.
+83   SETFILTER          yes          no         Homegrown command.
+4    SETINDEX           yes          yes        Activate an index for the area.
+92   SETORDER           yes          no         Homegrown command.
+132  SHOW               yes          no         Homegrown command.
+79   SKIP               yes          no         Homegrown command.
+128  SMARTLIST          yes          no         Homegrown command.
+60   SPACE              yes          no         Homegrown command.
+126  SQL                yes          no         Homegrown command.
+23   SQLITE             yes          no         SQL Interface
+127  SQLSEL             yes          no         Homegrown command.
+135  SQLVER             yes          no         Homegrown command.
+20   STATUS             yes          yes        Display area status.
+40   STR                yes          no         Homegrown command.
+19   STRUCT             yes          yes        Display table structure.
+58   STUFF              yes          no         Homegrown command.
+51   SUBSTR             yes          no         Homegrown command.
+65   SUPERBROWSER       yes          no         Homegrown command.
+49   TEST               yes          no         Homegrown command.
+9    TOP                yes          yes        Go to first record.
+75   TRANSFORM          yes          no         Homegrown command.
+22   TRIM               yes          yes        Remove leading and trailing spaces
+24   TUPLE              yes          yes        Build one tuple row from fields across work areas.
+        {"SCHEMA",    "SCHEMA [str]",                        "Schema Architech.", true},
+
+
+Examples:
+    TUPLE *                    (all fields from current area)
+    TUPLE LNAME,FNAME          (selected fields from current area)
+    TUPLE #11.*                (all fields from area 11)
+    TUPLE #9.*,#11.LNAME       (mix of areas)
+
+Notes:
+    #n prefixes a work area slot; "*" means all fields for that area.
+    Output fields are separated by ASCII Unit Separator (0x1F).
+104  TUPTALK            yes          no         Homegrown command.
+91   TURBOPACK          yes          no         Homegrown command.
+84   TVISION            yes          no         Homegrown command.
+90   UNDELETE           yes          no         Homegrown command.
+106  UNLOCK             yes          no         Homegrown command.
+140  UNTIL              yes          no         Homegrown command.
+131  UPDATE             yes          no         Homegrown command.
+43   UPPER              yes          no         Homegrown command.
+1    USE                yes          yes        Open a DBF in a work area.
+64   VAL                yes          no         Homegrown command.
+95   VALIDATE           yes          no         Homegrown command.
+149  VERSION            yes          no         Homegrown command.
+87   WHERE              yes          no         Homegrown command.
+142  WHILE              yes          no         Homegrown command.
+89   WSREPORT           yes          no         Homegrown command.
+28   ZAP                yes          yes        Remove all records.
+12   APPEND BLANK       no           yes        Append blank record.
+25   SET ORDER          no           yes        Set controlling index tag.
+.

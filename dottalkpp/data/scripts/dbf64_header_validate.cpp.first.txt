@@ -1,0 +1,24 @@
+#include "xbase.hpp"
+#include "xbase_error_codes.hpp"
+#include "xbase_error_context.hpp"
+
+using namespace xbase::error;
+
+bool dbf64_validate_header(const xbase::DbHeader& h)
+{
+    error_guard guard;
+    clear_last_error();
+
+    if (h.record_length == 0) {
+        set_last_error(e_dbf_header_invalid());
+        return false;
+    }
+
+    if (h.header_length == 0) {
+        set_last_error(e_dbf_header_invalid());
+        return false;
+    }
+
+    set_last_error(ok());
+    return true;
+}

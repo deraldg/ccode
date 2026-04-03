@@ -29,3 +29,6 @@ void cmd_BANG(xbase::DbArea&, std::istringstream& iss) {
     }
 #endif
 }
+
+
+

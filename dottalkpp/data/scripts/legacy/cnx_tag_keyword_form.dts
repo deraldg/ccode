@@ -1,0 +1,34 @@
+schemas close
+* Exercise both SETORDER forms for each tag: with TAG keyword and bare form
+COLOR DEFAULT
+USE students noindex
+SETCNX students.cnx
+* LNAME
+SETORDER students.cnx TAG LNAME --asc
+STATUS
+LIST
+SETORDER students.cnx LNAME --desc
+STATUS
+LIST
+* SID
+SETORDER students.cnx TAG SID --asc
+STATUS
+LIST
+SETORDER students.cnx SID --desc
+STATUS
+LIST
+* GPA
+SETORDER students.cnx TAG GPA --asc
+STATUS
+LIST
+SETORDER students.cnx GPA --desc
+STATUS
+LIST
+* MAJOR
+SETORDER students.cnx TAG MAJOR --asc
+STATUS
+LIST
+SETORDER students.cnx MAJOR --desc
+STATUS
+LIST
+* end

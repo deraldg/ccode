@@ -51,6 +51,8 @@ private:
 
         bool first(Key& outKey, RecNo& outRec) override;
         bool next (Key& outKey, RecNo& outRec) override;
+        bool last (Key& outKey, RecNo& outRec) override;
+        bool prev (Key& outKey, RecNo& outRec) override;
 
     private:
         It   begin_;

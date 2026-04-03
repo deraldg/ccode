@@ -21,3 +21,6 @@ extern "C" {
 // Those were duplicating the real implementations provided in cmd_*.cpp and
 // caused LNK2005 duplicate symbol errors. The shell will call the DbArea&
 // variants directly from their original translation units.
+
+
+

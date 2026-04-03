@@ -1,0 +1,92 @@
+To make the scanner more robust for **Dottalk++**, we can update the Python script to use a "multi-pass" logic. It will look for your specific prefixes (`CMD_`, `DT_`) while also scanning files with specific naming conventions (like `rel`, `xbase`, or `expr`) for any capitalized keywords.
+
+This ensures that even if your conventions are a bit loose, the script catches the functional strings used in your database logic.
+
+### Updated Scanner (`gen_keywords.py`)
+
+I have updated the regex to catch your specific prefixes and added a file-filtering mechanism to prioritize your core database files.
+
+```python
+import os
+import re
+
+# Configuration
+SOURCE_DIRS = [r'D:\code\ccode\src', r'D:\code\ccode\includes']
+OUTPUT_FILE = r'D:\code\ccode\includes\keywords.h'
+
+# Keywords found in files containing these strings will be prioritized
+CORE_FILE_INDICATORS = ['rel', 'xbase', 'expr', 'shell']
+
+# Regex 1: Specifically matches your prefixes (Case Insensitive)
+PREFIX_PATTERN = re.compile(r'\b(CMD_|DT_)[a-zA-Z0-9_]+\b', re.IGNORECASE)
+
+# Regex 2: Matches ALL_CAPS words (standard for SQL/xBase commands)
+CAPS_PATTERN = re.compile(r'\b[A-Z][A-Z0-9_]{2,}\b')
+
+def scan_repo():
+    keywords = set()
+    
+    for directory in SOURCE_DIRS:
+        if not os.path.exists(directory): continue
+        
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if file.endswith(('.cpp', '.h', '.hpp')):
+                    file_path = os.path.join(root, file)
+                    is_core_file = any(ind in file.lower() for ind in CORE_FILE_INDICATORS)
+                    
+                    with open(file_path, 'r', errors='ignore') as f:
+                        content = f.read()
+                        
+                        # 1. Grab everything with your specific prefixes
+                        prefixes = PREFIX_PATTERN.findall(content)
+                        # findall with groups returns the group; we want the whole match
+                        full_matches = re.findall(r'\b(?:CMD_|DT_)[a-zA-Z0-9_]+\b', content, re.I)
+                        keywords.update(full_matches)
+                        
+                        # 2. If it's a core file (xbase, expr, etc.), grab all-caps words
+                        if is_core_file:
+                            caps = CAPS_PATTERN.findall(content)
+                            keywords.update(caps)
+
+    # Clean up: Remove duplicates and sort
+    final_list = sorted(list(set(k.upper() for k in keywords)))
+    write_header(final_list)
+
+def write_header(keywords):
+    with open(OUTPUT_FILE, 'w') as f:
+        f.write("#pragma once\n#include <unordered_set>\n#include <string>\n#include <vector>\n\n")
+        f.write("namespace Dottalk {\n")
+        f.write("    // Auto-generated keyword manifest\n")
+        f.write("    const std::unordered_set<std::string> SYSTEM_KEYWORDS = {\n")
+        for kw in keywords:
+            f.write(f'        "{kw}",\n')
+        f.write("    };\n\n")
+        
+        # Also generating a vector in case you need to iterate for autocomplete/UI
+        f.write("    const std::vector<std::string> KEYWORD_LIST = {\n")
+        for kw in keywords:
+            f.write(f'        "{kw}",\n')
+        f.write("    };\n")
+        f.write("}\n")
+
+if __name__ == "__main__":
+    scan_repo()
+    print(f"Successfully generated {OUTPUT_FILE}")
+
+```
+
+---
+
+### How this improves your Parser
+
+By including both the `unordered_set` and a `vector`, your program can handle two different tasks:
+
+1. **Fast Validation:** Use `SYSTEM_KEYWORDS.count(input)` to instantly see if a word in your `expr` parser is a reserved keyword.
+2. **Suggestion/Help:** Use `KEYWORD_LIST` to display a list of available commands to the user in your `shell.cpp` or UI.
+
+### Integrated Workflow
+
+Since you are managing your repo on `D:\code\ccode`, you can run this script whenever you refactor your `xbase` or `rel` files. It will automatically keep your C++ `includes\keywords.h` in sync with your actual source code.
+
+Would you like me to add a **"similarity check"** function to the Python script so it flags potential typos (e.g., if you have `CMD_OPEN` in one file and `CMD_OPN` in another)?

@@ -1,0 +1,24 @@
+DTSHEMA 2
+AREA 0 | dbf=BUILDING.DBF | index=none | indextype=NONE | tag=none | alias=BUILDING
+AREA 1 | dbf=CLASSES.DBF | index=none | indextype=NONE | tag=none | alias=CLASSES
+AREA 2 | dbf=COURSES.DBF | index=none | indextype=NONE | tag=none | alias=COURSES
+AREA 3 | dbf=DEPT.DBF | index=none | indextype=NONE | tag=none | alias=DEPT
+AREA 4 | dbf=ENROLL.DBF | index=none | indextype=NONE | tag=none | alias=ENROLL
+AREA 5 | dbf=LOCKTEST.dbf | index=none | indextype=NONE | tag=none | alias=LOCKTEST
+AREA 6 | dbf=MAJORS.DBF | index=none | indextype=NONE | tag=none | alias=MAJORS
+AREA 7 | dbf=MAPPEND.dbf | index=none | indextype=NONE | tag=none | alias=MAPPEND
+AREA 8 | dbf=MEMO_FOX26.dbf | index=none | indextype=NONE | tag=none | alias=MEMO_FOX26
+AREA 9 | dbf=MEMO_MAINT.dbf | index=none | indextype=NONE | tag=none | alias=MEMO_MAINT
+AREA 10 | dbf=MEMO_MSDOS.dbf | index=none | indextype=NONE | tag=none | alias=MEMO_MSDOS
+AREA 11 | dbf=MEMO_SIZE_X64.dbf | index=none | indextype=NONE | tag=none | alias=MEMO_SIZE_X64
+AREA 12 | dbf=MEMO_VFP.dbf | index=none | indextype=NONE | tag=none | alias=MEMO_VFP
+AREA 13 | dbf=MEMO_X64.dbf | index=none | indextype=NONE | tag=none | alias=MEMO_X64
+AREA 14 | dbf=ROOMS.DBF | index=none | indextype=NONE | tag=none | alias=ROOMS
+AREA 15 | dbf=smoketest.dbf | index=none | indextype=NONE | tag=none | alias=SMOKETEST
+AREA 16 | dbf=smoketest2.dbf | index=none | indextype=NONE | tag=none | alias=SMOKETEST2
+AREA 17 | dbf=STUD_MAJ.DBF | index=none | indextype=NONE | tag=none | alias=STUD_MAJ
+AREA 18 | dbf=STUDENTS.dbf | index=none | indextype=NONE | tag=none | alias=STUDENTS
+AREA 19 | dbf=TASSIGN.DBF | index=none | indextype=NONE | tag=none | alias=TASSIGN
+AREA 20 | dbf=TEACHERS.dbf | index=none | indextype=NONE | tag=none | alias=TEACHERS
+AREA 21 | dbf=TERMS.DBF | index=none | indextype=NONE | tag=none | alias=TERMS
+AREA 22 | dbf=X64_ALL_TYPES.dbf | index=none | indextype=NONE | tag=none | alias=X64_ALL_TYPES

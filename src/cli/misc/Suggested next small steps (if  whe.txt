@@ -1,0 +1,17 @@
+Suggested next small steps (if / when you want)
+
+Minimal DbArea extension (still in xbase.hpp — very low impact)Just add one tiny member so you can detect version without any new types:C++// inside class DbArea { private:
+uint8_t     dbf_version_byte = 0x03;   // default = classic
+// }Then in your existing readHeader():C++void DbArea::readHeader() {
+    _fp.read(reinterpret_cast<char*>(&_hdr), sizeof(_hdr));
+    if (!_fp) throw std::runtime_error("short header");
+    dbf_version_byte = _hdr.version;
+    // optionally: validate known values 0x03 / 0x30 / 0x31 / 0x32
+}
+
+Naming suggestion for the separate headerSince the side project stays 0x03-only and the main conversion work also prefers classic, consider names that make the separation obvious:
+xbase_vfp.hpp
+xbase_visual.hpp
+xbase_modern.hpp
+dbf_vfp_loader.hpp
+vfp_support.hpp

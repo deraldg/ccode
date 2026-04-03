@@ -1,0 +1,10 @@
+right now the path is cdx create , cdx addtag, etc.
+use buildlmdb to convert cdx to filename_root.cdx.d 
+
+use setlmdb filename_root index_tag
+
+smartlist 
+
+loop/endloop
+
+goto

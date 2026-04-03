@@ -1,0 +1,115 @@
+Here’s a clean, **codex‑style, college‑level CS 101 textbook index**—the kind of thing you’d expect at the back of an introductory computer science text. It’s not tied to any copyrighted book; it’s a **canonical, from‑scratch index** you can drop into your own materials or use as a scaffold.
+
+---
+
+# 📘 **CS 101 — Canonical Index (Codex‑Style)**
+
+### **A**
+- **Abstraction**, 12–14, 45  
+- **Algorithms**, 30–41  
+  - analysis of, 38–41  
+  - design strategies, 33–36  
+  - pseudocode, 31–32  
+- **Arrays**, 90–97  
+- **ASCII**, 22–23  
+
+### **B**
+- **Binary numbers**, 16–21  
+- **Boolean logic**, 24–29  
+- **Bug reports**, 210–212  
+- **Bytecode**, 180–182  
+
+### **C**
+- **Classes**, 130–147  
+- **Compilation**, 170–178  
+- **Conditionals**, 70–77  
+- **Control flow**, 68–89  
+- **CPU basics**, 250–255  
+
+### **D**
+- **Data structures**, 88–120  
+  - arrays, 90–97  
+  - lists, 98–104  
+  - stacks, 105–110  
+  - queues, 111–115  
+- **Debugging**, 200–214  
+- **Digital logic**, 24–29  
+
+### **E**
+- **Encapsulation**, 140–142  
+- **Exceptions**, 160–165  
+- **Expressions**, 60–67  
+
+### **F**
+- **Files & I/O**, 190–199  
+- **Functions**, 100–119  
+  - parameters, 102–104  
+  - return values, 105–106  
+  - recursion, 116–119  
+
+### **G**
+- **Garbage collection**, 185–188  
+- **Graphs (intro)**, 300–305  
+
+### **H**
+- **Hardware overview**, 240–260  
+- **Heap vs stack**, 186–187  
+
+### **I**
+- **IDE usage**, 215–225  
+- **Iteration**, 78–89  
+
+### **L**
+- **Lists**, 98–104  
+- **Loops**, 78–89  
+
+### **M**
+- **Memory**, 180–189  
+- **Methods**, 130–147  
+- **Modularity**, 12–14  
+
+### **O**
+- **Objects**, 130–147  
+- **Operating systems (intro)**, 260–275  
+
+### **P**
+- **Pointers (conceptual)**, 188–189  
+- **Programming paradigms**, 10–11  
+- **Python/Java/C syntax overview**, 50–59  
+
+### **R**
+- **Recursion**, 116–119  
+- **Runtime errors**, 160–165  
+
+### **S**
+- **Software engineering basics**, 200–230  
+- **Sorting algorithms**, 36–41  
+- **Strings**, 98–100  
+
+### **T**
+- **Testing**, 205–210  
+- **Time complexity**, 38–41  
+- **Types**, 52–55  
+
+### **U**
+- **Unicode**, 23–24  
+- **User input**, 190–192  
+
+### **V**
+- **Variables**, 52–55  
+- **Version control (intro)**, 226–230  
+
+### **W**
+- **While loops**, 80–82  
+- **Writing pseudocode**, 31–32  
+
+---
+
+If you want, I can also generate:
+
+- a **full table of contents**  
+- a **chapter‑by‑chapter outline**  
+- a **complete CS 101 textbook skeleton**  
+- or a **FoxPro/xBase‑flavored CS 101** if you want it aligned with your DBF_64 codex work
+
+Just tell me the style you want and I’ll shape it.

@@ -1,0 +1,88 @@
+/**
+ * =============================================================================
+ * Super Browser — Order-Aware Read-Only Viewer
+ * =============================================================================
+ *
+ * This command replaces the legacy BROWSE prototype with a unified,
+ * order-aware, CNX/INX-capable, FOR-filtered, read-only browser.
+ *
+ * DESIGN CONTRACT
+ * ---------------------------------------------------------------------------
+ * Command:
+ *     BROWSE [FOR <expr>] [RAW|PRETTY] [PAGE <n>] [ALL]
+ *            [TOP|BOTTOM] [START KEY <literal>] [QUIET]
+ *
+ * Output Modes:
+ *     PRETTY (default): prints "; TUPLE: v1 | v2 | v3 ..."
+ *     RAW:              prints concatenated field values with no separators
+ *
+ * Deleted Records:
+ *     Deleted rows are hidden by default unless global SET DELETED
+ *     is later exposed. This command does not modify records.
+ *
+ * Paging:
+ *     PAGE n     — number of rows per page (default 20)
+ *     ALL        — disables paging
+ *     QUIET      — suppresses banners and More-prompt
+ *
+ * ORDERING RULES
+ * ---------------------------------------------------------------------------
+ * Order is determined by orderstate::*:
+ *     orderstate::hasOrder(area)
+ *     orderstate::orderName(area)      — INX path (if non-CNX)
+ *     orderstate::activeTag(area)      — CNX tag
+ *     orderstate::isAscending(area)
+ *     orderstate::isCnx(area)
+ *
+ * Banner Logic:
+ *     If CNX:   "ORDER: TAG <tag> (ASC|DESC)"
+ *     If INX:   "ORDER: <inx path> (ASC|DESC)"
+ *     Else:     "ORDER: PHYSICAL (engine order respected)"
+ *
+ * Traversal:
+ *     INX: recnos loaded via:
+ *           order_nav_detail::load_inx_recnos(path, recCount, recnos)
+ *     CNX: recnos generated via:
+ *           order_nav_detail::build_cnx_recnos_from_db(area, tag, recnos)
+ *
+ *     Starting Position:
+ *          TOP     → area.top()
+ *          BOTTOM  → area.bottom()
+ *
+ *     START KEY:
+ *          Uses existing cmd_SEEK to position inside order.
+ *
+ *     Physical fallback:
+ *          If no order, iterate via skip(+1) or skip(-1).
+ *
+ * FILTERING
+ * ---------------------------------------------------------------------------
+ * FOR <expr> is compiled once via:
+ *      where_eval::compile_where_expr_cached(expr)
+ *
+ * Then evaluated per record with:
+ *      where_eval::run_program(*prog->plan, area)
+ *
+ * Deleted rows are skipped before filtering. Filtering is applied
+ * before printing.
+ *
+ * PRINTING
+ * ---------------------------------------------------------------------------
+ * PRETTY:
+ *      "; TUPLE: v1 | v2 | v3 ..."
+ *
+ * RAW:
+ *      "v1v2v3..."   (no delimiters)
+ *
+ * EXISTING HOOKS + FUTURE EXTENSIONS
+ * ---------------------------------------------------------------------------
+ * • Fully read-only in this phase.
+ * • Relations: future integration should add optional related-row banners.
+ * • SET DELETED will override hide-deleted behavior once exposed.
+ * • Order cache invalidation is handled outside this command.
+ *
+ * =============================================================================
+ * End of Super Browser Contract
+ * =============================================================================
+ */
+// src/cli/cmd_browse.cpp

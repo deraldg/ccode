@@ -1,0 +1,44 @@
+SET ECHO ON
+ECHO ===== DT VAR/LMDB SMOKETEST (FULL) START =====
+
+ECHO -- Phase 0: clean slate --
+CLEAR VAR ALL
+SHOW VAR
+
+SCHEMAS CLOSE
+
+USE STUDENTS
+SETLMDB STUDENTS
+LMDB USE LNAME
+
+
+ECHO -- Phase 1: SET VAR (store-text) + hard error on undefined --
+SET VAR temp = fred
+ECHO Expect undefined-var hard error next line
+ECHO &fred
+ECHO Expect to print: fred (as plain text expansion)
+ECHO &temp
+
+ECHO -- Phase 2: SET VAR! typed/evaluated values --
+SET VAR! n = 1
+SET VAR! step = 1
+SET VAR! cutoff = CTOD("2026-01-01")
+SET VAR! who = "Grimwood"
+SET VAR! s = "20260101"
+
+SHOW VAR
+SHOW VAR n
+SHOW VAR cutoff
+SHOW VAR who
+SHOW VAR s
+
+ECHO -- Phase 3: true counter loop (n should step up) --
+LOOP 10
+  ECHO n=&n
+  SET VAR! n = (&n + &step)
+  GOTO &N
+  SET VAR! who = CALC(LNAME)
+  SHOW VAR who
+  LMDB SEEK &who
+ENDLOOP
+SHOW VAR n

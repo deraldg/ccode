@@ -1,5 +1,24 @@
 # src/CMakeLists.txt — build the main CLI app and local libs when present.
 
+# ---- Options ----------------------------------------------------------------
+option(DOTTALK_WITH_TV "Build Turbo Vision UI (browse TUI, palette, etc.)" OFF)
+option(DOTTALK_BUILD_OLD_PALETTE "Build legacy palette demo sources (deprecated)" OFF)
+option(DOTTALK_BUILD_PALETTE_EXE "Build standalone fox_palette.exe" OFF)
+
+# Define only if not already provided by the top-level project.
+if (NOT DEFINED DOTTALK_WITH_DEV)
+  option(DOTTALK_WITH_DEV "Include developer tools and transitional aliases" ON)
+endif()
+
+# ---- MSVC runtime (fixes MSVC_RUNTIME_LIBRARY errors) ------------------------
+# Use the official CMake mechanism (CMP0091 + CMAKE_MSVC_RUNTIME_LIBRARY).
+# This avoids brittle /NODEFAULTLIB hacks and prevents mixed-runtime crashes.
+if (MSVC)
+  cmake_policy(SET CMP0091 NEW)
+  # Multi-config safe: Release => /MD, Debug => /MDd
+  # set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
+
 # 0) Add internal libraries first (so targets exist before linking)
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/xindex/CMakeLists.txt")
   add_subdirectory(xindex)
@@ -13,9 +32,12 @@ endif()
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/expr/CMakeLists.txt")
   add_subdirectory(tests/expr)
 endif()
-
-# ---- Option: toggle legacy palette demo vs shim ---------------------------
-option(DOTTALK_BUILD_OLD_PALETTE "Build legacy palette demo sources" OFF)
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/expr/CMakeLists.txt")
+  add_subdirectory(src/cli/expr)
+endif()
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/expr/CMakeLists.txt")
+  add_subdirectory(src/cli/browse)
+endif()
 
 # 1) Collect sources for the CLI under src/
 file(GLOB_RECURSE DOTTALKPP_SOURCES CONFIGURE_DEPENDS
@@ -35,11 +57,22 @@ set(_EXCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/python"
   "${CMAKE_CURRENT_SOURCE_DIR}/pybind"
   "${CMAKE_CURRENT_SOURCE_DIR}/pydottalk"
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests"     # avoid test mains
+  "${CMAKE_CURRENT_SOURCE_DIR}/tv"        # TV isolated, not globbed
+  "${CMAKE_CURRENT_SOURCE_DIR}/palette"   # palette handled explicitly
+  "${CMAKE_CURRENT_SOURCE_DIR}/build"     # exclude src in src/build
+  "${CMAKE_CURRENT_SOURCE_DIR}/common"
 )
 
 # Filter without re-globbing (avoids glob cache issues)
 set(DOTTALKPP_SOURCES_FILTERED "")
+
+# Hard safety: never compile src/bindings into dottalkpp (those are optional modules)
 foreach(_src IN LISTS DOTTALKPP_SOURCES)
+  string(REPLACE "\\" "/" _src_norm "${_src}")
+  if(_src_norm MATCHES "/src/bindings/")
+    continue()
+  endif()
   set(_keep TRUE)
   foreach(_dir IN LISTS _EXCLUDE_DIRS)
     if(_keep AND _src MATCHES "^${_dir}(/|\\\\)")
@@ -59,67 +92,170 @@ foreach(_maybe IN ITEMS
   "${CMAKE_SOURCE_DIR}/src/cli/palette_app.cpp"
   "${CMAKE_SOURCE_DIR}/src/cli/cmd_palette.cpp"
   "${CMAKE_SOURCE_DIR}/src/cli/tv_sanity_probe.cpp"
-  "${CMAKE_SOURCE_DIR}/src/cli/cmd_fox_palette_entry.cpp"
+  "${CMAKE_SOURCE_DIR}/src/palette/cmd_fox_palette_entry.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/test_sql_where.cpp"
+  "${CMAKE_SOURCE_DIR}/tests/test_where_cache_only.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_ttestapp.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_palette_shim.cpp"
 )
   if (EXISTS "${_maybe}")
     list(REMOVE_ITEM DOTTALKPP_SOURCES "${_maybe}")
   endif()
 endforeach()
 
-# 3) Define the main CLI executable (embedded FOXPALETTE)
-add_executable(dottalkpp ${DOTTALKPP_SOURCES})
-
-# ---------- FOXPALETTE wiring for dottalkpp (embedded) ----------
-target_sources(dottalkpp PRIVATE
-  ${CMAKE_SOURCE_DIR}/src/cli/cmd_fox_palette_entry.cpp
-  ${CMAKE_SOURCE_DIR}/palette/cmd_fox_palette.cpp
-  ${CMAKE_SOURCE_DIR}/palette/fox_palette.cpp
+# 2.6) Strip any extra mains under src that aren't the CLI entry
+foreach(_extra_main IN ITEMS
+  "${CMAKE_SOURCE_DIR}/src/dli/demo_main.cpp"
+  "${CMAKE_SOURCE_DIR}/src/tests/test_sql_where.cpp"
+  "${CMAKE_SOURCE_DIR}/src/tests/test_where_cache_only.cpp"
 )
-target_include_directories(dottalkpp PRIVATE
-  ${CMAKE_SOURCE_DIR}/palette
-)
-target_compile_definitions(dottalkpp PRIVATE FOX_PALETTE_AS_LIBRARY=1) # no main
-# ----------------------------------------------------------------
+  if (EXISTS "${_extra_main}")
+    list(REMOVE_ITEM DOTTALKPP_SOURCES "${_extra_main}")
+  endif()
+endforeach()
 
-# 3.5) Legacy PALETTE toggle vs auto-shim
-if (DOTTALK_BUILD_OLD_PALETTE)
-  message(STATUS "DOTTALK_BUILD_OLD_PALETTE=ON: building legacy palette demo.")
-  set(_LEGACY_LIST "")
-  foreach(_maybe IN ITEMS
-    "${CMAKE_SOURCE_DIR}/src/cli/cmd_palette.cpp"
-    "${CMAKE_SOURCE_DIR}/src/cli/palette_app.cpp"
-    "${CMAKE_SOURCE_DIR}/src/cli/palette.cpp"
-  )
-    if (EXISTS "${_maybe}")
-      list(APPEND _LEGACY_LIST "${_maybe}")
+# 2.7) Dev-only / transitional command sources
+# These are deliberately filename-specific, not subtree-wide.
+# Public builds should exclude backend/dev helpers and transitional wrappers.
+set(DOTTALKPP_DEV_SOURCES
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_buildlmdb.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_lmdb.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_lmdb_dump.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_lmdb_util.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_setlmdb.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_setcnx.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_setcdx.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_setindex.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_setorder.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_rebuild.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_indexseek.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_list_lmdb.cpp"
+)
+
+# Optional extra dev/debug helpers that may or may not exist in your tree
+foreach(_dev_optional IN ITEMS
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_area51.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_cdx.cpp"
+  "${CMAKE_SOURCE_DIR}/src/cli/cmd_cnx.cpp"
+)
+  if (EXISTS "${_dev_optional}")
+    list(APPEND DOTTALKPP_DEV_SOURCES "${_dev_optional}")
+  endif()
+endforeach()
+
+if (NOT DOTTALK_WITH_DEV)
+  foreach(_devsrc IN LISTS DOTTALKPP_DEV_SOURCES)
+    if (EXISTS "${_devsrc}")
+      list(REMOVE_ITEM DOTTALKPP_SOURCES "${_devsrc}")
     endif()
   endforeach()
-  if (_LEGACY_LIST)
-    target_sources(dottalkpp PRIVATE ${_LEGACY_LIST})
-  endif()
-else()
-  # Autogenerate shim so old 'PALETTE' command forwards to 'FOXPALETTE'.
-  set(_gen_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
-  file(MAKE_DIRECTORY "${_gen_dir}")
-  set(_shim "${_gen_dir}/cmd_palette_shim.cpp")
-  file(WRITE "${_shim}" [=[
-    #include <sstream>
-    namespace xbase { class DbArea; }
-    void cmd_FOX_PALETTE(xbase::DbArea&, std::istringstream&);
-    extern "C" void cmd_PALETTE(xbase::DbArea& area, std::istringstream& args) {
-        static bool warned = false; // avoid spam on loops
-        if (!warned) { /* optional: print deprecation via stderr or app logger */ warned = true; }
-        cmd_FOX_PALETTE(area, args);
-    }
-  ]=])
-  target_sources(dottalkpp PRIVATE "${_shim}")
 endif()
 
-# 4) Public headers
+# 2.8) Platform-select ABOUT info implementation
+# Prevent both platform files from being compiled at once.
+set(_ABOUT_INFO_WIN   "${CMAKE_SOURCE_DIR}/src/cli/about_info_win.cpp")
+set(_ABOUT_INFO_POSIX "${CMAKE_SOURCE_DIR}/src/cli/about_info_posix.cpp")
+set(_ABOUT_INFO_OLD   "${CMAKE_SOURCE_DIR}/src/cli/about_info.cpp")
+
+list(REMOVE_ITEM DOTTALKPP_SOURCES
+  "${_ABOUT_INFO_WIN}"
+  "${_ABOUT_INFO_POSIX}"
+  "${_ABOUT_INFO_OLD}"
+)
+
+if (WIN32)
+  if (EXISTS "${_ABOUT_INFO_WIN}")
+    list(APPEND DOTTALKPP_SOURCES "${_ABOUT_INFO_WIN}")
+  else()
+    message(FATAL_ERROR "Missing Windows ABOUT source: ${_ABOUT_INFO_WIN}")
+  endif()
+else()
+  if (EXISTS "${_ABOUT_INFO_POSIX}")
+    list(APPEND DOTTALKPP_SOURCES "${_ABOUT_INFO_POSIX}")
+  else()
+    message(FATAL_ERROR "Missing POSIX ABOUT source: ${_ABOUT_INFO_POSIX}")
+  endif()
+endif()
+
+# 3) Define the main CLI executable
+add_executable(dottalkpp ${DOTTALKPP_SOURCES})
+
+# Common shared infrastructure extracted from CLI.
+# src/common stays excluded from the glob above, so these are added explicitly.
+target_sources(dottalkpp PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/common/path_state.cpp"
+  "${CMAKE_SOURCE_DIR}/src/common/path_resolver.cpp"
+)
+
+# Compile-time flag for shell registration / help visibility.
+if (DOTTALK_WITH_DEV)
+  target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_DEV=1)
+else()
+  target_compile_definitions(dottalkpp PRIVATE DOTTALK_WITH_DEV=0)
+endif()
+
+# NOTE:
+# Removed: target_link_options(dottalkpp PRIVATE "/NODEFAULTLIB:LIBCMTD")
+# Rationale: when combined with other libs, it can produce mixed runtime behavior
+# and hard-to-diagnose crashes. The proper runtime selection is handled above.
+
+# 3.1) Turbo Vision UI — build isolated lib and link only when enabled
+if (DOTTALK_WITH_TV)
+  add_subdirectory(tv)
+  target_link_libraries(dottalkpp PRIVATE dottalk_tvui)
+endif()
+
+# 3.2) PALETTE command: by default, provide a stub so scripts don't explode
+set(_gen_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${_gen_dir}")
+set(_shim "${_gen_dir}/cmd_palette_stub.cpp")
+file(WRITE "${_shim}" [=[
+  #include <sstream>
+  #include <iostream>
+  namespace xbase { class DbArea; }
+  extern "C" void cmd_PALETTE(xbase::DbArea&, std::istringstream&) {
+      std::cerr << "PALETTE not available in this build.\n";
+  }
+]=])
+target_sources(dottalkpp PRIVATE "${_shim}")
+
+# 3.3) Optional standalone fox_palette.exe (opt-in)
+if (DOTTALK_WITH_TV AND DOTTALK_BUILD_PALETTE_EXE)
+  add_executable(fox_palette
+    ${CMAKE_SOURCE_DIR}/palette/cmd_fox_palette.cpp
+    ${CMAKE_SOURCE_DIR}/palette/fox_palette.cpp
+  )
+  target_include_directories(fox_palette PRIVATE
+    ${CMAKE_SOURCE_DIR}/palette
+    ${CMAKE_SOURCE_DIR}/include
+  )
+  if (TARGET xbase)
+    target_link_libraries(fox_palette PRIVATE xbase)
+  elseif (TARGET xindex)
+    target_link_libraries(fox_palette PRIVATE xindex)
+  endif()
+  if (TARGET memo)
+    target_link_libraries(fox_palette PRIVATE memo)
+  endif()
+  if (TARGET tvision::tvision)
+    target_link_libraries(fox_palette PRIVATE tvision::tvision)
+  else()
+    message(FATAL_ERROR "DOTTALK_BUILD_PALETTE_EXE=ON but tvision::tvision target not found.")
+  endif()
+endif()
+
+# 4) Header search paths
 set(DOTTALKPP_PUBLIC_INC "${CMAKE_SOURCE_DIR}/include")
 if (EXISTS "${DOTTALKPP_PUBLIC_INC}")
   target_include_directories(dottalkpp PUBLIC "${DOTTALKPP_PUBLIC_INC}")
 endif()
+
+# Private source-tree headers still referenced by some CLI glue headers.
+# Beta portability fix.
+target_include_directories(dottalkpp PRIVATE
+  "${CMAKE_SOURCE_DIR}/src"
+  "${CMAKE_SOURCE_DIR}/src/cli"
+)
 
 # 5) Warnings
 if (MSVC)
@@ -137,30 +273,7 @@ endif()
 if (TARGET memo)
   target_link_libraries(dottalkpp PRIVATE memo)
 endif()
-# Use the exported vcpkg target so include dirs propagate.
-if (TARGET tvision::tvision)
-  target_link_libraries(dottalkpp PRIVATE tvision::tvision)
-endif()
 
-# ====================== Standalone fox_palette.exe ==========================
-add_executable(fox_palette
-  ${CMAKE_SOURCE_DIR}/palette/cmd_fox_palette.cpp
-  ${CMAKE_SOURCE_DIR}/palette/fox_palette.cpp
-)
-target_include_directories(fox_palette PRIVATE
-  ${CMAKE_SOURCE_DIR}/palette
-  ${DOTTALKPP_PUBLIC_INC}
-)
-if (TARGET xbase)
-  target_link_libraries(fox_palette PRIVATE xbase)
-elseif (TARGET xindex)
-  target_link_libraries(fox_palette PRIVATE xindex)
-endif()
-if (TARGET memo)
-  target_link_libraries(fox_palette PRIVATE memo)
-endif()
-# IMPORTANT: link to the exported TV target to pick up headers.
-if (TARGET tvision::tvision)
-  target_link_libraries(fox_palette PRIVATE tvision::tvision)
-endif()
-# ===========================================================================
+# 7) Build summary
+message(STATUS "dottalkpp: DOTTALK_WITH_DEV = ${DOTTALK_WITH_DEV}")
+message(STATUS "dottalkpp: DOTTALK_WITH_TV  = ${DOTTALK_WITH_TV}")

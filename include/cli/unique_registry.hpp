@@ -28,3 +28,6 @@ std::vector<std::string> list_unique_fields(xbase::DbArea& A);
 const std::unordered_map<std::string, std::unordered_set<std::string>>& snapshot();
 
 } // namespace unique_reg
+
+
+

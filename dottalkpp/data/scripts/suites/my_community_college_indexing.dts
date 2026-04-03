@@ -1,0 +1,80 @@
+* ---- My Community College: build CNX containers + field-name tags ----
+* Assumes DBFs open correctly via USE and INDEXES slot resolver is configured.
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+
+select building
+cnx create
+cnx addtag bldg
+rebuild
+
+select rooms
+cnx create
+cnx addtag room
+cnx addtag bldg
+rebuild
+
+select terms
+cnx create
+cnx addtag term
+rebuild
+
+select dept
+cnx create
+cnx addtag dept_id
+rebuild
+
+select majors
+cnx create
+cnx addtag major
+cnx addtag dept_id
+rebuild
+
+select teachers
+cnx create
+cnx addtag tid
+cnx addtag dept_id
+cnx addtag lname
+cnx addtag fname
+rebuild
+
+select courses
+cnx create
+cnx addtag cid
+cnx addtag dept_id
+rebuild
+
+select students
+cnx create
+cnx addtag sid
+cnx addtag major
+cnx addtag lname
+cnx addtag fname
+rebuild
+
+select classes
+cnx create
+cnx addtag cls_id
+cnx addtag term
+cnx addtag cid
+cnx addtag room
+cnx addtag tid
+rebuild
+
+select enroll
+cnx create
+cnx addtag sid
+cnx addtag cls_id
+rebuild
+
+select stud_maj
+cnx create
+cnx addtag sid
+cnx addtag major
+rebuild
+
+select tassign
+cnx create
+cnx addtag cls_id
+cnx addtag tid
+rebuild

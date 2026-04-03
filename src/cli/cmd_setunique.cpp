@@ -54,3 +54,6 @@ void cmd_SET_UNIQUE(xbase::DbArea& A, std::istringstream& in) {
     std::cout << "UNIQUE " << (Uon == "ON" ? "ON" : "OFF")
               << " for FIELD " << upcopy(fname) << ".\n";
 }
+
+
+

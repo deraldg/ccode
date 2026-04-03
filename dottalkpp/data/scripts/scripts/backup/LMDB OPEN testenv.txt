@@ -1,0 +1,10 @@
+LMDB OPEN testenv
+LMDB INFO
+LMDB PUT hello 42
+LMDB SEEK hello
+LMDB SCAN a z
+LMDB DEL hello 42
+ 
+LMDB SEEK hello   (should say not found)
+ 
+LMDB CLOSE

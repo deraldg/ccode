@@ -1,0 +1,143 @@
+Begin with the catalog.
+
+## DotScript Token Catalog — v0.1
+
+This is the first machine-readable working set. It is intentionally conservative.
+
+```text
+TOKEN       CATEGORY         HARD  SOFT  EXPR  VAR_OK  FIELD_OK  TAG_OK  NOTES
+IF          control          Y     N     N     N       Y         Y       block opener
+ELSE        control          Y     N     N     N       Y         Y       conditional branch
+ENDIF       control          Y     N     N     N       Y         Y       conditional terminator
+
+DO          control          Y     N     N     N       Y         Y       loop/script opener
+WHILE       control          Y     Y     N     N       Y         Y       loop word; also qualifier risk
+ENDDO       control          Y     N     N     N       Y         Y       loop terminator
+FOR         control          Y     Y     N     N       Y         Y       loop word; also qualifier risk
+TO          control          Y     Y     N     N       Y         Y       range/assignment word
+STEP        control          Y     N     N     N       Y         Y       FOR-step word
+ENDFOR      control          Y     N     N     N       Y         Y       FOR terminator
+SCAN        control          Y     N     N     N       Y         Y       scan opener
+ENDSCAN     control          Y     N     N     N       Y         Y       scan terminator
+
+CASE        control          Y     N     N     N       Y         Y       case opener
+OTHERWISE   control          Y     N     N     N       Y         Y       case fallback
+ENDCASE     control          Y     N     N     N       Y         Y       case terminator
+RETURN      control          Y     N     N     N       Y         Y       flow control
+
+VAR         assign_head      Y     N     N     N       Y         Y       variable declaration
+AS          assign_word      N     Y     N     N       Y         Y       future grammar helper
+VALUE       assign_word      N     Y     N     N       Y         Y       future grammar helper
+
+AND         logical          Y     N     Y     N       Y         Y       logical operator
+OR          logical          Y     N     Y     N       Y         Y       logical operator
+NOT         logical          Y     N     Y     N       Y         Y       logical operator
+IN          expr_qualifier   N     Y     Y     N       Y         Y       expression and command risk
+LIKE        predicate        Y     N     Y     N       Y         Y       predicate operator
+BETWEEN     predicate        Y     N     Y     N       Y         Y       predicate operator
+TRUE        literal          Y     N     Y     N       Y         Y       boolean literal
+FALSE       literal          Y     N     Y     N       Y         Y       boolean literal
+NULL        literal          Y     N     Y     N       Y         Y       null literal
+
+ALL         qualifier        N     Y     N     N       Y         Y       command scope
+NEXT        qualifier        N     Y     N     N       Y         Y       command scope/count
+REST        qualifier        N     Y     N     N       Y         Y       command scope
+TAG         qualifier        N     Y     N     N       Y         Y       index/tag grammar
+FIELDS      qualifier        N     Y     N     N       Y         Y       field-list grammar
+WITH        qualifier        N     Y     N     N       Y         Y       general qualifier
+FROM        qualifier        N     Y     N     N       Y         Y       source grammar
+ON          toggle           N     Y     N     N       Y         Y       toggle literal
+OFF         toggle           N     Y     N     N       Y         Y       toggle literal
+YES         literal_soft     N     Y     N     N       Y         Y       optional boolean-like literal
+NO          literal_soft     N     Y     N     N       Y         Y       optional boolean-like literal
+
+SET         command_head     Y     N     N     N       Y         Y       statement head
+USE         command_head     Y     N     N     N       Y         Y       statement head
+SELECT      command_head     Y     N     N     N       Y         Y       statement head
+LIST        command_head     Y     N     N     N       Y         Y       statement head
+DISPLAY     command_head     Y     N     N     N       Y         Y       statement head
+COUNT       command_head     Y     N     N     N       Y         Y       statement head
+SEEK        command_head     Y     N     N     N       Y         Y       statement head
+FIND        command_head     Y     N     N     N       Y         Y       statement head
+LOCATE      command_head     Y     N     N     N       Y         Y       statement head
+COPY        command_head     Y     N     N     N       Y         Y       statement head
+DELETE      command_head     Y     N     N     N       Y         Y       statement head
+RECALL      command_head     Y     N     N     N       Y         Y       statement head
+REPLACE     command_head     Y     N     N     N       Y         Y       statement head
+APPEND      command_head     Y     N     N     N       Y         Y       statement head
+STRUCT      command_head     Y     N     N     N       Y         Y       statement head
+BROWSE      command_head     Y     N     N     N       Y         Y       statement head
+STATUS      command_head     Y     N     N     N       Y         Y       statement head
+AREA        command_head     Y     N     N     N       Y         Y       statement head
+SCHEMAS     command_head     Y     N     N     N       Y         Y       statement head
+INDEX       command_head     Y     N     N     N       Y         Y       statement head
+REINDEX     command_head     Y     N     N     N       Y         Y       statement head
+ORDER       command_head     Y     N     N     N       Y         Y       statement head
+BUILDLMDB   command_head     Y     N     N     N       Y         Y       statement head
+SETLMDB     command_head     Y     N     N     N       Y         Y       statement head
+```
+
+## Parsing rules to lock now
+
+1. `VAR_OK = N` means reject as a DotScript variable name.
+2. `HARD = Y` means always reserved in statement grammar.
+3. `SOFT = Y` means only special when the active command grammar expects it.
+4. `EXPR = Y` means expression parser owns it.
+5. Quoted strings bypass all reserved-word checks.
+
+## First rejection set for `VAR`
+
+These should fail immediately:
+
+```text
+VAR if = 1
+VAR and = 1
+VAR true = 1
+VAR all = 1
+VAR set = 1
+VAR off = 1
+VAR next = 1
+```
+
+## First DotScript shakedown
+
+```text
+* dotscript_reserved_shakedown_01.dts
+
+var alpha = 1
+var beta = 2
+if alpha and beta
+    ? "IF AND parsed"
+endif
+
+* these should fail cleanly
+var if = 1
+var and = 1
+var true = 1
+var all = 1
+var set = 1
+
+* these should remain data
+var word1 = "IF"
+var word2 = "ALL"
+var word3 = "TRUE"
+
+list all
+struct all
+display all
+
+* these should fail unless later supported
+seek all
+use all
+set all
+```
+
+## Immediate next step
+
+Build three small policy functions:
+
+* `is_hard_reserved(token)`
+* `is_soft_reserved(token)`
+* `is_valid_dotscript_var_name(token)`
+
+Then wire the `VAR` validator first. That gives you the quickest safety gain.

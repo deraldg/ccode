@@ -1,0 +1,24 @@
+schemas close
+* CNX + TAG parsing smoke test
+COLOR DEFAULT
+USE students
+SETCNX students.cnx
+* Expect correct banner + correct ordering by LNAME ASC
+SETORDER students.cnx TAG LNAME --asc
+LIST
+* Flip direction via global flag
+DESCEND
+LIST
+* Back to ASCEND
+ASCEND
+LIST
+* Explicit TAG keyword with bogus tag -> should banner 'BOGUS' and show fallback note
+SETORDER students.cnx TAG bogus --asc
+LIST
+* A couple more tags to exercise parser
+SETORDER students.cnx TAG SID --desc
+LIST
+SETORDER students.cnx GPA --asc
+LIST
+WSREPORT
+STRUCT INDEX

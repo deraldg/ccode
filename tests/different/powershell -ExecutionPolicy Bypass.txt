@@ -1,3 +1,0 @@
-powershell -ExecutionPolicy Bypass -File .\datarun.ps1
-:: or
-.\run-tests.bat

@@ -1,0 +1,14 @@
+that is true I opened a second session for a test and forgot they file were already open in another another powershell windoso good  . Was the lock, system or dottalk?
+
+let's examine our tool set when designing the schemas , how much work is already done ? can we layer it over dbarea?
+
+give me a script to create different size memos 
+
+set var n = 1
+
+loop 10 times
+append
+populate fields with sample data
+populate the memo with n * megabytes of chars
+n = n + 1
+endloop

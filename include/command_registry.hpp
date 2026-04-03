@@ -1,50 +1,86 @@
-﻿#pragma once
+// ============================================================================
+// File: src/cli/command_registry.hpp
+// Project: DotTalk++
+// ----------------------------------------------------------------------------
+#pragma once
 
+#include <cstdint>
+#include <exception>
 #include <functional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
-#include <sstream>
+#include <vector>
 
-#include "xbase.hpp"   // for xbase::DbArea
-
-// ===== DotTalk Line Interface (dli) =========================================
-//  - Public API is unchanged except the namespace is now dli:: instead of the old namespace
-//  - A temporary alias `namespace cli = dli;` is provided at the bottom so
-//    existing call sites continue to compile during the rename sweep.
+namespace xbase { class DbArea; }
 
 namespace dli {
 
-// Handlers take (DbArea&, args-stream)
-using Handler = std::function<void(xbase::DbArea&, std::istringstream&)>;
+using Handler = std::function<void(xbase::DbArea& area, std::istringstream& args)>;
 
-struct CommandRegistry {
-  // Register or replace a command handler by exact, already-normalized name.
-  void add(const std::string& name, Handler h);
-
-  // Dispatch a command; returns true to keep shell alive (normal case).
-  bool run(xbase::DbArea& area,
-           const std::string& normalized_key,
-           std::istringstream& args);
-
-  // Access the internal map (read-only)
-  const std::unordered_map<std::string, Handler>& map() const { return map_; }
-
-private:
-  std::unordered_map<std::string, Handler> map_;
+/**
+ * Handlers may throw this to request a clean shutdown (EXIT/QUIT).
+ * CommandRegistry::try_run catches it and reports exit_requested=true.
+ */
+struct ExitRequested final : std::exception {
+    const char* what() const noexcept override { return "exit requested"; }
 };
 
-// Global singleton accessor (defined in the .cpp)
-CommandRegistry& registry();
+enum class RunStatus : std::uint8_t {
+    Ok = 0,
+    UnknownCommand,
+    HandlerError,
+};
 
-// Convenience helpers that some code references directly.
-void register_command(const std::string& name, dli::Handler h);
-const std::unordered_map<std::string, dli::Handler>& map();
+struct RunResult {
+    RunStatus status{RunStatus::Ok};
+    bool exit_requested{false};
+    std::string message; // for UnknownCommand / HandlerError
+};
+
+class CommandRegistry final {
+public:
+    void add(const std::string& name, Handler h);
+
+    /**
+     * Legacy contract: returns "keep shell alive".
+     * Prints errors to stdout/stderr. Returns false if exit_requested.
+     */
+    bool run(xbase::DbArea& area,
+             const std::string& normalized_key,
+             std::istringstream& args);
+
+    /**
+     * UI-friendly contract: does not print.
+     * - status==Ok: handler ran successfully
+     * - status==UnknownCommand: no handler registered
+     * - status==HandlerError: handler threw
+     * - exit_requested==true: handler requested shutdown (status stays Ok)
+     */
+    RunResult try_run(xbase::DbArea& area,
+                      const std::string& normalized_key,
+                      std::istringstream& args);
+
+    const std::unordered_map<std::string, Handler>& map() const noexcept { return map_; }
+
+private:
+    std::unordered_map<std::string, Handler> map_;
+};
+
+CommandRegistry& registry();
+void register_command(const std::string& name, Handler h);
+const std::unordered_map<std::string, Handler>& map();
+
+/**
+ * Quote-aware argv tokens for the currently executing command.
+ * Valid only while a handler is running (inside try_run/run).
+ */
+const std::vector<std::string>& current_argv() noexcept;
+
+/**
+ * Raw args substring for the currently executing command (the remainder of args stream).
+ * Valid only while a handler is running (inside try_run/run).
+ */
+const std::string& current_raw_args() noexcept;
 
 } // namespace dli
-
-// ---------------------------------------------------------------------------
-// TEMPORARY BACK-COMPAT ALIAS:
-//   Keep this until you finish sweeping \bcli:: -> dli:: across the repo.
-//   Afterwards, remove these two lines and rebuild to catch any stragglers.
-
-

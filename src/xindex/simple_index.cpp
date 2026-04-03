@@ -8,3 +8,6 @@ namespace xindex {
 // NOTE: build_and_save is implemented in simple_index_build_and_save.cpp.
 
 } // namespace xindex
+
+
+

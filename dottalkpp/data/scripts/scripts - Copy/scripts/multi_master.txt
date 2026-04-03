@@ -1,0 +1,60 @@
+<mxfile host="app.diagrams.net" modified="2026-01-01T00:00:00.000Z" agent="5.0 (Windows)" version="24.3.1">
+
+  <!-- PAGE 1: System–Entity Chart (Retro Blue) -->
+  <diagram id="p1_diagram" name="System–Entity Chart">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCE0FF">
+      <root>
+        <mxCell id="p1_0"/>
+        <mxCell id="p1_1" parent="p1_0"/>
+
+        <!-- SYSTEM LAYER -->
+        <mxCell id="p1_sys" value="System Layer&#xa;---&#xa;Platform&#xa;OS&#xa;Runtime&#xa;Environment"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p1_1">
+          <mxGeometry x="60" y="40" width="300" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- ENGINE LAYER -->
+        <mxCell id="p1_engine" value="Engine Layer&#xa;---&#xa;DotTalk++ Core&#xa;Command Engine&#xa;Expression Engine&#xa;Index/Storage"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p1_1">
+          <mxGeometry x="420" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- APPLICATION LAYER -->
+        <mxCell id="p1_app" value="Application Layer&#xa;---&#xa;DIAL&#xa;WebSurface&#xa;draw.io Integration&#xa;UI Windows"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p1_1">
+          <mxGeometry x="820" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CURRICULUM LAYER -->
+        <mxCell id="p1_curr" value="Curriculum Layer&#xa;---&#xa;Chapters&#xa;Sections&#xa;Examples&#xa;Exercises&#xa;Diagrams"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p1_1">
+          <mxGeometry x="60" y="320" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CODEX LAYER -->
+        <mxCell id="p1_codex" value="Codex Layer&#xa;---&#xa;Documentation&#xa;Glossary&#xa;Cross-Refs&#xa;Templates&#xa;Build System"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p1_1">
+          <mxGeometry x="460" y="320" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- BRANDING LAYER -->
+        <mxCell id="p1_brand" value="Branding Layer&#xa;---&#xa;Trademark&#xa;Logo System&#xa;Color System&#xa;Typography&#xa;Usage Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p1_1">
+          <mxGeometry x="860" y="320" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p1_edge1" edge="1" parent="p1_1" source="p1_sys" target="p1_engine"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell id="p1_edge2" edge="1" parent="p1_1" source="p1_engine" target="p1_app"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell id="p1_edge3" edge="1" parent="p1_1" source="p1_app" target="p1_curr"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell id="p1_edge4" edge="1" parent="p1_1" source="p1_curr" target="p1_codex"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell id="p1_edge5" edge="1" parent="p1_1" source="p1_codex" target="p1_brand"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

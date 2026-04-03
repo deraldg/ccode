@@ -1,0 +1,62 @@
+  <!-- PAGE 11: Branding / Visual Identity System (Retro Classic Gray) -->
+  <diagram id="p11_diagram" name="Branding / Visual Identity System">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#D9D9D9">
+      <root>
+        <mxCell id="p11_0"/>
+        <mxCell id="p11_1" parent="p11_0"/>
+
+        <!-- TRADEMARK SYSTEM -->
+        <mxCell id="p11_tm" value="Trademark System&#xa;---&#xa;Wordmark&#xa;Registration Classes&#xa;Usage Rights&#xa;Protection Zones&#xa;Legal Notes"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="80" y="40" width="380" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- LOGO SYSTEM -->
+        <mxCell id="p11_logo" value="Logo System&#xa;---&#xa;Primary Logo&#xa;Secondary Marks&#xa;Monochrome Rules&#xa;Minimum Size&#xa;Clear Space"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="520" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- COLOR SYSTEM -->
+        <mxCell id="p11_color" value="Color System&#xa;---&#xa;Retro Palette&#xa;System Blue (#CCE0FF)&#xa;Terminal Green (#CCFFCC)&#xa;Paper Yellow (#FFF2CC)&#xa;Amiga Lilac (#E0CCFF)&#xa;Peach (#FFD9CC)&#xa;Classic Gray (#D9D9D9)"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="940" y="40" width="380" height="300" as="geometry"/>
+        </mxCell>
+
+        <!-- TYPOGRAPHY -->
+        <mxCell id="p11_type" value="Typography&#xa;---&#xa;Primary Typeface&#xa;Monospace Variant&#xa;Weights&#xa;Line Spacing&#xa;Accessibility Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="80" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- LAYOUT SYSTEM -->
+        <mxCell id="p11_layout" value="Layout System&#xa;---&#xa;Grid Rules&#xa;Margins&#xa;Alignment&#xa;Component Spacing&#xa;Responsive Variants"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="520" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BRAND USAGE -->
+        <mxCell id="p11_usage" value="Brand Usage&#xa;---&#xa;Do/Don't Rules&#xa;Examples&#xa;Templates&#xa;Instructor Materials&#xa;Developer Materials"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="940" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p11_edge1" edge="1" parent="p11_1" source="p11_tm" target="p11_logo"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge2" edge="1" parent="p11_1" source="p11_logo" target="p11_color"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge3" edge="1" parent="p11_1" source="p11_color" target="p11_type"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge4" edge="1" parent="p11_1" source="p11_type" target="p11_layout"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge5" edge="1" parent="p11_1" source="p11_layout" target="p11_usage"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

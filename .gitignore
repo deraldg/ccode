@@ -1,5 +1,5 @@
-﻿# Build trees
-/build/
+# Build trees
+/build*/
 /out/
 /dist/
 /bin/
@@ -40,3 +40,45 @@ __pycache__/
 
 # Test results
 /results/
+
+# === ccode canonical ignore (auto) ===
+# Builds
+/build/
+/build-*/
+/CMakeFiles/
+/CMakeCache.txt
+/build.ninja
+/compile_commands.json
+
+# Local-only outputs
+/_artifacts/
+/_bundles/
+/_drops/
+/zips/
+/dist/
+/vcpkg_installed/
+
+# Runtime data outputs
+/data/out/
+/data/tmp/
+/data/logs/
+
+# IDE/OS noise
+/.vscode/
+/.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archives & bundles
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# Logs
+*.log
+# === /ccode canonical ignore (auto) ===
+
+
+
+.fake

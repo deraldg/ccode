@@ -1,0 +1,163 @@
+// src/cli/cmd_set.cpp — FoxPro-like SET command (router/dispatcher only)
+
+#include "xbase.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "cli/settings.hpp"
+
+// ---- Forward declarations for concrete handlers we delegate to --------------
+void cmd_SETINDEX        (xbase::DbArea&, std::istringstream&);
+void cmd_SETORDER        (xbase::DbArea&, std::istringstream&);
+void cmd_SETFILTER       (xbase::DbArea&, std::istringstream&);
+void cmd_SET_UNIQUE      (xbase::DbArea&, std::istringstream&);
+void cmd_SET_RELATIONS   (xbase::DbArea&, std::istringstream&); // reserved (kept for parity)
+
+// ---- Small local utilities ---------------------------------------------------
+static inline std::string to_upper(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
+    return s;
+}
+
+static inline std::string ltrim_copy(std::string s) {
+    size_t i = 0;
+    while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+    return s.substr(i);
+}
+
+static inline std::string rest(std::istringstream& iss) {
+    return std::string(std::istreambuf_iterator<char>(iss), std::istreambuf_iterator<char>());
+}
+
+static inline bool parse_on_off(const std::string& tok, bool& out) {
+    const auto u = to_upper(tok);
+    if (u == "ON")  { out = true;  return true; }
+    if (u == "OFF") { out = false; return true; }
+    return false;
+}
+
+// ---- SET router --------------------------------------------------------------
+void cmd_SET(xbase::DbArea& A, std::istringstream& args) {
+    using cli::Settings;
+    auto& S = Settings::instance();
+
+    std::string opt;
+    if (!(args >> opt)) {
+        std::cout << "Usage: SET <option> [args]\n";
+        return;
+    }
+    opt = to_upper(opt);
+
+    // ---- SET INDEX [TO] <inx-path>
+    if (opt == "INDEX") {
+        // Accept both: SET INDEX <arg...>  and  SET INDEX TO <arg...>
+        std::string first; args >> first;
+        std::string tail = ltrim_copy(rest(args));
+
+        std::string pass;
+        if (!first.empty() && to_upper(first) != "TO") {
+            // implicit TO
+            pass = first;
+            if (!tail.empty()) pass += " " + tail;
+        } else {
+            // explicit TO or no arg (empty clears depending on handler semantics)
+            pass = tail.empty() ? std::string() : tail;
+        }
+
+        std::istringstream reparsed(pass);
+        cmd_SETINDEX(A, reparsed);
+        return;
+    }
+
+    // ---- SET ORDER [TO] <container.cnx> [<tag>] [--asc|--desc]
+    if (opt == "ORDER") {
+        std::string first; args >> first;
+        std::string tail = ltrim_copy(rest(args));
+
+        std::string pass;
+        if (!first.empty() && to_upper(first) != "TO") {
+            // implicit TO
+            pass = first;
+            if (!tail.empty()) pass += " " + tail;
+        } else {
+            // explicit TO or no arg
+            pass = tail; // if empty, handler can treat as "show"
+        }
+
+        std::istringstream reparsed(pass);
+        cmd_SETORDER(A, reparsed);
+        return;
+    }
+
+    // ---- SET FILTER [TO] <expr>   |   SET FILTER TO        (clear)
+    if (opt == "FILTER") {
+        std::string first; args >> first;
+        std::string tail = ltrim_copy(rest(args));
+
+        std::string pass;
+        if (!first.empty() && to_upper(first) != "TO") {
+            // implicit TO form: SET FILTER <expr...>
+            pass = "TO " + first;
+            if (!tail.empty()) pass += " " + tail;
+        } else if (to_upper(first) == "TO") {
+            // explicit TO: may be empty (clear) or expression
+            pass = "TO";
+            if (!tail.empty()) pass += " " + tail;
+        } else {
+            // no args at all => treat as clear
+            pass = "TO";
+        }
+
+        std::istringstream reparsed(pass);
+        cmd_SETFILTER(A, reparsed);
+        return;
+    }
+
+    // ---- SET UNIQUE <args...>  (delegated)
+    if (opt == "UNIQUE") {
+        std::istringstream r(rest(args));
+        cmd_SET_UNIQUE(A, r);
+        return;
+    }
+
+    // ---- SET RELATION ...  (kept for completeness; handler owns semantics)
+    if (opt == "RELATION" || opt == "RELATIONS") {
+        std::istringstream r(rest(args));
+        cmd_SET_RELATIONS(A, r);
+        return;
+    }
+
+    // ---- SET DELETED ON|OFF
+    if (opt == "DELETED") {
+        std::string tok; args >> tok;
+        bool on = S.deleted_on.load();
+        if (!parse_on_off(tok, on)) {
+            std::cout << "SET DELETED ON|OFF\n";
+            return;
+        }
+        S.deleted_on.store(on);
+        std::cout << "Deleted visibility: " << (on ? "HIDE (ON)" : "SHOW (OFF)") << "\n";
+        return;
+    }
+
+    // ---- SET TALK ON|OFF
+    if (opt == "TALK") {
+        std::string tok; args >> tok;
+        bool on = S.talk_on.load();
+        if (!parse_on_off(tok, on)) {
+            std::cout << "SET TALK ON|OFF\n";
+            return;
+        }
+        S.talk_on.store(on);
+        std::cout << "Talk is " << (on ? "ON" : "OFF") << "\n";
+        return;
+    }
+
+    // ---- Fallback
+    std::cout << "Unknown or unimplemented SET option: " << opt << "\n";
+}

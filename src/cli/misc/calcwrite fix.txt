@@ -1,0 +1,32 @@
+//Your table files are fine as-is — no edits needed.
+//The only thing missing for CALCWRITE is the same small if-branch we added to REPLACE.
+//You can copy-paste just that block from the REPLACE file into CALCWRITE (after the BEFORE capture, before direct write): //int area0 = resolve_current_index(area);
+
+    if (area0 < 0) {
+        std::cout << "CALCWRITE: cannot determine current area.\n";
+        xbase::locks::unlock_record(area, rn);
+        return;
+    }
+
+    if (dottalk::table::is_enabled(area0)) {
+        auto& tb = dottalk::table::get_tb(area0);
+
+        // Build field mask
+        std::uint64_t field_mask[dottalk::table::kWords]{};
+        int idx0 = fidx - 1;
+        int word = idx0 / 64;
+        int bit  = idx0 % 64;
+        field_mask[word] |= (std::uint64_t{1} << bit);
+
+        tb.add_change(static_cast<int>(rn), dottalk::table::CHANGE_UPDATE, field_mask, field1, to_store);
+
+        dottalk::table::set_dirty(area0, true);
+        dottalk::table::mark_stale_field(area0, field1);
+
+        // Deferred locking: hold lock until COMMIT
+        // (add to locked_recnos if you implemented tracking)
+        // tb.locked_recnos.insert(rn);
+
+        std::cout << "Buffered CALCWRITE " << lhs << " at rec " << rn << ".\n";
+        return;
+    }

@@ -1,0 +1,25 @@
+DTSHEMA 3
+CURRENT|0
+AREA|0|D:\\code\\ccode\\dottalkpp\\data\\dbf\\BUILDING.DBF|BUILDING|1||NONE|
+AREA|1|D:\\code\\ccode\\dottalkpp\\data\\dbf\\CLASSES.DBF|CLASSES|1||NONE|
+AREA|2|D:\\code\\ccode\\dottalkpp\\data\\dbf\\COURSES.DBF|COURSES|1||NONE|
+AREA|3|D:\\code\\ccode\\dottalkpp\\data\\dbf\\DEPT.DBF|DEPT|1||NONE|
+AREA|4|D:\\code\\ccode\\dottalkpp\\data\\dbf\\ENROLL.DBF|ENROLL|1||NONE|
+AREA|5|D:\\code\\ccode\\dottalkpp\\data\\dbf\\LOCKTEST.dbf|LOCKTEST|1||NONE|
+AREA|6|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MAJORS.DBF|MAJORS|1||NONE|
+AREA|7|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MAPPEND.dbf|MAPPEND|1||NONE|
+AREA|8|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MEMO_FOX26.dbf|MEMO_FOX26|1||NONE|
+AREA|9|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MEMO_MAINT.dbf|MEMO_MAINT|1||NONE|
+AREA|10|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MEMO_MSDOS.dbf|MEMO_MSDOS|1||NONE|
+AREA|11|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MEMO_SIZE_X64.dbf|MEMO_SIZE_X64|1||NONE|
+AREA|12|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MEMO_VFP.dbf|MEMO_VFP|1||NONE|
+AREA|13|D:\\code\\ccode\\dottalkpp\\data\\dbf\\MEMO_X64.dbf|MEMO_X64|1||NONE|
+AREA|14|D:\\code\\ccode\\dottalkpp\\data\\dbf\\ROOMS.DBF|ROOMS|1||NONE|
+AREA|15|D:\\code\\ccode\\dottalkpp\\data\\dbf\\smoketest.dbf|SMOKETEST|1||NONE|
+AREA|16|D:\\code\\ccode\\dottalkpp\\data\\dbf\\smoketest2.dbf|SMOKETEST2|1||NONE|
+AREA|17|D:\\code\\ccode\\dottalkpp\\data\\dbf\\STUD_MAJ.DBF|STUD_MAJ|1||NONE|
+AREA|18|D:\\code\\ccode\\dottalkpp\\data\\dbf\\STUDENTS.dbf|STUDENTS|1||NONE|
+AREA|19|D:\\code\\ccode\\dottalkpp\\data\\dbf\\TASSIGN.DBF|TASSIGN|1||NONE|
+AREA|20|D:\\code\\ccode\\dottalkpp\\data\\dbf\\TEACHERS.dbf|TEACHERS|1||NONE|
+AREA|21|D:\\code\\ccode\\dottalkpp\\data\\dbf\\TERMS.DBF|TERMS|1||NONE|
+AREA|22|D:\\code\\ccode\\dottalkpp\\data\\dbf\\X64_ALL_TYPES.dbf|X64_ALL_TYPES|1||NONE|

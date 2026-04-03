@@ -1,0 +1,708 @@
+// src/cli/cmd_lmdb.cpp
+// LMDB diagnostic/interactive command: LMDB OPEN/USE/SEEK/SCAN/DUMP/INFO
+//
+// IMPORTANT: This command is intended to be a read-only window into the LMDB index
+// environments produced by BUILDLMDB/REBUILD. It is not the indexing backend itself.
+//
+// Design notes:
+// - One global LMDB environment open at a time.
+// - One selected named DB (tag) at a time.
+// - Keys are stored in one of two modes:
+//   (A) DUPSORT mode: key=base, value=recno (binary u64)
+//   (B) Composite-key mode: key=base||recno (binary u64), value empty
+//
+// Your current BUILDLMDB is using composite-key mode.
+
+#include "shell.hpp"
+#include "xbase.hpp"
+
+#include <lmdb.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace {
+
+std::string trim(const std::string& s) {
+    size_t a = 0, b = s.size();
+    while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
+    while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
+    return s.substr(a, b - a);
+}
+
+std::string upper(std::string s) {
+    for (auto& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+bool starts_with_ci(const std::string& a, const std::string& b) {
+    if (b.size() > a.size()) return false;
+    for (size_t i = 0; i < b.size(); ++i) {
+        if (std::toupper(static_cast<unsigned char>(a[i])) != std::toupper(static_cast<unsigned char>(b[i]))) return false;
+    }
+    return true;
+}
+
+std::vector<std::string> split_ws(const std::string& s) {
+    std::vector<std::string> out;
+    std::istringstream iss(s);
+    std::string tok;
+    while (iss >> tok) out.push_back(tok);
+    return out;
+}
+
+static bool decode_u64_le_from_bytes(const void* p, size_t n, uint64_t& out) {
+    if (!p || n < 8) return false;
+    const unsigned char* b = static_cast<const unsigned char*>(p);
+    uint64_t v = 0;
+    for (int i = 0; i < 8; ++i) {
+        v |= (static_cast<uint64_t>(b[i]) << (8 * i));
+    }
+    out = v;
+    return true;
+}
+
+static void encode_u64_le_to_bytes(uint64_t v, unsigned char* out8) {
+    for (int i = 0; i < 8; ++i) out8[i] = static_cast<unsigned char>((v >> (8 * i)) & 0xFF);
+}
+
+// Shared LMDB command state
+struct LmdbState {
+    MDB_env* env = nullptr;
+    std::string envdir;
+    std::string tag;           // selected named DB/tag
+    bool composite_mode = true; // true: key=base||recno; false: dupsort mode
+};
+
+static LmdbState g;
+
+static void close_env() {
+    if (g.env) {
+        mdb_env_close(g.env);
+        g.env = nullptr;
+    }
+    g.envdir.clear();
+    g.tag.clear();
+    g.composite_mode = true;
+}
+
+static int open_env_dir(const std::string& envdir) {
+    close_env();
+
+    MDB_env* env = nullptr;
+    int rc = mdb_env_create(&env);
+    if (rc != MDB_SUCCESS) return rc;
+
+    // Allow many named DBs (one per tag)
+    rc = mdb_env_set_maxdbs(env, 1024);
+    if (rc != MDB_SUCCESS) {
+        mdb_env_close(env);
+        return rc;
+    }
+
+    // Optional: ensure a stable map size for read-only access.
+    // Not strictly required for read-only opens, but harmless.
+    (void)mdb_env_set_mapsize(env, 1024ull * 1024ull * 1024ull);
+
+    // Open read-only, matching LMDB_UTIL’s proven flags for your current layout.
+    // MDB_NOSUBDIR: treat <envdir> as the environment root file (not a directory).
+    // MDB_NOTLS   : avoid per-thread reader slots (CLI usage).
+    rc = mdb_env_open(env, envdir.c_str(), MDB_RDONLY | MDB_NOSUBDIR | MDB_NOTLS, 0664);
+    if (rc != MDB_SUCCESS) {
+        mdb_env_close(env);
+        return rc;
+    }
+
+    g.env = env;
+    g.envdir = envdir;
+    g.tag.clear();
+    g.composite_mode = true; // default assumption for your build
+    return MDB_SUCCESS;
+}
+
+static bool begin_ro_txn(MDB_txn** out_txn, std::string* err) {
+    if (!g.env) {
+        if (err) *err = "env not open";
+        return false;
+    }
+    MDB_txn* txn = nullptr;
+    const int rc = mdb_txn_begin(g.env, nullptr, MDB_RDONLY, &txn);
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = mdb_strerror(rc);
+        return false;
+    }
+    *out_txn = txn;
+    return true;
+}
+
+static void end_txn(MDB_txn* txn) {
+    if (txn) mdb_txn_abort(txn);
+}
+
+// Open currently selected DBI (tag must be selected)
+static bool open_selected_dbi(MDB_txn* txn, MDB_dbi* out_dbi, std::string* err) {
+    if (!txn) {
+        if (err) *err = "txn null";
+        return false;
+    }
+    if (g.tag.empty()) {
+        if (err) *err = "no tag selected";
+        return false;
+    }
+    MDB_dbi dbi{};
+    const int rc = mdb_dbi_open(txn, g.tag.c_str(), 0, &dbi);
+    if (rc != MDB_SUCCESS) {
+        if (err) *err = std::string("dbi_open failed: ") + mdb_strerror(rc);
+        return false;
+    }
+    *out_dbi = dbi;
+    return true;
+}
+
+// Determine whether the selected DB is DUPSORT (value carries recno) or composite-key mode.
+static bool probe_dbi_mode(const std::string& tagU, bool& out_dupsort, std::string* err) {
+    if (!g.env) {
+        if (err) *err = "env not open";
+        return false;
+    }
+    MDB_txn* txn = nullptr;
+    if (!begin_ro_txn(&txn, err)) return false;
+
+    MDB_dbi dbi{};
+    const int rc = mdb_dbi_open(txn, tagU.c_str(), 0, &dbi);
+    if (rc != MDB_SUCCESS) {
+        end_txn(txn);
+        if (err) *err = std::string("dbi_open failed: ") + mdb_strerror(rc);
+        return false;
+    }
+
+    unsigned int flags = 0;
+    const int rc2 = mdb_dbi_flags(txn, dbi, &flags);
+    // dbi can remain open; we abort txn anyway
+    end_txn(txn);
+    if (rc2 != MDB_SUCCESS) {
+        if (err) *err = std::string("dbi_flags failed: ") + mdb_strerror(rc2);
+        return false;
+    }
+
+    out_dupsort = ((flags & MDB_DUPSORT) != 0);
+    return true;
+}
+
+static MDB_val make_val_from_string(const std::string& s) {
+    MDB_val v{};
+    v.mv_size = s.size();
+    v.mv_data = const_cast<char*>(s.data());
+    return v;
+}
+
+static std::string string_from_val(const MDB_val& v) {
+    if (!v.mv_data || v.mv_size == 0) return {};
+    return std::string(static_cast<const char*>(v.mv_data), v.mv_size);
+}
+
+static std::string base_key_from_keyval(const MDB_val& key) {
+    if (!key.mv_data || key.mv_size == 0) return {};
+    const char* p = static_cast<const char*>(key.mv_data);
+    size_t n = key.mv_size;
+
+    if (g.composite_mode && n >= 8) {
+        n -= 8; // strip recno tail
+    }
+
+    std::string s(p, n);
+
+    // Trim trailing spaces/control
+    while (!s.empty()) {
+        unsigned char c = static_cast<unsigned char>(s.back());
+        if (c <= 0x20) s.pop_back();
+        else break;
+    }
+    return s;
+}
+
+static bool decode_recno_from_val_or_keytail(const MDB_val& key, const MDB_val& val, uint64_t& out) {
+    // DUPSORT mode: recno stored in value (u64 le)
+    if (decode_u64_le_from_bytes(val.mv_data, val.mv_size, out)) return true;
+
+    // Composite mode: recno stored in key tail (last 8 bytes)
+    if (g.composite_mode && key.mv_data && key.mv_size >= 8) {
+        const unsigned char* kb = static_cast<const unsigned char*>(key.mv_data);
+        return decode_u64_le_from_bytes(kb + (key.mv_size - 8), 8, out);
+    }
+    return false;
+}
+
+static std::string encode_composite_key(const std::string& base_key_upper, uint64_t recno_bound) {
+    // base||recno (u64 le)
+    std::string k = base_key_upper;
+    unsigned char tail[8]{};
+    encode_u64_le_to_bytes(recno_bound, tail);
+    k.append(reinterpret_cast<const char*>(tail), 8);
+    return k;
+}
+
+static void print_usage() {
+    std::cout
+        << "LMDB command:\n"
+        << "  LMDB\n"
+        << "  LMDB OPEN <env_dir>\n"
+        << "  LMDB OPEN <env_dir> DB <TAG>\n"
+        << "  LMDB CLOSE\n"
+        << "  LMDB USE <TAG>\n"
+        << "  LMDB SEEK <key>\n"
+        << "  LMDB SCAN <low> <high>       (inclusive)\n"
+        << "  LMDB DUMP [<maxkeys>]\n"
+        << "  LMDB INFO\n";
+}
+
+// Lookup key in currently selected DB; returns first matching recno.
+static bool seek_first_match_recno(const std::string& base_key_upper, int& out_recno, std::string* err) {
+    if (!g.env) { if (err) *err = "env not open"; return false; }
+    if (g.tag.empty()) { if (err) *err = "no tag selected"; return false; }
+
+    MDB_txn* txn = nullptr;
+    if (!begin_ro_txn(&txn, err)) return false;
+
+    MDB_dbi dbi{};
+    if (!open_selected_dbi(txn, &dbi, err)) {
+        end_txn(txn);
+        return false;
+    }
+
+    MDB_cursor* cur = nullptr;
+    int rc = mdb_cursor_open(txn, dbi, &cur);
+    if (rc != MDB_SUCCESS) {
+        end_txn(txn);
+        if (err) *err = std::string("cursor_open failed: ") + mdb_strerror(rc);
+        return false;
+    }
+
+    // Prepare search key
+    std::string skey = base_key_upper;
+    if (g.composite_mode) {
+        // Lower bound: base||0
+        skey = encode_composite_key(base_key_upper, 0);
+    }
+
+    MDB_val k = make_val_from_string(skey);
+    MDB_val v{};
+
+    rc = mdb_cursor_get(cur, &k, &v, MDB_SET_RANGE);
+    if (rc != MDB_SUCCESS) {
+        mdb_cursor_close(cur);
+        end_txn(txn);
+        if (rc == MDB_NOTFOUND) return false;
+        if (err) *err = std::string("cursor_get failed: ") + mdb_strerror(rc);
+        return false;
+    }
+
+    // Verify base matches exactly (case-insensitive already forced to upper)
+    const std::string found_base = upper(base_key_from_keyval(k));
+    if (found_base != base_key_upper) {
+        mdb_cursor_close(cur);
+        end_txn(txn);
+        return false;
+    }
+
+    uint64_t rec64 = 0;
+    if (!decode_recno_from_val_or_keytail(k, v, rec64)) {
+        mdb_cursor_close(cur);
+        end_txn(txn);
+        if (err) *err = "could not decode recno";
+        return false;
+    }
+
+    out_recno = static_cast<int>(rec64);
+
+    mdb_cursor_close(cur);
+    end_txn(txn);
+    return true;
+}
+
+static void cmd_info() {
+    if (!g.env) {
+        std::cout << "* LMDB INFO: env not open.\n";
+        return;
+    }
+
+    MDB_txn* txn = nullptr;
+    std::string err;
+    if (!begin_ro_txn(&txn, &err)) {
+        std::cout << "* LMDB INFO: " << err << "\n";
+        return;
+    }
+
+    MDB_stat st{};
+    MDB_envinfo ei{};
+    int rc = mdb_env_stat(g.env, &st);
+    int rc2 = mdb_env_info(g.env, &ei);
+    end_txn(txn);
+
+    std::cout << "* LMDB INFO:\n";
+    std::cout << "  envdir: " << g.envdir << "\n";
+    std::cout << "  tag   : " << (g.tag.empty() ? "(none)" : g.tag) << "\n";
+    std::cout << "  mode  : " << (g.composite_mode ? "composite (key=base||recno)" : "dupsort (key=base, val=recno)") << "\n";
+
+    if (rc == MDB_SUCCESS && rc2 == MDB_SUCCESS) {
+        std::cout << "  mapsize: " << ei.me_mapsize << "\n";
+        std::cout << "  last_pgno: " << ei.me_last_pgno << "\n";
+        std::cout << "  last_txnid: " << ei.me_last_txnid << "\n";
+        std::cout << "  maxreaders: " << ei.me_maxreaders << "\n";
+        std::cout << "  numreaders: " << ei.me_numreaders << "\n";
+        std::cout << "  entries: " << st.ms_entries << "\n";
+        std::cout << "  depth  : " << st.ms_depth << "\n";
+        std::cout << "  psize  : " << st.ms_psize << "\n";
+    }
+}
+
+static void cmd_dump(int maxkeys) {
+    if (!g.env) { std::cout << "* LMDB DUMP: env not open.\n"; return; }
+    if (g.tag.empty()) { std::cout << "* LMDB DUMP: no tag selected.\n"; return; }
+
+    MDB_txn* txn = nullptr;
+    std::string err;
+    if (!begin_ro_txn(&txn, &err)) {
+        std::cout << "* LMDB DUMP: " << err << "\n";
+        return;
+    }
+
+    MDB_dbi dbi{};
+    if (!open_selected_dbi(txn, &dbi, &err)) {
+        end_txn(txn);
+        std::cout << "* LMDB DUMP: " << err << "\n";
+        return;
+    }
+
+    MDB_cursor* cur = nullptr;
+    int rc = mdb_cursor_open(txn, dbi, &cur);
+    if (rc != MDB_SUCCESS) {
+        end_txn(txn);
+        std::cout << "* LMDB DUMP: cursor_open failed: " << mdb_strerror(rc) << "\n";
+        return;
+    }
+
+    MDB_val k{}, v{};
+    rc = mdb_cursor_get(cur, &k, &v, MDB_FIRST);
+    int printed = 0;
+
+    while (rc == MDB_SUCCESS) {
+        const std::string base = base_key_from_keyval(k);
+
+        uint64_t rec64 = 0;
+        const bool has_recno = decode_recno_from_val_or_keytail(k, v, rec64);
+        const int recno = has_recno ? static_cast<int>(rec64) : 0;
+
+        std::cout << base << " -> " << recno << "\n";
+        ++printed;
+        if (maxkeys > 0 && printed >= maxkeys) break;
+
+        rc = mdb_cursor_get(cur, &k, &v, MDB_NEXT);
+    }
+
+    if (rc != MDB_SUCCESS && rc != MDB_NOTFOUND) {
+        std::cout << "* LMDB DUMP: cursor_get failed: " << mdb_strerror(rc) << "\n";
+    }
+
+    std::cout << "* LMDB DUMP: printed " << printed << "\n";
+
+    mdb_cursor_close(cur);
+    end_txn(txn);
+}
+
+static void cmd_seek(const std::string& key) {
+    if (!g.env) { std::cout << "* LMDB SEEK: env not open.\n"; return; }
+    if (g.tag.empty()) { std::cout << "* LMDB SEEK: no tag selected.\n"; return; }
+
+    const std::string key_up = upper(key);
+    int recno = 0;
+    std::string err;
+
+    if (!seek_first_match_recno(key_up, recno, &err)) {
+        std::cout << "* LMDB SEEK: " << key << " -> (not found)\n";
+        return;
+    }
+
+    std::cout << "* LMDB SEEK: " << key_up << " -> " << recno << "\n";
+}
+
+static void cmd_scan(const std::string& low, const std::string& high) {
+    if (!g.env) { std::cout << "* LMDB SCAN: env not open.\n"; return; }
+    if (g.tag.empty()) { std::cout << "* LMDB SCAN: no tag selected.\n"; return; }
+
+    MDB_txn* txn = nullptr;
+    std::string err;
+    if (!begin_ro_txn(&txn, &err)) {
+        std::cout << "* LMDB SCAN: " << err << "\n";
+        return;
+    }
+
+    MDB_dbi dbi{};
+    if (!open_selected_dbi(txn, &dbi, &err)) {
+        end_txn(txn);
+        std::cout << "* LMDB SCAN: " << err << "\n";
+        return;
+    }
+
+    MDB_cursor* cur = nullptr;
+    int rc = mdb_cursor_open(txn, dbi, &cur);
+    if (rc != MDB_SUCCESS) {
+        end_txn(txn);
+        std::cout << "* LMDB SCAN: cursor_open failed: " << mdb_strerror(rc) << "\n";
+        return;
+    }
+
+    const std::string lowU = upper(low);
+    const std::string highU = upper(high);
+
+    std::string skey = lowU;
+    if (g.composite_mode) skey = encode_composite_key(lowU, 0);
+
+    MDB_val k = make_val_from_string(skey);
+    MDB_val v{};
+
+    rc = mdb_cursor_get(cur, &k, &v, MDB_SET_RANGE);
+    int shown = 0;
+
+    while (rc == MDB_SUCCESS) {
+        const std::string base = upper(base_key_from_keyval(k));
+        if (base < lowU) {
+            rc = mdb_cursor_get(cur, &k, &v, MDB_NEXT);
+            continue;
+        }
+        if (base > highU) break;
+
+        uint64_t rec64 = 0;
+        const bool has_recno = decode_recno_from_val_or_keytail(k, v, rec64);
+        const int recno = has_recno ? static_cast<int>(rec64) : 0;
+
+        std::cout << base << " -> " << recno << "\n";
+        ++shown;
+        rc = mdb_cursor_get(cur, &k, &v, MDB_NEXT);
+    }
+
+    if (rc != MDB_SUCCESS && rc != MDB_NOTFOUND) {
+        std::cout << "* LMDB SCAN: cursor_get failed: " << mdb_strerror(rc) << "\n";
+    } else {
+        std::cout << "* LMDB SCAN: shown " << shown << "\n";
+    }
+
+    mdb_cursor_close(cur);
+    end_txn(txn);
+}
+
+} // anonymous namespace
+
+// -----------------------------------------------------------------------------
+// Shared helpers for other commands (SEEK / SETLMDB) to avoid duplicate LMDB opens.
+// -----------------------------------------------------------------------------
+namespace dottalk_lmdb_shared {
+
+bool is_open() {
+    return (g.env != nullptr);
+}
+
+std::string current_env() {
+    return g.envdir;
+}
+
+std::string current_tag() {
+    return g.tag;
+}
+
+void close() {
+    close_env();
+}
+
+bool ensure_open(const std::string& envdir, const std::string& tag, std::string* err) {
+    if (envdir.empty()) {
+        if (err) *err = "envdir empty";
+        return false;
+    }
+
+    if (!g.env || !starts_with_ci(g.envdir, envdir)) {
+        const int rc = open_env_dir(envdir);
+        if (rc != MDB_SUCCESS) {
+            if (err) *err = std::string("LMDB OPEN failed: ") + mdb_strerror(rc);
+            return false;
+        }
+    }
+
+    if (!tag.empty()) {
+        const std::string tagU = upper(tag);
+
+        bool dupsort = false;
+        std::string perr;
+        if (!probe_dbi_mode(tagU, dupsort, &perr)) {
+            if (err) *err = perr;
+            return false;
+        }
+
+        g.tag = tagU;
+        g.composite_mode = !dupsort;
+
+        // Validate tag exists
+        MDB_txn* txn = nullptr;
+        if (!begin_ro_txn(&txn, err)) return false;
+
+        MDB_dbi dbi{};
+        const bool ok = open_selected_dbi(txn, &dbi, err);
+        end_txn(txn);
+        return ok;
+    }
+
+    return true;
+}
+
+bool seek_recno(const std::string& key_upper, int& out_recno, std::string* err) {
+    return seek_first_match_recno(key_upper, out_recno, err);
+}
+
+} // namespace dottalk_lmdb_shared
+
+// -----------------------------------------------------------------------------
+// dottalk::lmdbcli  (thin linkage surface for SEEK/SETLMDB)
+// -----------------------------------------------------------------------------
+// cmd_seek.cpp and cmd_setlmdb.cpp link against these symbols.
+namespace dottalk::lmdbcli {
+
+bool is_open() {
+    return dottalk_lmdb_shared::is_open();
+}
+
+bool open_env(const std::string& env_dir, std::string& err) {
+    // Only open the environment. Tag selection happens via use_db().
+    return dottalk_lmdb_shared::ensure_open(env_dir, std::string{}, &err);
+}
+
+bool use_db(const std::string& tag, std::string& err) {
+    if (!dottalk_lmdb_shared::is_open()) {
+        err = "env not open";
+        return false;
+    }
+    // Re-use ensure_open to validate/tag-select and to set composite vs dupsort mode.
+    return dottalk_lmdb_shared::ensure_open(dottalk_lmdb_shared::current_env(), tag, &err);
+}
+
+bool seek_key(const std::string& key, int& out_recno, std::string& err) {
+    if (!dottalk_lmdb_shared::is_open()) {
+        err = "env not open";
+        return false;
+    }
+    if (dottalk_lmdb_shared::current_tag().empty()) {
+        err = "no tag selected";
+        return false;
+    }
+    return dottalk_lmdb_shared::seek_recno(key, out_recno, &err);
+}
+
+} // namespace dottalk::lmdbcli
+
+// ---- LMDB command implementation ----
+void cmd_LMDB(xbase::DbArea&, std::istringstream& iss) {
+    const std::string rest = trim(std::string(std::istreambuf_iterator<char>(iss), {}));
+    const auto toks = split_ws(rest);
+
+    if (toks.empty()) {
+        print_usage();
+        return;
+    }
+
+    const std::string sub = upper(toks[0]);
+
+    if (sub == "OPEN") {
+        if (toks.size() < 2) { std::cout << "* LMDB OPEN: missing env_dir\n"; return; }
+        const std::string envdir = toks[1];
+
+        int rc = open_env_dir(envdir);
+        if (rc != MDB_SUCCESS) {
+            std::cout << "* LMDB OPEN: failed: " << mdb_strerror(rc) << "\n";
+            return;
+        }
+        std::cout << "* LMDB OPEN: " << envdir << "\n";
+
+        // Optional: allow OPEN <env> DB <TAG>
+        if (toks.size() >= 4 && upper(toks[2]) == "DB") {
+            const std::string tag = upper(toks[3]);
+
+            bool dupsort = false;
+            std::string err;
+            if (!probe_dbi_mode(tag, dupsort, &err)) {
+                std::cout << "* LMDB OPEN: db probe failed: " << err << "\n";
+                return;
+            }
+
+            g.tag = tag;
+            g.composite_mode = !dupsort;
+
+            std::cout << "* LMDB USE: mode: " << (g.composite_mode ? "composite-key (key||recno)" : "dupsort (val=recno)") << "\n";
+            std::cout << "* LMDB USE: DB '" << g.tag << "'\n";
+        } else {
+            std::cout << "* LMDB: note: use 'LMDB USE <TAG>' to select a tag DB.\n";
+        }
+        return;
+    }
+
+    if (sub == "CLOSE") {
+        close_env();
+        std::cout << "* LMDB CLOSE\n";
+        return;
+    }
+
+    if (sub == "USE") {
+        if (!g.env) { std::cout << "* LMDB USE: env not open. Try: LMDB OPEN <env_dir>\n"; return; }
+        if (toks.size() < 2) { std::cout << "* LMDB USE: missing tag\n"; return; }
+
+        const std::string tag = upper(toks[1]);
+
+        bool dupsort = false;
+        std::string err;
+        if (!probe_dbi_mode(tag, dupsort, &err)) {
+            std::cout << "* LMDB USE: db probe failed: " << err << "\n";
+            return;
+        }
+
+        g.tag = tag;
+        g.composite_mode = !dupsort;
+
+        std::cout << "* LMDB USE: DB '" << g.tag << "'\n";
+        std::cout << "* LMDB USE: mode: " << (g.composite_mode ? "composite (key=base||recno)" : "dupsort (key=base, val=recno)") << "\n";
+        return;
+    }
+
+    if (sub == "SEEK") {
+        if (toks.size() < 2) { std::cout << "* LMDB SEEK: missing key\n"; return; }
+        cmd_seek(toks[1]);
+        return;
+    }
+
+    if (sub == "SCAN") {
+        if (toks.size() < 3) { std::cout << "* LMDB SCAN: missing low/high\n"; return; }
+        cmd_scan(toks[1], toks[2]);
+        return;
+    }
+
+    if (sub == "DUMP") {
+        int maxkeys = 50;
+        if (toks.size() >= 2) {
+            try { maxkeys = std::stoi(toks[1]); } catch (...) {}
+        }
+        cmd_dump(maxkeys);
+        return;
+    }
+
+    if (sub == "INFO") {
+        cmd_info();
+        return;
+    }
+
+    print_usage();
+}

@@ -1,0 +1,22 @@
+SCHEMAS OPEN DBF
+
+REL CLEAR ALL
+REL ADD students enroll ON sid
+REL ADD enroll classes ON cls_id
+REL ADD classes tassign ON cls_id
+REL ADD tassign teachers ON tid
+
+SELECT students
+LOCATE FOR sid = 50000020
+
+REL ENUM LIMIT 10 ENROLL CLASSES TASSIGN TEACHERS ;
+     TUPLE students.sid, ;
+           students.lname, ;
+           students.fname, ;
+           enroll.cls_id, ;
+           enroll.grade, ;
+           classes.cid, ;
+           classes.sec, ;
+           teachers.tid, ;
+           teachers.lname, ;
+           teachers.fname 

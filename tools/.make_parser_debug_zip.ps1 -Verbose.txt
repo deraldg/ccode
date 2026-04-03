@@ -1,5 +1,0 @@
-.\make_parser_debug_zip.ps1 -Verbose
-
-.\make_parser_debug_zip.ps1 -ExePath .\build\Release\dottalkpp.exe -Verbose
-
-.\make_parser_debug_zip.ps1 -IncludeGlobs @('src\xindex\**\*.*','xcode\**\*.*')

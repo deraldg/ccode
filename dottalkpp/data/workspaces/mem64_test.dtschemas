@@ -1,0 +1,4 @@
+DTSHEMA 2
+AREA 0 | dbf=X64_A.dbf | index=none | indextype=NONE | tag=none | alias=X64_A
+AREA 1 | dbf=X64_B.dbf | index=none | indextype=NONE | tag=none | alias=X64_B
+AREA 2 | dbf=X64_C.dbf | index=none | indextype=NONE | tag=none | alias=X64_C

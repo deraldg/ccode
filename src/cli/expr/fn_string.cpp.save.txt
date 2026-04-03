@@ -1,0 +1,344 @@
+// src/cli/expr/fn_string.cpp
+// FoxPro-style string builtins for DotTalk++
+// Clean for MSVC/GCC/Clang
+
+#include "cli/expr/fn_string.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace dottalk::expr {
+
+// -------------------------------------------------------------------
+// Helpers implemented as simple string-returning callables.
+// Each function accepts argv-style vector<string>.
+// -------------------------------------------------------------------
+
+static std::string dt_upper(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    std::string s = args[0];
+    for (char &c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
+}
+
+static std::string dt_lower(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    std::string s = args[0];
+    for (char &c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+static std::string dt_alltrim(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    const std::string &s = args[0];
+    const std::size_t start = s.find_first_not_of(" \t");
+    if (start == std::string::npos) return {};
+    const std::size_t end = s.find_last_not_of(" \t");
+    return s.substr(start, end - start + 1);
+}
+
+static std::string dt_ltrim(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    const std::string &s = args[0];
+    const std::size_t start = s.find_first_not_of(" \t");
+    return (start == std::string::npos) ? std::string{} : s.substr(start);
+}
+
+static std::string dt_rtrim(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    const std::string &s = args[0];
+    const std::size_t end = s.find_last_not_of(" \t");
+    return (end == std::string::npos) ? std::string{} : s.substr(0, end + 1);
+}
+
+static std::string dt_left(const std::vector<std::string>& args) {
+    if (args.size() < 2) return {};
+    const std::string &s = args[0];
+    const int n = std::stoi(args[1]);
+    if (n <= 0) return {};
+    const std::size_t nn = static_cast<std::size_t>(n);
+    return s.substr(0, nn < s.size() ? nn : s.size());
+}
+
+static std::string dt_right(const std::vector<std::string>& args) {
+    if (args.size() < 2) return {};
+    const std::string &s = args[0];
+    const int n = std::stoi(args[1]);
+    if (n <= 0) return {};
+    const std::size_t nn = static_cast<std::size_t>(n);
+    return (nn >= s.size()) ? s : s.substr(s.size() - nn);
+}
+
+static std::string dt_substr(const std::vector<std::string>& args) {
+    if (args.size() < 2) return {};
+    const std::string &s = args[0];
+    int start = std::stoi(args[1]);      // 1-based
+    if (start <= 0) start = 1;
+    std::size_t pos = static_cast<std::size_t>(start - 1);
+    if (pos >= s.size()) return {};
+    std::size_t len = s.size() - pos;
+    if (args.size() >= 3) {
+        int req = std::stoi(args[2]);
+        if (req > 0) len = static_cast<std::size_t>(req);
+    }
+    return s.substr(pos, len);
+}
+
+static std::string dt_len(const std::vector<std::string>& args) {
+    return args.empty() ? "0" : std::to_string(args[0].size());
+}
+
+static std::string dt_at(const std::vector<std::string>& args) {
+    if (args.size() < 2) return "0";
+    const std::string &needle = args[0];
+    const std::string &haystack = args[1];
+    int occ = (args.size() >= 3) ? std::stoi(args[2]) : 1;
+    if (occ <= 0 || needle.empty()) return "0";
+    std::size_t pos = haystack.find(needle);
+    int count = 0;
+    while (pos != std::string::npos) {
+        if (++count == occ) return std::to_string(pos + 1); // 1-based
+        pos = haystack.find(needle, pos + 1);
+    }
+    return "0";
+}
+
+static std::string dt_atc(const std::vector<std::string>& args) {
+    if (args.size() < 2) return "0";
+    std::string needle = args[0];
+    std::string haystack = args[1];
+    std::transform(needle.begin(), needle.end(), needle.begin(),
+                   [](unsigned char c){ return std::toupper(c); });
+    std::transform(haystack.begin(), haystack.end(), haystack.begin(),
+                   [](unsigned char c){ return std::toupper(c); });
+    int occ = (args.size() >= 3) ? std::stoi(args[2]) : 1;
+    if (occ <= 0 || needle.empty()) return "0";
+    std::size_t pos = haystack.find(needle);
+    int count = 0;
+    while (pos != std::string::npos) {
+        if (++count == occ) return std::to_string(pos + 1);
+        pos = haystack.find(needle, pos + 1);
+    }
+    return "0";
+}
+
+static std::string dt_contains(const std::vector<std::string>& args) {
+    if (args.size() < 2) return ".F.";
+    return (args[1].find(args[0]) != std::string::npos) ? ".T." : ".F.";
+}
+
+static std::string dt_stuff(const std::vector<std::string>& args) {
+    if (args.size() < 4) return {};
+    std::string s = args[0];
+    int start = std::stoi(args[1]); if (start <= 0) start = 1;
+    int del = std::stoi(args[2]);   if (del   <  0) del = 0;
+    const std::string &ins = args[3];
+    std::size_t pos = static_cast<std::size_t>(start - 1);
+    if (pos > s.size()) pos = s.size();
+    std::size_t end = pos + static_cast<std::size_t>(del);
+    if (end > s.size()) end = s.size();
+    s.replace(pos, end - pos, ins);
+    return s;
+}
+
+static std::string dt_chr(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    int n = std::stoi(args[0]);
+    return (n >= 0 && n <= 255) ? std::string(1, static_cast<char>(n)) : std::string{};
+}
+
+static std::string dt_asc(const std::vector<std::string>& args) {
+    if (args.empty() || args[0].empty()) return "0";
+    return std::to_string(static_cast<unsigned char>(args[0][0]));
+}
+
+static std::string dt_space(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    int n = std::stoi(args[0]);
+    return (n > 0) ? std::string(static_cast<std::size_t>(n), ' ') : std::string{};
+}
+
+static std::string dt_replicate(const std::vector<std::string>& args) {
+    if (args.size() < 2) return {};
+    const std::string &s = args[0];
+    int n = std::stoi(args[1]);
+    if (n <= 0 || s.empty()) return {};
+    std::string r;
+    r.reserve(s.size() * static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) r += s;
+    return r;
+}
+
+static std::string dt_str(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    double val = std::stod(args[0]);
+    int len = (args.size() >= 2) ? std::stoi(args[1]) : 10;
+    int dec = (args.size() >= 3) ? std::stoi(args[2]) : 0;
+    if (len < 1) len = 1;
+    if (dec < 0) dec = 0;
+    if (dec >= len) dec = len - 1;
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(dec) << val;
+    std::string s = oss.str();
+    if (!s.empty() && s.front() == '+') s.erase(s.begin());
+    if (static_cast<int>(s.length()) > len) return std::string(static_cast<std::size_t>(len), '*');
+    if (static_cast<int>(s.length()) < len)
+        s = std::string(static_cast<std::size_t>(len - s.length()), ' ') + s;
+    return s;
+}
+
+static std::string dt_val(const std::vector<std::string>& args) {
+    if (args.empty() || args[0].empty()) return "0";
+    const std::string &s = args[0];
+    std::size_t i = s.find_first_not_of(" \t");
+    if (i == std::string::npos) return "0";
+    std::size_t start = i;
+    if (i < s.size() && (s[i] == '+' || s[i] == '-')) ++i;
+    while (i < s.size() && (std::isdigit(static_cast<unsigned char>(s[i])) || s[i] == '.')) ++i;
+    if (i == start) return "0";
+    return s.substr(start, i - start);
+}
+
+static std::string dt_padl(const std::vector<std::string>& args) {
+    if (args.size() < 2) return {};
+    std::string s = args[0];
+    int target = std::stoi(args[1]);
+    char pad = (args.size() >= 3 && !args[2].empty()) ? args[2][0] : ' ';
+    if (target <= 0) return {};
+    if (static_cast<int>(s.length()) >= target) return s.substr(0, static_cast<std::size_t>(target));
+    return std::string(static_cast<std::size_t>(target - s.length()), pad) + s;
+}
+
+static std::string dt_padr(const std::vector<std::string>& args) {
+    if (args.size() < 2) return {};
+    std::string s = args[0];
+    int target = std::stoi(args[1]);
+    char pad = (args.size() >= 3 && !args[2].empty()) ? args[2][0] : ' ';
+    if (target <= 0) return {};
+    if (static_cast<int>(s.length()) >= target) return s.substr(0, static_cast<std::size_t>(target));
+    s.resize(static_cast<std::size_t>(target), pad);
+    return s;
+}
+
+static std::string dt_padc(const std::vector<std::string>& args) {
+    if (args.size() < 2) return {};
+    std::string s = args[0];
+    int target = std::stoi(args[1]);
+    char pad = (args.size() >= 3 && !args[2].empty()) ? args[2][0] : ' ';
+    if (target <= 0) return {};
+    if (static_cast<int>(s.length()) >= target) return s.substr(0, static_cast<std::size_t>(target));
+    int len = static_cast<int>(s.length());
+    int left = (target - len) / 2;
+    int right = target - len - left;
+    return std::string(static_cast<std::size_t>(left), pad) + s + std::string(static_cast<std::size_t>(right), pad);
+}
+
+static bool like_match(const std::string &pat, const std::string &str, std::size_t p = 0, std::size_t s = 0) {
+    if (p == pat.size()) return s == str.size();
+    if (pat[p] == '*') {
+        if (p + 1 == pat.size()) return true;
+        for (std::size_t i = s; i <= str.size(); ++i)
+            if (like_match(pat, str, p + 1, i)) return true;
+        return false;
+    }
+    if (s == str.size()) return false;
+    if (pat[p] != '?' && pat[p] != str[s]) return false;
+    return like_match(pat, str, p + 1, s + 1);
+}
+
+static std::string dt_like(const std::vector<std::string>& args) {
+    if (args.size() < 2) return ".F.";
+    return like_match(args[0], args[1]) ? ".T." : ".F.";
+}
+
+static std::string dt_proper(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    std::string s = args[0];
+    bool cap = true;
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (std::isalpha(c)) {
+            s[i] = cap ? static_cast<char>(std::toupper(c)) : static_cast<char>(std::tolower(c));
+            cap = false;
+        } else {
+            cap = true;
+        }
+    }
+    return s;
+}
+
+static std::string dt_transform(const std::vector<std::string>& args) {
+    // Placeholder — pass-through for now
+    return args.empty() ? std::string{} : args[0];
+}
+
+static std::string dt_concat(const std::vector<std::string>& args) {
+    // FoxPro-style CONCAT(): returns simple concatenation of all arguments.
+    // Note: arguments arrive as strings from the expression layer (numbers are already stringified).
+    if (args.empty()) return {};
+    std::size_t total = 0;
+    for (const auto& a : args) total += a.size();
+    std::string out;
+    out.reserve(total);
+    for (const auto& a : args) out += a;
+    return out;
+}
+
+
+// -------------------------------------------------------------------
+// Registry
+// -------------------------------------------------------------------
+
+static const BuiltinFnSpec kStringFns[] = {
+    { "UPPER",      1, 1, &dt_upper },
+    { "LOWER",      1, 1, &dt_lower },
+    { "ALLTRIM",    1, 1, &dt_alltrim },
+    { "LTRIM",      1, 1, &dt_ltrim },
+    { "RTRIM",      1, 1, &dt_rtrim },
+    { "TRIM",       1, 1, &dt_rtrim },
+    { "LEFT",       2, 2, &dt_left },
+    { "RIGHT",      2, 2, &dt_right },
+    { "SUBSTR",     2, 3, &dt_substr },
+    { "LEN",        1, 1, &dt_len },
+    { "AT",         2, 3, &dt_at },
+    { "ATC",        2, 3, &dt_atc },
+    { "$",          2, 2, &dt_contains },
+    { "STUFF",      4, 4, &dt_stuff },
+    { "CHR",        1, 1, &dt_chr },
+    { "ASC",        1, 1, &dt_asc },
+    { "SPACE",      1, 1, &dt_space },
+    { "REPLICATE",  2, 2, &dt_replicate },
+    { "STR",        1, 3, &dt_str },
+    { "VAL",        1, 1, &dt_val },
+    { "PADL",       2, 3, &dt_padl },
+    { "PADR",       2, 3, &dt_padr },
+    { "PADC",       2, 3, &dt_padc },
+    { "LIKE",       2, 2, &dt_like },
+    { "PROPER",     1, 1, &dt_proper },
+    { "TRANSFORM",  2, 2, &dt_transform },
+    { "CONCAT",     1, 32, &dt_concat },
+    { "STRCAT",     1, 32, &dt_concat },
+};
+
+static constexpr unsigned long long kCount =
+    sizeof(kStringFns) / sizeof(kStringFns[0]);
+
+// -------------------------------------------------------------------
+// Public API (matches fn_string.hpp)
+// -------------------------------------------------------------------
+
+const BuiltinFnSpec* string_fn_specs() {
+    return kStringFns;
+}
+
+std::size_t string_fn_specs_count() {
+    return static_cast<std::size_t>(kCount);
+}
+
+} // namespace dottalk::expr

@@ -1,0 +1,117 @@
+// src/cli/cmd_christmas.cpp
+// Retro VT-100-style Christmas tree using dli::screen.
+
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <cstdlib>
+
+#include "xbase.hpp"
+#include "dli/screen.hpp"
+
+static inline int clamp(int v, int lo, int hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
+void cmd_CHRISTMAS(xbase::DbArea& A, std::istringstream& in)
+{
+    (void)A;
+    (void)in;
+
+    using namespace dli;
+
+    const int W = screen_width();
+    const int H = screen_height();
+
+    if (W <= 0 || H <= 0) {
+        // Fallback: nothing to draw against.
+        return;
+    }
+
+    // Enable VT if possible (no-op on non-Windows).
+    const bool vt = screen_enable_vt(true);
+
+    // Simple retro tree shape (visible characters only).
+    const char* tree_lines[] = {
+        "    ^",
+        "   ^^^",
+        "  ^^^^^",
+        " ^^^^^^^",
+        "^^^^^^^^^",
+        "  ^^^^^",
+        " ^^^^^^^",
+        "^^^^^^^^^"
+    };
+    const int tree_count = static_cast<int>(sizeof(tree_lines) / sizeof(tree_lines[0]));
+
+    // Ornaments (single visible chars).
+    const char ornaments[] = { '*', 'o', '+', '#' };
+    const int ornament_count = static_cast<int>(sizeof(ornaments) / sizeof(ornaments[0]));
+
+    // Choose a vertical placement roughly centered.
+    const int total_height = tree_count + 3; // tree + trunk + star row
+    int y0 = (H - total_height) / 2;
+    if (y0 < 0) y0 = 0;
+
+    // Clear logical screen (but don't wipe entire console buffer).
+    screen_clear(false);
+
+    // Draw star line (one row above tree).
+    {
+        std::string star_visible = "*";
+        const int star_x = clamp(W / 2, 0, W - 1);
+        std::string star_colored = vt_fg(star_visible, 33, true, vt); // yellow, bold
+        screen_write_span(star_x, y0, star_colored);
+    }
+
+    // Draw tree body.
+    for (int i = 0; i < tree_count; ++i) {
+        const std::string visible(tree_lines[i]); // only visible chars, no escapes
+        const int vis_len = static_cast<int>(visible.size());
+        int x = W / 2 - vis_len / 2;
+        x = clamp(x, 0, std::max(0, W - vis_len));
+
+        std::string out;
+        out.reserve(vis_len * 4); // room for escapes
+
+        for (char c : visible) {
+            if (c == '^') {
+                int r = std::rand() % 20;
+                if (r == 0) {
+                    // Red ornament
+                    std::string s(1, ornaments[std::rand() % ornament_count]);
+                    out += vt_fg(s, 31, true, vt); // red
+                } else if (r == 1) {
+                    // Yellow ornament
+                    std::string s(1, ornaments[std::rand() % ornament_count]);
+                    out += vt_fg(s, 33, true, vt); // yellow
+                } else {
+                    // Green foliage
+                    std::string s(1, '^');
+                    out += vt_fg(s, 32, false, vt); // green
+                }
+            } else {
+                // Spaces or padding, no color.
+                out.push_back(c);
+            }
+        }
+
+        screen_write_span(x, y0 + 1 + i, out);
+    }
+
+    // Draw trunk (two rows).
+    {
+        const std::string trunk_visible = "|||";
+        const int vis_len = static_cast<int>(trunk_visible.size());
+        int x = W / 2 - vis_len / 2;
+        x = clamp(x, 0, std::max(0, W - vis_len));
+
+        std::string trunk_colored = vt_fg(trunk_visible, 37, false, vt); // white/gray
+
+        screen_write_span(x, y0 + 1 + tree_count,     trunk_colored);
+        screen_write_span(x, y0 + 1 + tree_count + 1, trunk_colored);
+    }
+
+    // Leave cursor at bottom, invisible (like a form).
+    screen_set_cursor(0, H - 1, false);
+}

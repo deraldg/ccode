@@ -1,0 +1,1628 @@
+DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.
+. BROWSE
+Entered BROWSE mode (read-only).
+ORDER: (physical order)
+Format: PRETTY | Start: TOP | Page: 20
+
+(skeleton listing complete)
+. LIST
+(empty)
+. USE STUDENTS
+Opened STUDENTS with 201 records.
+Auto-attached order: STUDENTS.cnx (tag: SID)
+. BROWSE
+Entered BROWSE mode (read-only).
+ORDER: (physical order)
+Format: PRETTY | Start: TOP | Page: 20
+
+; TUPLE: 50000000 | Washington           | Davis           | 20260130 | X | CSCI | 20260129 |  2.0 | quinn.taylor0@student.mcc.edu
+; TUPLE: 50000001 | Washington           | George          |          | X | CSCI | 20250710 | 4.59 | mason.martin1@student.mcc.edu
+; TUPLE: 50000002 | Ramirez              | Skyler          | 19890329 | X | HIST | 20240722 | 2.58 | skyler.ramirez2@student.mcc.edu
+; TUPLE: 50000003 | Davis                | Sophia          | 19970808 | M | PHYS | 20250519 | 3.81 | sophia.davis3@student.mcc.edu
+; TUPLE: 50000004 | Rodriguez            | Evan            | 19891127 | F | ARTS | 20240907 | 2.37 | evan.rodriguez4@student.mcc.edu
+; TUPLE: 50000005 | Rodriguez            | Alex            | 19900617 | M | BUSN | 20231223 | 2.88 | alex.rodriguez5@student.mcc.edu
+; TUPLE: 50000006 | Garcia               | Mia             | 20011225 | M | BIOL | 20230313 | 3.55 | mia.garcia6@student.mcc.edu
+; TUPLE: 50000007 | Ramirez              | Jordan          | 19910926 | M | PHYS | 20231113 | 2.57 | jordan.ramirez7@student.mcc.edu
+; TUPLE: 50000008 | Lopez                | Ethan           | 20000429 | F | CSCI | 20240926 | 3.77 | ethan.lopez8@student.mcc.edu
+; TUPLE: 50000009 | Martin               | Ava             | 19931206 | F | BIOL | 20250216 | 2.47 | ava.martin9@student.mcc.edu
+; TUPLE: 50000010 | Clark                | Parker          | 20021115 | F | BIOL | 20230228 | 3.58 | parker.clark10@student.mcc.edu
+; TUPLE: 50000011 | White                | Ava             | 19971017 | M | MATH | 20241104 | 2.45 | ava.white11@student.mcc.edu
+; TUPLE: 50000012 | Lewis                | Parker          | 20061030 | F | ENGL | 20231011 | 3.10 | parker.lewis12@student.mcc.edu
+; TUPLE: 50000013 | Smith                | Isabella        | 19900215 | X | ACCT | 20240912 | 3.58 | isabella.smith13@student.mcc.edu
+; TUPLE: 50000014 | Jackson              | Taylor          | 19980910 | X | BUSN | 20231108 | 2.17 | taylor.jackson14@student.mcc.edu
+; TUPLE: 50000015 | Martin               | Adrien          | 20040722 | M | BIOL | 20230509 | 3.72 | adrien.martin15@student.mcc.edu
+; TUPLE: 50000016 | Brown                | Logan           | 20070209 | X | COMM | 20230712 | 3.39 | logan.brown16@student.mcc.edu
+; TUPLE: 50000017 | Williams             | Sophia          | 19960603 | M | BIOL | 20240507 | 2.48 | sophia.williams17@student.mcc.edu
+; TUPLE: 50000018 | Harris               | Drew            | 19900913 | X | ARTS | 20241028 | 2.52 | drew.harris18@student.mcc.edu
+; TUPLE: 50000019 | Martinez             | Harper          | 19910711 | X | HIST | 20240630 | 3.78 | harper.martinez19@student.mcc.edu
+-- More -- (Enter to continue, Q to quit) Q
+(skeleton listing complete)
+. SB
+Entered WORKSPACE mode (read-only).
+ORDER: Order: ASCEND  File: D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx  CNX TAG: SID
+Format: PRETTY | Start: TOP | Page: 20
+
+; TUPLE: 50000000 | Washington | Davis | 20260130 | X | CSCI | 20260129 | 2.0 | quinn.taylor0@student.mcc.edu
+; TUPLE: 50000001 | Washington | George |  | X | CSCI | 20250710 | 4.59 | mason.martin1@student.mcc.edu
+; TUPLE: 50000002 | Ramirez | Skyler | 19890329 | X | HIST | 20240722 | 2.58 | skyler.ramirez2@student.mcc.edu
+; TUPLE: 50000003 | Davis | Sophia | 19970808 | M | PHYS | 20250519 | 3.81 | sophia.davis3@student.mcc.edu
+; TUPLE: 50000004 | Rodriguez | Evan | 19891127 | F | ARTS | 20240907 | 2.37 | evan.rodriguez4@student.mcc.edu
+; TUPLE: 50000005 | Rodriguez | Alex | 19900617 | M | BUSN | 20231223 | 2.88 | alex.rodriguez5@student.mcc.edu
+; TUPLE: 50000006 | Garcia | Mia | 20011225 | M | BIOL | 20230313 | 3.55 | mia.garcia6@student.mcc.edu
+; TUPLE: 50000007 | Ramirez | Jordan | 19910926 | M | PHYS | 20231113 | 2.57 | jordan.ramirez7@student.mcc.edu
+; TUPLE: 50000008 | Lopez | Ethan | 20000429 | F | CSCI | 20240926 | 3.77 | ethan.lopez8@student.mcc.edu
+; TUPLE: 50000009 | Martin | Ava | 19931206 | F | BIOL | 20250216 | 2.47 | ava.martin9@student.mcc.edu
+; TUPLE: 50000010 | Clark | Parker | 20021115 | F | BIOL | 20230228 | 3.58 | parker.clark10@student.mcc.edu
+; TUPLE: 50000011 | White | Ava | 19971017 | M | MATH | 20241104 | 2.45 | ava.white11@student.mcc.edu
+; TUPLE: 50000012 | Lewis | Parker | 20061030 | F | ENGL | 20231011 | 3.10 | parker.lewis12@student.mcc.edu
+; TUPLE: 50000013 | Smith | Isabella | 19900215 | X | ACCT | 20240912 | 3.58 | isabella.smith13@student.mcc.edu
+; TUPLE: 50000014 | Jackson | Taylor | 19980910 | X | BUSN | 20231108 | 2.17 | taylor.jackson14@student.mcc.edu
+; TUPLE: 50000015 | Martin | Adrien | 20040722 | M | BIOL | 20230509 | 3.72 | adrien.martin15@student.mcc.edu
+; TUPLE: 50000016 | Brown | Logan | 20070209 | X | COMM | 20230712 | 3.39 | logan.brown16@student.mcc.edu
+; TUPLE: 50000017 | Williams | Sophia | 19960603 | M | BIOL | 20240507 | 2.48 | sophia.williams17@student.mcc.edu
+; TUPLE: 50000018 | Harris | Drew | 19900913 | X | ARTS | 20241028 | 2.52 | drew.harris18@student.mcc.edu
+; TUPLE: 50000019 | Martinez | Harper | 19910711 | X | HIST | 20240630 | 3.78 | harper.martinez19@student.mcc.edu
+-- More -- (Enter to continue, Q to quit) Q
+20 record(s) listed.
+. SM
+RECNO=1 | STUDENTS.SID=50000000 | STUDENTS.LNAME=Washington | STUDENTS.FNAME=Davis | STUDENTS.DOB=20260130 | STUDENTS.GENDER=X | STUDENTS.MAJOR=CSCI | STUDENTS.ENROLL_D=20260129 | STUDENTS.GPA=2.0 | STUDENTS.EMAIL=quinn.taylor0@student.mcc.edu
+RECNO=2 | STUDENTS.SID=50000001 | STUDENTS.LNAME=Washington | STUDENTS.FNAME=George | STUDENTS.DOB="" | STUDENTS.GENDER=X | STUDENTS.MAJOR=CSCI | STUDENTS.ENROLL_D=20250710 | STUDENTS.GPA=4.59 | STUDENTS.EMAIL=mason.martin1@student.mcc.edu
+RECNO=3 | STUDENTS.SID=50000002 | STUDENTS.LNAME=Ramirez | STUDENTS.FNAME=Skyler | STUDENTS.DOB=19890329 | STUDENTS.GENDER=X | STUDENTS.MAJOR=HIST | STUDENTS.ENROLL_D=20240722 | STUDENTS.GPA=2.58 | STUDENTS.EMAIL=skyler.ramirez2@student.mcc.edu
+RECNO=4 | STUDENTS.SID=50000003 | STUDENTS.LNAME=Davis | STUDENTS.FNAME=Sophia | STUDENTS.DOB=19970808 | STUDENTS.GENDER=M | STUDENTS.MAJOR=PHYS | STUDENTS.ENROLL_D=20250519 | STUDENTS.GPA=3.81 | STUDENTS.EMAIL=sophia.davis3@student.mcc.edu
+RECNO=5 | STUDENTS.SID=50000004 | STUDENTS.LNAME=Rodriguez | STUDENTS.FNAME=Evan | STUDENTS.DOB=19891127 | STUDENTS.GENDER=F | STUDENTS.MAJOR=ARTS | STUDENTS.ENROLL_D=20240907 | STUDENTS.GPA=2.37 | STUDENTS.EMAIL=evan.rodriguez4@student.mcc.edu
+RECNO=6 | STUDENTS.SID=50000005 | STUDENTS.LNAME=Rodriguez | STUDENTS.FNAME=Alex | STUDENTS.DOB=19900617 | STUDENTS.GENDER=M | STUDENTS.MAJOR=BUSN | STUDENTS.ENROLL_D=20231223 | STUDENTS.GPA=2.88 | STUDENTS.EMAIL=alex.rodriguez5@student.mcc.edu
+RECNO=7 | STUDENTS.SID=50000006 | STUDENTS.LNAME=Garcia | STUDENTS.FNAME=Mia | STUDENTS.DOB=20011225 | STUDENTS.GENDER=M | STUDENTS.MAJOR=BIOL | STUDENTS.ENROLL_D=20230313 | STUDENTS.GPA=3.55 | STUDENTS.EMAIL=mia.garcia6@student.mcc.edu
+RECNO=8 | STUDENTS.SID=50000007 | STUDENTS.LNAME=Ramirez | STUDENTS.FNAME=Jordan | STUDENTS.DOB=19910926 | STUDENTS.GENDER=M | STUDENTS.MAJOR=PHYS | STUDENTS.ENROLL_D=20231113 | STUDENTS.GPA=2.57 | STUDENTS.EMAIL=jordan.ramirez7@student.mcc.edu
+RECNO=9 | STUDENTS.SID=50000008 | STUDENTS.LNAME=Lopez | STUDENTS.FNAME=Ethan | STUDENTS.DOB=20000429 | STUDENTS.GENDER=F | STUDENTS.MAJOR=CSCI | STUDENTS.ENROLL_D=20240926 | STUDENTS.GPA=3.77 | STUDENTS.EMAIL=ethan.lopez8@student.mcc.edu
+RECNO=10 | STUDENTS.SID=50000009 | STUDENTS.LNAME=Martin | STUDENTS.FNAME=Ava | STUDENTS.DOB=19931206 | STUDENTS.GENDER=F | STUDENTS.MAJOR=BIOL | STUDENTS.ENROLL_D=20250216 | STUDENTS.GPA=2.47 | STUDENTS.EMAIL=ava.martin9@student.mcc.edu
+RECNO=11 | STUDENTS.SID=50000010 | STUDENTS.LNAME=Clark | STUDENTS.FNAME=Parker | STUDENTS.DOB=20021115 | STUDENTS.GENDER=F | STUDENTS.MAJOR=BIOL | STUDENTS.ENROLL_D=20230228 | STUDENTS.GPA=3.58 | STUDENTS.EMAIL=parker.clark10@student.mcc.edu
+RECNO=12 | STUDENTS.SID=50000011 | STUDENTS.LNAME=White | STUDENTS.FNAME=Ava | STUDENTS.DOB=19971017 | STUDENTS.GENDER=M | STUDENTS.MAJOR=MATH | STUDENTS.ENROLL_D=20241104 | STUDENTS.GPA=2.45 | STUDENTS.EMAIL=ava.white11@student.mcc.edu
+RECNO=13 | STUDENTS.SID=50000012 | STUDENTS.LNAME=Lewis | STUDENTS.FNAME=Parker | STUDENTS.DOB=20061030 | STUDENTS.GENDER=F | STUDENTS.MAJOR=ENGL | STUDENTS.ENROLL_D=20231011 | STUDENTS.GPA=3.10 | STUDENTS.EMAIL=parker.lewis12@student.mcc.edu
+RECNO=14 | STUDENTS.SID=50000013 | STUDENTS.LNAME=Smith | STUDENTS.FNAME=Isabella | STUDENTS.DOB=19900215 | STUDENTS.GENDER=X | STUDENTS.MAJOR=ACCT | STUDENTS.ENROLL_D=20240912 | STUDENTS.GPA=3.58 | STUDENTS.EMAIL=isabella.smith13@student.mcc.edu
+RECNO=15 | STUDENTS.SID=50000014 | STUDENTS.LNAME=Jackson | STUDENTS.FNAME=Taylor | STUDENTS.DOB=19980910 | STUDENTS.GENDER=X | STUDENTS.MAJOR=BUSN | STUDENTS.ENROLL_D=20231108 | STUDENTS.GPA=2.17 | STUDENTS.EMAIL=taylor.jackson14@student.mcc.edu
+RECNO=16 | STUDENTS.SID=50000015 | STUDENTS.LNAME=Martin | STUDENTS.FNAME=Adrien | STUDENTS.DOB=20040722 | STUDENTS.GENDER=M | STUDENTS.MAJOR=BIOL | STUDENTS.ENROLL_D=20230509 | STUDENTS.GPA=3.72 | STUDENTS.EMAIL=adrien.martin15@student.mcc.edu
+RECNO=17 | STUDENTS.SID=50000016 | STUDENTS.LNAME=Brown | STUDENTS.FNAME=Logan | STUDENTS.DOB=20070209 | STUDENTS.GENDER=X | STUDENTS.MAJOR=COMM | STUDENTS.ENROLL_D=20230712 | STUDENTS.GPA=3.39 | STUDENTS.EMAIL=logan.brown16@student.mcc.edu
+RECNO=18 | STUDENTS.SID=50000017 | STUDENTS.LNAME=Williams | STUDENTS.FNAME=Sophia | STUDENTS.DOB=19960603 | STUDENTS.GENDER=M | STUDENTS.MAJOR=BIOL | STUDENTS.ENROLL_D=20240507 | STUDENTS.GPA=2.48 | STUDENTS.EMAIL=sophia.williams17@student.mcc.edu
+RECNO=19 | STUDENTS.SID=50000018 | STUDENTS.LNAME=Harris | STUDENTS.FNAME=Drew | STUDENTS.DOB=19900913 | STUDENTS.GENDER=X | STUDENTS.MAJOR=ARTS | STUDENTS.ENROLL_D=20241028 | STUDENTS.GPA=2.52 | STUDENTS.EMAIL=drew.harris18@student.mcc.edu
+RECNO=20 | STUDENTS.SID=50000019 | STUDENTS.LNAME=Martinez | STUDENTS.FNAME=Harper | STUDENTS.DOB=19910711 | STUDENTS.GENDER=X | STUDENTS.MAJOR=HIST | STUDENTS.ENROLL_D=20240630 | STUDENTS.GPA=3.78 | STUDENTS.EMAIL=harper.martinez19@student.mcc.edu
+Super Browser: pos 21 / 198  [CNX:SID ASC]  |  AREA: STUDENTS [STUDENTS]  |  REL: configured
+-- More -- (Enter=next, Q=quit, TOP/BOTTOM/SKIP n/GOTO n, FOR <expr>, CLEAR FOR, ORDER PHYSICAL/INX/CNX, SPEC <spec>, SHOW|HIDE SCHEMA|JSON, SHOW CHILDREN [LIMIT n], SHOW CHILDREN FOR <area> PREVIEW n, OPEN CHILD <area>, BACK, SHOW BREADCRUMBS, STATUS VERBOSE|COMPACT, HELP) Q
+. echo REL JOIN/ENUM regression mini-suite (12 tests)
+.
+. echo TEST 01: clean start + open DBF schemas
+. SCHEMAS CLOSE
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 1 area(s) closed.
+. SCHEMAS OPEN DBF
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SCHEMAS OPEN: scanning directory: DBF
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+SCHEMAS: 12 table(s) opened into area(s) 0..11.
+.
+. echo TEST 02: select STUDENTS + locate known SID
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. LOCATE FOR SID = 50000010
+Located.
+. RECNO
+11
+.
+. echo TEST 03: reset relations + build chain STUDENTS->ENROLL->CLASSES->TASSIGN->TEACHERS
+. SET RELATIONS CLEAR ALL
+REL: cleared all
+OK
+. SET RELATIONS ADD STUDENTS ENROLL ON SID
+REL: STUDENTS -> ENROLL ON SID
+OK
+. SET RELATIONS ADD ENROLL CLASSES ON CLS_ID
+REL: ENROLL -> CLASSES ON CLS_ID
+OK
+. SET RELATIONS ADD CLASSES TASSIGN ON CLS_ID
+REL: CLASSES -> TASSIGN ON CLS_ID
+OK
+. SET RELATIONS ADD TASSIGN TEACHERS ON TID
+REL: TASSIGN -> TEACHERS ON TID
+OK
+. REL REFRESH
+OK
+.
+. echo TEST 04: REL LIST should show ENROLL matches (expect: 2 for SID=50000010)
+. REL LIST
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 2)
+.
+. echo TEST 05: cursor should be stable across refresh/list (RECNO unchanged)
+. RECNO
+11
+. REL REFRESH
+OK
+. RECNO
+11
+.
+. echo TEST 06: REL JOIN ONE should emit exactly 1 row (historical behavior)
+. REL JOIN ONE LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+OK
+.
+. echo TEST 07: REL JOIN should enumerate like ENUM (expect: >1 rows; known dataset: 5 rows here)
+. REL JOIN LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL290ENGL290Wilson
+; TUPLE: 50000010 | W26ENGL290 | ENGL290 | Wilson
+OK
+.
+. echo TEST 08: REL ENUM should match REL JOIN row-for-row for the same projection
+. REL ENUM LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL290ENGL290Wilson
+; TUPLE: 50000010 | W26ENGL290 | ENGL290 | Wilson
+OK
+.
+. echo TEST 09: DISTINCT should collapse projection-duplicates (expect: 3 rows here: 2 teachers ENGL170 + 1 for ENGL290)
+. REL JOIN DISTINCT LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL290ENGL290Wilson
+; TUPLE: 50000010 | W26ENGL290 | ENGL290 | Wilson
+OK
+.
+. echo TEST 10: include CLASSES.SEC to make rows unique (expect: 5 rows; DISTINCT should not reduce)
+. REL JOIN LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, CLASSES.SEC, TEACHERS.LNAME
+50000010W26ENGL170ENGL170 6Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 |  6 | Gonzalez
+50000010W26ENGL170ENGL170 6White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 |  6 | White
+50000010W26ENGL170ENGL17010Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | 10 | Gonzalez
+50000010W26ENGL170ENGL17010White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | 10 | White
+50000010W26ENGL290ENGL290 5Wilson
+; TUPLE: 50000010 | W26ENGL290 | ENGL290 |  5 | Wilson
+OK
+. REL JOIN DISTINCT LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, CLASSES.SEC, TEACHERS.LNAME
+50000010W26ENGL170ENGL170 6Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 |  6 | Gonzalez
+50000010W26ENGL170ENGL170 6White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 |  6 | White
+50000010W26ENGL170ENGL17010Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | 10 | Gonzalez
+50000010W26ENGL170ENGL17010White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | 10 | White
+50000010W26ENGL290ENGL290 5Wilson
+; TUPLE: 50000010 | W26ENGL290 | ENGL290 |  5 | Wilson
+OK
+.
+. echo TEST 11: LIMIT should cap rows (expect: exactly 2 rows)
+. REL JOIN LIMIT 2 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+OK
+.
+. echo TEST 12: explicit chain path should work + REL LIST ALL should not crash
+. REL JOIN ENROLL CLASSES TASSIGN TEACHERS LIMIT 0 TUPLE STUDENTS.SID, STUDENTS.LNAME, ENROLL.CLS_ID, CLASSES.SEC, TEACHERS.LNAME
+50000010ClarkW26ENGL170 6Gonzalez
+; TUPLE: 50000010 | Clark | W26ENGL170 |  6 | Gonzalez
+50000010ClarkW26ENGL170 6White
+; TUPLE: 50000010 | Clark | W26ENGL170 |  6 | White
+50000010ClarkW26ENGL17010Gonzalez
+; TUPLE: 50000010 | Clark | W26ENGL170 | 10 | Gonzalez
+50000010ClarkW26ENGL17010White
+; TUPLE: 50000010 | Clark | W26ENGL170 | 10 | White
+50000010ClarkW26ENGL290 5Wilson
+; TUPLE: 50000010 | Clark | W26ENGL290 |  5 | Wilson
+OK
+. REL LIST ALL
+Relations (tree) rooted at: STUDENTS
+STUDENTS
+  -> ENROLL ON SID  (matches: 2)
+    -> CLASSES ON CLS_ID  (matches: 3)
+      -> TASSIGN ON CLS_ID  (matches: 3)
+        -> TEACHERS ON TID  (matches: 3)
+.
+. echo DONE
+. echo ============================================================
+. echo My Community College — Build CNX indexes (table-name CNX)
+. echo Notes:
+. echo  - Uses CNX-per-table named exactly like the DBF (default loading)
+. echo  - Uses ECHO lines as comments
+. echo  - Safe to re-run: CNX CREATE may say "already exists"; ADDTAG may say "already exists"
+. echo ============================================================
+.
+. echo
+. echo --- Open schema tables into work areas (0..11) ---
+. schemas close
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 12 area(s) closed.
+. schemas open dbf
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SCHEMAS OPEN: scanning directory: dbf
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+SCHEMAS: 12 table(s) opened into area(s) 0..11.
+. schemas
+SCHEMAS: Listing open work areas...
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+  Area 12: --- closed ---
+  Area 13: --- closed ---
+  Area 14: --- closed ---
+  Area 15: --- closed ---
+  Area 16: --- closed ---
+  Area 17: --- closed ---
+  Area 18: --- closed ---
+  Area 19: --- closed ---
+  Area 20: --- closed ---
+  Area 21: --- closed ---
+  Area 22: --- closed ---
+  Area 23: --- closed ---
+  Area 24: --- closed ---
+  Area 25: --- closed ---
+  Area 26: --- closed ---
+  Area 27: --- closed ---
+  Area 28: --- closed ---
+  Area 29: --- closed ---
+  Area 30: --- closed ---
+  Area 31: --- closed ---
+SCHEMAS: 12 of 32 area(s) in use.
+.
+. echo
+. echo --- BUILDING.cnx ---
+. select building
+Selected area 0.
+Current area: 0
+  File: BUILDING  Recs: 9  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\BUILDING.cnx"
+. cnx addtag bldg
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\BUILDING.cnx
+  [1] BLDG : OK
+REBUILD: done  OK=1  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- ROOMS.cnx ---
+. select rooms
+Selected area 6.
+Current area: 6
+  File: ROOMS  Recs: 30  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\ROOMS.cnx"
+. cnx addtag room
+CNX ADDTAG: tag already exists.
+. cnx addtag bldg
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\ROOMS.cnx
+  [1] ROOM : OK
+  [2] BLDG : OK
+REBUILD: done  OK=2  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- TERMS.cnx ---
+. select terms
+Selected area 11.
+Current area: 11
+  File: TERMS  Recs: 3  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\TERMS.cnx"
+. cnx addtag term
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\TERMS.cnx
+  [1] TERM : OK
+REBUILD: done  OK=1  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- DEPT.cnx ---
+. select dept
+Selected area 3.
+Current area: 3
+  File: DEPT  Recs: 10  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\DEPT.cnx"
+. cnx addtag dept_id
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\DEPT.cnx
+  [1] DEPT_ID : OK
+REBUILD: done  OK=1  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- MAJORS.cnx ---
+. select majors
+Selected area 5.
+Current area: 5
+  File: MAJORS  Recs: 12  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\MAJORS.cnx"
+. cnx addtag major
+CNX ADDTAG: tag already exists.
+. cnx addtag dept_id
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\MAJORS.cnx
+  [1] MAJOR : OK
+  [2] DEPT_ID : OK
+REBUILD: done  OK=2  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- TEACHERS.cnx ---
+. select teachers
+Selected area 10.
+Current area: 10
+  File: TEACHERS  Recs: 20  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\TEACHERS.cnx"
+. cnx addtag tid
+CNX ADDTAG: tag already exists.
+. cnx addtag dept_id
+CNX ADDTAG: tag already exists.
+. cnx addtag lname
+CNX ADDTAG: tag already exists.
+. cnx addtag fname
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\TEACHERS.cnx
+  [1] TID : OK
+  [2] DEPT_ID : OK
+  [3] LNAME : OK
+  [4] FNAME : OK
+REBUILD: done  OK=4  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- COURSES.cnx ---
+. select courses
+Selected area 2.
+Current area: 2
+  File: COURSES  Recs: 100  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\COURSES.cnx"
+. cnx addtag cid
+CNX ADDTAG: tag already exists.
+. cnx addtag dept_id
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\COURSES.cnx
+  [1] CID : OK
+  [2] DEPT_ID : OK
+REBUILD: done  OK=2  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- STUDENTS.cnx ---
+. select students
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx"
+. cnx addtag sid
+CNX ADDTAG: tag already exists.
+. cnx addtag major
+CNX ADDTAG: tag already exists.
+. cnx addtag lname
+CNX ADDTAG: tag already exists.
+. cnx addtag fname
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx
+  [1] SID : OK
+  [2] MAJOR : OK
+  [3] LNAME : OK
+  [4] FNAME : OK
+REBUILD: done  OK=4  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- CLASSES.cnx ---
+. select classes
+Selected area 1.
+Current area: 1
+  File: CLASSES  Recs: 200  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\CLASSES.cnx"
+. cnx addtag cls_id
+CNX ADDTAG: tag already exists.
+. cnx addtag term
+CNX ADDTAG: tag already exists.
+. cnx addtag cid
+CNX ADDTAG: tag already exists.
+. cnx addtag room
+CNX ADDTAG: tag already exists.
+. cnx addtag tid
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\CLASSES.cnx
+  [1] CLS_ID : OK
+  [2] TERM : OK
+  [3] CID : OK
+  [4] ROOM : OK
+  [5] TID : OK
+REBUILD: done  OK=5  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- ENROLL.cnx ---
+. select enroll
+Selected area 4.
+Current area: 4
+  File: ENROLL  Recs: 686  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\ENROLL.cnx"
+. cnx addtag sid
+CNX ADDTAG: tag already exists.
+. cnx addtag cls_id
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\ENROLL.cnx
+  [1] SID : OK
+  [2] CLS_ID : OK
+REBUILD: done  OK=2  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- STUD_MAJ.cnx ---
+. select stud_maj
+Selected area 7.
+Current area: 7
+  File: STUD_MAJ  Recs: 200  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\STUD_MAJ.cnx"
+. cnx addtag sid
+CNX ADDTAG: tag already exists.
+. cnx addtag major
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\STUD_MAJ.cnx
+  [1] SID : OK
+  [2] MAJOR : OK
+REBUILD: done  OK=2  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo --- TASSIGN.cnx ---
+. select tassign
+Selected area 9.
+Current area: 9
+  File: TASSIGN  Recs: 200  Recno: 1
+. cnx create
+CNX CREATE: file already exists: "D:\code\ccode\dottalkpp\data\indexes\TASSIGN.cnx"
+. cnx addtag cls_id
+CNX ADDTAG: tag already exists.
+. cnx addtag tid
+CNX ADDTAG: tag already exists.
+. rebuild
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\TASSIGN.cnx
+  [1] CLS_ID : OK
+  [2] TID : OK
+REBUILD: done  OK=2  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+.
+. echo
+. echo ============================================================
+. echo DONE — CNX containers created/updated for all MCC tables.
+. echo ============================================================
+. RELATIONS
+Relations for parent: TASSIGN
+  (none)
+. RELATIONS ALL
+Relations (tree) rooted at: TASSIGN
+TASSIGN
+  (none)
+. REL ALL
+REL syntax
+  REL LIST [ALL]
+  REL REFRESH
+  REL JOIN [LIMIT <n>] [<child1> <child2> ...] TUPLE <expr>
+  REL ENUM [LIMIT <n>] [<child1> <child2> ...] TUPLE <expr>
+  REL SAVE [path] | REL SAVE AS <dataset>
+  REL LOAD [path] | REL LOAD AS <dataset>
+  REL ADD <parent> <child> ON <field>      # alias of SET RELATIONS ADD
+  REL CLEAR <parent>|ALL                   # alias of SET RELATIONS CLEAR
+. REL LIST ALL
+Relations (tree) rooted at: TASSIGN
+TASSIGN
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. REL LIST ALL
+Relations (tree) rooted at: STUDENTS
+STUDENTS
+. echo enum shakedown
+.
+. SCHEMAS CLOSE
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 12 area(s) closed.
+. SCHEMAS OPEN DBF
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SCHEMAS OPEN: scanning directory: DBF
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+SCHEMAS: 12 table(s) opened into area(s) 0..11.
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. SET RELATIONS CLEAR ALL
+REL: cleared all
+OK
+. SET RELATIONS ADD STUDENTS ENROLL ON SID
+REL: STUDENTS -> ENROLL ON SID
+OK
+. SET RELATIONS ADD ENROLL CLASSES ON CLS_ID
+REL: ENROLL -> CLASSES ON CLS_ID
+OK
+. SET RELATIONS ADD CLASSES TASSIGN ON CLS_ID
+REL: CLASSES -> TASSIGN ON CLS_ID
+OK
+. SET RELATIONS ADD TASSIGN TEACHERS ON TID
+REL: TASSIGN -> TEACHERS ON TID
+OK
+. REL REFRESH
+OK
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. RECNO
+1
+. LOCATE FOR SID = 50000010
+Located.
+. RECNO
+11
+. REL REFRESH
+OK
+. RECNO
+11
+. REL LIST
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 2)
+. RECNO
+11
+. COUNT FOR SID = 50000010
+1
+. RECNO
+11
+.
+. REL JOIN LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL290ENGL290Wilson
+; TUPLE: 50000010 | W26ENGL290 | ENGL290 | Wilson
+OK
+. RECNO
+11
+.
+. REL ENUM LIMIT 0 TUPLE STUDENTS.SID, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL170ENGL170Gonzalez
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | Gonzalez
+50000010W26ENGL170ENGL170White
+; TUPLE: 50000010 | W26ENGL170 | ENGL170 | White
+50000010W26ENGL290ENGL290Wilson
+; TUPLE: 50000010 | W26ENGL290 | ENGL290 | Wilson
+OK
+.
+. REL ENUM ENROLL CLASSES TASSIGN TEACHERS LIMIT 10 TUPLE STUDENTS.SID, STUDENTS.LNAME, ENROLL.CLS_ID, CLASSES.TERM, CLASSES.CID, CLASSES.SEC, TASSIGN.TID, TEACHERS.LNAME, TEACHERS.TID
+50000010ClarkW26ENGL170W26ENGL170 6100012Gonzalez100012
+; TUPLE: 50000010 | Clark | W26ENGL170 | W26 | ENGL170 |  6 | 100012 | Gonzalez | 100012
+50000010ClarkW26ENGL170W26ENGL170 6100005White100005
+; TUPLE: 50000010 | Clark | W26ENGL170 | W26 | ENGL170 |  6 | 100005 | White | 100005
+50000010ClarkW26ENGL170W26ENGL17010100012Gonzalez100012
+; TUPLE: 50000010 | Clark | W26ENGL170 | W26 | ENGL170 | 10 | 100012 | Gonzalez | 100012
+50000010ClarkW26ENGL170W26ENGL17010100005White100005
+; TUPLE: 50000010 | Clark | W26ENGL170 | W26 | ENGL170 | 10 | 100005 | White | 100005
+50000010ClarkW26ENGL290W26ENGL290 5100000Wilson100000
+; TUPLE: 50000010 | Clark | W26ENGL290 | W26 | ENGL290 |  5 | 100000 | Wilson | 100000
+OK
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 11
+. LOCATE FOR SID = 50000011
+Located.
+. RECNO
+12
+. REL REFRESH
+OK
+. REL LIST
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 3)
+. REL ENUM LIMIT 0 TUPLE STUDENTS.SID, STUDENTS.LNAME, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000011WhiteF25BIOL170BIOL170Clark
+; TUPLE: 50000011 | White | F25BIOL170 | BIOL170 | Clark
+50000011WhiteS26MATH190MATH190White
+; TUPLE: 50000011 | White | S26MATH190 | MATH190 | White
+50000011WhiteS26HIST140HIST140Jackson
+; TUPLE: 50000011 | White | S26HIST140 | HIST140 | Jackson
+OK
+. RECNO
+12
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 12
+. TOP
+Recno: 1
+. RECNO
+1
+. REL REFRESH
+OK
+. REL LIST
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 4)
+. REL ENUM LIMIT 0 TUPLE STUDENTS.SID, STUDENTS.LNAME, ENROLL.CLS_ID, CLASSES.CID, TEACHERS.LNAME
+50000000WashingtonS26PHYS210PHYS210Martin
+; TUPLE: 50000000 | Washington | S26PHYS210 | PHYS210 | Martin
+50000000WashingtonW26CHEM200CHEM200Thompson
+; TUPLE: 50000000 | Washington | W26CHEM200 | CHEM200 | Thompson
+50000000WashingtonS26MATH140MATH140Thompson
+; TUPLE: 50000000 | Washington | S26MATH140 | MATH140 | Thompson
+50000000WashingtonS26MATH140MATH140Gonzalez
+; TUPLE: 50000000 | Washington | S26MATH140 | MATH140 | Gonzalez
+50000000WashingtonS26MATH140MATH140Thompson
+; TUPLE: 50000000 | Washington | S26MATH140 | MATH140 | Thompson
+50000000WashingtonS26MATH140MATH140Gonzalez
+; TUPLE: 50000000 | Washington | S26MATH140 | MATH140 | Gonzalez
+50000000WashingtonF25ARTS102ARTS102Harris
+; TUPLE: 50000000 | Washington | F25ARTS102 | ARTS102 | Harris
+OK
+. RECNO
+1
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. TUP
+50000000WashingtonDavis20260130XCSCI202601292.0quinn.taylor0@student.mcc.edu
+; TUPLE: 50000000 | Washington | Davis | 20260130 | X | CSCI | 20260129 | 2.0 | quinn.taylor0@student.mcc.edu
+. RECNO
+1
+. SELECT ENROLL
+Selected area 4.
+Current area: 4
+  File: ENROLL  Recs: 686  Recno: 1
+. TUP
+        150000000S26PHYS210IPA20260406
+; TUPLE:         1 | 50000000 | S26PHYS210 | IP | A | 20260406
+. RECNO
+1
+. SELECT CLASSES
+Selected area 1.
+Current area: 1
+  File: CLASSES  Recs: 200  Recno: 184
+. TUP
+S26PHYS210S26PHYS210 6BLDG02-1F13:00-13:50100008 30
+; TUPLE: S26PHYS210 | S26 | PHYS210 |  6 | BLDG02-1 | F | 13:00-13:50 | 100008 |  30
+. RECNO
+184
+. SELECT TASSIGN
+Selected area 9.
+Current area: 9
+  File: TASSIGN  Recs: 200  Recno: 184
+. TUP
+S26PHYS21010000820241216
+; TUPLE: S26PHYS210 | 100008 | 20241216
+. RECNO
+184
+. SELECT TEACHERS
+Selected area 10.
+Current area: 10
+  File: TEACHERS  Recs: 20  Recno: 9
+. TUP
+100008MartinJordanARTSjmartin@mcc.edu20161117F
+; TUPLE: 100008 | Martin | Jordan | ARTS | jmartin@mcc.edu | 20161117 | F
+. RECNO
+9
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+.
+. REL REFRESH
+OK
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. REL LIST
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 4)
+.
+. REL LIST ALL
+Relations (tree) rooted at: STUDENTS
+STUDENTS
+  -> ENROLL ON SID  (matches: 4)
+    -> CLASSES ON CLS_ID  (matches: 5)
+      -> TASSIGN ON CLS_ID  (matches: 5)
+        -> TEACHERS ON TID  (matches: 4)
+.
+. WSREPORT
+DotTalk Status Report
+
+  Slot  Name
+  ----- --------
+      0 D:\code\ccode\dottalkpp\data\dbf\BUILDING.DBF
+      1 D:\code\ccode\dottalkpp\data\dbf\CLASSES.DBF
+      2 D:\code\ccode\dottalkpp\data\dbf\COURSES.DBF
+      3 D:\code\ccode\dottalkpp\data\dbf\DEPT.DBF
+      4 D:\code\ccode\dottalkpp\data\dbf\ENROLL.DBF
+      5 D:\code\ccode\dottalkpp\data\dbf\MAJORS.DBF
+      6 D:\code\ccode\dottalkpp\data\dbf\ROOMS.DBF
+      7 D:\code\ccode\dottalkpp\data\dbf\STUD_MAJ.DBF
+      8 D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf
+      9 D:\code\ccode\dottalkpp\data\dbf\TASSIGN.DBF
+     10 D:\code\ccode\dottalkpp\data\dbf\TEACHERS.dbf
+     11 D:\code\ccode\dottalkpp\data\dbf\TERMS.DBF
+
+Area 8: D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf
+Index Summary
+----------------------------------------
+Has Order   : NO
+Container   : (none)
+Type        : (none)
+Tag         : (none)
+Direction   : PHYSICAL
+Record Count: 201
+
+Tags
+  (none)
+
+. AREA
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+  DBF (abs)           : D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf
+  Logical name        : STUDENTS
+  Legacy name()       : STUDENTS
+  Path: D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf
+  Order: NATURAL
+. STRUCT
+Fields (9)
+  #  Name          Type   Len   Dec
+   1  SID           N        8     0
+   2  LNAME         C       20     0
+   3  FNAME         C       15     0
+   4  DOB           D        8     0
+   5  GENDER        C        1     0
+   6  MAJOR         C        4     0
+   7  ENROLL_D      D        8     0
+   8  GPA           N        4     2
+   9  EMAIL         C       40     0
+Dbfile      : STUDENTS  (STUDENTS)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. STATUS
+Area 8: D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf  (STUDENTS.dbf) [current]
+Order       : PHYSICAL
+  Tags        : (none)
+  Records     : 201
+. SETINDEX STUDENTS
+Index set: STUDENTS.inx
+. LIST 4
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL
+     8 50000007 Ramirez              Jordan          19910926 M PHYS 20231113 2.57 jordan.ramirez7@student.mcc.edu
+     7 50000006 Garcia               Mia             20011225 M BIOL 20230313 3.55 mia.garcia6@student.mcc.edu
+     4 50000003 Davis                Sophia          19970808 M PHYS 20250519 3.81 sophia.davis3@student.mcc.edu
+    13 50000012 Lewis                Parker          20061030 F ENGL 20231011 3.10 parker.lewis12@student.mcc.edu
+4 record(s) listed (limit 4). Use LIST ALL to show more.
+. REINDEX
+REINDEX (rebuild)
+  Index file   : D:\code\ccode\dottalkpp\data\indexes\STUDENTS.inx
+  Tag expr     : lname
+REINDEX: wrote STUDENTS.inx  (2INX v2, expr: lname, ASC)
+Note: Index file was regenerated from its stored tag expression.
+. LIST 5
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL
+    21 50000020 Anderson             Taylor          20050613 M ENGL 20240519 1.00 taylor.anderson20@student.mcc.edu
+    47 50000046 Anderson             Avery           20030827 F HIST 20250507 3.27 avery.anderson46@student.mcc.edu
+    79 50000078 Anderson             Noah            20031112 F ENGL 20240101 2.99 noah.anderson78@student.mcc.edu
+    84 50000083 Anderson             Alex            20021231 X HIST 20250306 3.95 alex.anderson83@student.mcc.edu
+    86 50000085 Anderson             Olivia          20060729 X MATH 20240929 3.23 olivia.anderson85@student.mcc.edu
+5 record(s) listed (limit 5). Use LIST ALL to show more.
+. SET ORDER STUDENTS GENDER
+SET ORDER: using CNX 'D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx' TAG 'SID' (ASC)
+. SET ORDER STUDENTS LNAME
+SET ORDER: using CNX 'D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx' TAG 'LNAME' (ASC)
+. CNX ADDTAG GENDER
+CNX ADDTAG: added 'GENDER'.
+. REBUILD
+REBUILD: D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx
+  [1] SID : OK
+  [2] MAJOR : OK
+  [3] LNAME : OK
+  [4] FNAME : OK
+  [5] GENDER : OK
+REBUILD: done  OK=5  SKIP=0  FAIL=0
+REBUILD: CNX updated (RUN1 persisted; root_page_off updated per tag).
+. SET ORDER STUDENTS GENDER
+SET ORDER: using CNX 'D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx' TAG 'GENDER' (ASC)
+. LIST 5
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL
+; CNX ORDER: file 'D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx'  TAG 'GENDER'  ASC
+   201 99999999 Test                 Case            20000101 A XXXX 20260130 1.25 case.test@x
+     5 50000004 Rodriguez            Evan            19891127 F ARTS 20240907 2.37 evan.rodriguez4@student.mcc.edu
+     9 50000008 Lopez                Ethan           20000429 F CSCI 20240926 3.77 ethan.lopez8@student.mcc.edu
+    10 50000009 Martin               Ava             19931206 F BIOL 20250216 2.47 ava.martin9@student.mcc.edu
+    11 50000010 Clark                Parker          20021115 F BIOL 20230228 3.58 parker.clark10@student.mcc.edu
+5 record(s) listed (limit 5). Use LIST ALL to show more.
+. set echo on
+Echo is ON
+. echo REL ENUM ersatz browser demo
+REL ENUM ersatz browser demo
+.
+. schemas close
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 12 area(s) closed.
+. schemas open dbf
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SCHEMAS OPEN: scanning directory: dbf
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+SCHEMAS: 12 table(s) opened into area(s) 0..11.
+.
+. rel clear all
+REL: cleared all
+OK
+. rel add students enroll on sid
+REL: STUDENTS -> ENROLL ON sid
+OK
+. rel add enroll classes on cls_id
+REL: ENROLL -> CLASSES ON cls_id
+OK
+. rel add classes tassign on cls_id
+REL: CLASSES -> TASSIGN ON cls_id
+OK
+. rel add tassign teachers on tid
+REL: TASSIGN -> TEACHERS ON tid
+OK
+. rel refresh
+OK
+.
+. select students
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. locate for sid = 50000020
+Located.
+. echo CURRENT STUDENT (parent)
+CURRENT STUDENT (parent)
+. tup
+50000020AndersonTaylor20050613MENGL202405191.00taylor.anderson20@student.mcc.edu
+; TUPLE: 50000020 | Anderson | Taylor | 20050613 | M | ENGL | 20240519 | 1.00 | taylor.anderson20@student.mcc.edu
+.
+. echo REL LIST (one hop)
+REL LIST (one hop)
+. rel list
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 5)
+.
+. echo REL LIST ALL (tree)
+REL LIST ALL (tree)
+. rel list all
+Relations (tree) rooted at: STUDENTS
+STUDENTS
+  -> ENROLL ON sid  (matches: 5)
+    -> CLASSES ON cls_id  (matches: 8)
+      -> TASSIGN ON cls_id  (matches: 8)
+        -> TEACHERS ON tid  (matches: 5)
+.
+. echo REL ENUM (LIMIT 10) — show ENROLL rows traced to TEACHERS
+REL ENUM (LIMIT 10) â€” show ENROLL rows traced to TEACHERS
+. rel enum limit 10 enroll classes tassign teachers tuple students.sid,students.lname,students.fname,enroll.cls_id,enroll.grade,classes.cid,classes.sec,teachers.tid,teachers.lname,teachers.fname
+50000020AndersonTaylorW26ARTS210A-ARTS210 7100003ClarkMia
+; TUPLE: 50000020 | Anderson | Taylor | W26ARTS210 | A- | ARTS210 |  7 | 100003 | Clark | Mia
+50000020AndersonTaylorF25PHYS260CPHYS260 9100001ThompsonEmma
+; TUPLE: 50000020 | Anderson | Taylor | F25PHYS260 | C | PHYS260 |  9 | 100001 | Thompson | Emma
+50000020AndersonTaylorF25PHYS260CPHYS260 9100003ClarkMia
+; TUPLE: 50000020 | Anderson | Taylor | F25PHYS260 | C | PHYS260 |  9 | 100003 | Clark | Mia
+50000020AndersonTaylorF25PHYS260CPHYS26010100001ThompsonEmma
+; TUPLE: 50000020 | Anderson | Taylor | F25PHYS260 | C | PHYS260 | 10 | 100001 | Thompson | Emma
+50000020AndersonTaylorF25PHYS260CPHYS26010100003ClarkMia
+; TUPLE: 50000020 | Anderson | Taylor | F25PHYS260 | C | PHYS260 | 10 | 100003 | Clark | Mia
+50000020AndersonTaylorF25HIST150IPHIST150 5100016MooreCasey
+; TUPLE: 50000020 | Anderson | Taylor | F25HIST150 | IP | HIST150 |  5 | 100016 | Moore | Casey
+50000020AndersonTaylorF25HIST150IPHIST150 5100003ClarkMia
+; TUPLE: 50000020 | Anderson | Taylor | F25HIST150 | IP | HIST150 |  5 | 100003 | Clark | Mia
+50000020AndersonTaylorF25HIST150IPHIST150 7100016MooreCasey
+; TUPLE: 50000020 | Anderson | Taylor | F25HIST150 | IP | HIST150 |  7 | 100016 | Moore | Casey
+50000020AndersonTaylorF25HIST150IPHIST150 7100003ClarkMia
+; TUPLE: 50000020 | Anderson | Taylor | F25HIST150 | IP | HIST150 |  7 | 100003 | Clark | Mia
+50000020AndersonTaylorF25PHYS140DPHYS14010100017HarrisMason
+; TUPLE: 50000020 | Anderson | Taylor | F25PHYS140 | D | PHYS140 | 10 | 100017 | Harris | Mason
+OK
+.
+. echo WALK FIRST 3 STUDENTS — each with up to 3 traced rows
+WALK FIRST 3 STUDENTS â€” each with up to 3 traced rows
+. select students
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 21
+. top
+Recno: 1
+. loop 3 times
+LOOP: buffering commands FOR 3 times. Type ENDLOOP to execute.
+.   echo ---- STUDENT ----
+.   tup
+.   rel enum limit 3 enroll classes tassign teachers tuple students.sid,students.lname,students.fname,enroll.cls_id,enroll.grade,classes.cid,classes.sec,teachers.tid,teachers.lname,teachers.fname
+.   skip 1
+. endloop
+---- STUDENT ----
+50000000WashingtonDavis20260130XCSCI202601292.0quinn.taylor0@student.mcc.edu
+; TUPLE: 50000000 | Washington | Davis | 20260130 | X | CSCI | 20260129 | 2.0 | quinn.taylor0@student.mcc.edu
+50000000WashingtonDavisS26PHYS210IPPHYS210 6100008MartinJordan
+; TUPLE: 50000000 | Washington | Davis | S26PHYS210 | IP | PHYS210 |  6 | 100008 | Martin | Jordan
+50000000WashingtonDavisW26CHEM200IPCHEM200 2100001ThompsonEmma
+; TUPLE: 50000000 | Washington | Davis | W26CHEM200 | IP | CHEM200 |  2 | 100001 | Thompson | Emma
+50000000WashingtonDavisS26MATH140C+MATH140 1100001ThompsonEmma
+; TUPLE: 50000000 | Washington | Davis | S26MATH140 | C+ | MATH140 |  1 | 100001 | Thompson | Emma
+OK
+Recno: 2
+---- STUDENT ----
+50000001WashingtonGeorgeXCSCI202507104.59mason.martin1@student.mcc.edu
+; TUPLE: 50000001 | Washington | George | "" | X | CSCI | 20250710 | 4.59 | mason.martin1@student.mcc.edu
+50000001WashingtonGeorgeW26CHEM200B-CHEM200 2100001ThompsonEmma
+; TUPLE: 50000001 | Washington | George | W26CHEM200 | B- | CHEM200 |  2 | 100001 | Thompson | Emma
+50000001WashingtonGeorgeW26ARTS120AARTS120 1100010WhiteEmma
+; TUPLE: 50000001 | Washington | George | W26ARTS120 | A | ARTS120 |  1 | 100010 | White | Emma
+50000001WashingtonGeorgeW26HIST100C+HIST100 9100016MooreCasey
+; TUPLE: 50000001 | Washington | George | W26HIST100 | C+ | HIST100 |  9 | 100016 | Moore | Casey
+OK
+Recno: 3
+---- STUDENT ----
+50000002RamirezSkyler19890329XHIST202407222.58skyler.ramirez2@student.mcc.edu
+; TUPLE: 50000002 | Ramirez | Skyler | 19890329 | X | HIST | 20240722 | 2.58 | skyler.ramirez2@student.mcc.edu
+50000002RamirezSkylerF25ENGL260C+ENGL260 2100012GonzalezReese
+; TUPLE: 50000002 | Ramirez | Skyler | F25ENGL260 | C+ | ENGL260 |  2 | 100012 | Gonzalez | Reese
+50000002RamirezSkylerF25MATH160IPMATH16010100002SmithSam
+; TUPLE: 50000002 | Ramirez | Skyler | F25MATH160 | IP | MATH160 | 10 | 100002 | Smith | Sam
+50000002RamirezSkylerS26ARTS210CARTS210 5100002SmithSam
+; TUPLE: 50000002 | Ramirez | Skyler | S26ARTS210 | C | ARTS210 |  5 | 100002 | Smith | Sam
+OK
+Recno: 4
+ENDLOOP: 4 buffered line(s), FOR 3 times -> 3 iteration(s)
+.
+. * ============================================================
+============================================================
+. * MCC_SHAKEDOWN.DTS - My Community College DBFs
+MCC_SHAKEDOWN.DTS - My Community College DBFs
+. * CALC Function/Operator Test Suite (full matrix)
+CALC Function/Operator Test Suite (full matrix)
+. *
+
+. * RULES / NOTES
+RULES / NOTES
+. * - Any CALC expression containing "=", ">=", "<=" (and similar) MUST start with "("
+- Any CALC expression containing "=", ">=", "<=" (and similar) MUST start with "("
+. *   or CALC may interpret it as CALCWRITE syntax.
+or CALC may interpret it as CALCWRITE syntax.
+. *     GOOD:  CALC (UPPER("a") = "A")
+GOOD:  CALC (UPPER("a") = "A")
+. *     BAD :  CALC UPPER("a") = "A"     * triggers CALCWRITE usage
+BAD :  CALC UPPER("a") = "A"     * triggers CALCWRITE usage
+. *
+
+. * - BOOLEAN/COUNT/LOCATE use the predicate grammar (not CALC expr grammar).
+- BOOLEAN/COUNT/LOCATE use the predicate grammar (not CALC expr grammar).
+. * - CONCAT() accepts comma-separated string args; "+" is numeric only.
+- CONCAT() accepts comma-separated string args; "+" is numeric only.
+. * - Inline comments: use * to comment the rest of the line.
+- Inline comments: use * to comment the rest of the line.
+. *
+
+. * IMPORTANT:
+IMPORTANT:
+. * - Keep this file ASCII/ANSI only (no smart quotes / em dashes).
+- Keep this file ASCII/ANSI only (no smart quotes / em dashes).
+. * ============================================================
+============================================================
+.
+. SET ECHO OFF
+Echo is OFF
+. ECHO ===== DotTalk++ MCC SHAKE-DOWN START =====
+. COLOR DEFAULT
+COLOR set to DEFAULT (LightGray/Black)
+.
+. SCHEMAS CLOSE
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 12 area(s) closed.
+. SCHEMAS OPEN DBF
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SCHEMAS OPEN: scanning directory: DBF
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+SCHEMAS: 12 table(s) opened into area(s) 0..11.
+. SCHEMAS
+SCHEMAS: Listing open work areas...
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+  Area 12: --- closed ---
+  Area 13: --- closed ---
+  Area 14: --- closed ---
+  Area 15: --- closed ---
+  Area 16: --- closed ---
+  Area 17: --- closed ---
+  Area 18: --- closed ---
+  Area 19: --- closed ---
+  Area 20: --- closed ---
+  Area 21: --- closed ---
+  Area 22: --- closed ---
+  Area 23: --- closed ---
+  Area 24: --- closed ---
+  Area 25: --- closed ---
+  Area 26: --- closed ---
+  Area 27: --- closed ---
+  Area 28: --- closed ---
+  Area 29: --- closed ---
+  Area 30: --- closed ---
+  Area 31: --- closed ---
+SCHEMAS: 12 of 32 area(s) in use.
+.
+. * ------------------------------------------------------------
+. * CALC: CLOCK / DATE-TIME (NO DBF REQUIRED)
+. * ------------------------------------------------------------
+.
+. CALC DATE()
+20260131
+. CALC TODAY()
+20260131
+. CALC TIME()
+160604
+. CALC NOW()
+20260131160604
+. CALC DATETIME()
+20260131160604
+.
+. DATE
+20260131
+. TODAY
+20260131
+. TIME
+160604
+. NOW
+20260131160604
+. DATETIME
+20260131160604
+.
+. CALC (DATE() = TODAY())
+.T.
+. CALC (NOW() = DATETIME())
+.T.
+.
+. CALC DATE() + 2
+20260202
+. CALC DATE() - 2
+20260129
+. CALC ((DATE() + 2) > DATE())
+.F.
+. CALC ((DATE() - 2) < DATE())
+.F.
+.
+. * CTOD parsing - ALWAYS QUOTE hyphenated dates
+. CALC CTOD("2000-01-01")
+20000101
+. CALC CTOD("2000/01/01")
+20000101
+. CALC CTOD(20000101)
+20000101
+.
+. * Compare date-to-date, not date-to-number
+. CALC (CTOD("2000-01-01") = CTOD("2000/01/01"))
+.T.
+. CALC (CTOD("2000-01-01") = CTOD(20000101))
+.T.
+. CALC (CTOD("2000-01-01") + 1 = CTOD("2000-01-02"))
+.F.
+. CALC (CTOD("2000-01-01") - 1 = CTOD("1999-12-31"))
+.F.
+.
+. * DTOC round-trip canary (string compare)
+. CALC DTOC(CTOD("2000-01-01"))
+20000101
+. CALC (DTOC(CTOD("2000-01-01")) = "20000101")
+.T.
+.
+. * ------------------------------------------------------------
+. * LOCATE / FIND / SEEK SMOKE (STUDENTS)
+. * ------------------------------------------------------------
+.
+. SELECT STUDENTS
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 201  Recno: 1
+. TOP
+Recno: 1
+.
+. LOCATE FOR LNAME = DAVIS
+Located.
+. TUP
+50000003DavisSophia19970808MPHYS202505193.81sophia.davis3@student.mcc.edu
+; TUPLE: 50000003 | Davis | Sophia | 19970808 | M | PHYS | 20250519 | 3.81 | sophia.davis3@student.mcc.edu
+.
+. LOCATE FOR LNAME = TAYLOR
+Located.
+. TUP
+50000024TaylorMason19850907FHIST202312032.97mason.taylor24@student.mcc.edu
+; TUPLE: 50000024 | Taylor | Mason | 19850907 | F | HIST | 20231203 | 2.97 | mason.taylor24@student.mcc.edu
+.
+. TOP
+Recno: 1
+. FIND LNAME = TAYLOR
+25: Taylor
+34: Taylor
+61: Taylor
+78: Taylor
+121: Taylor
+140: Taylor
+.
+. TOP
+Recno: 1
+. FIND LNAME = "WHITE"
+12: White
+55: White
+94: White
+101: White
+117: White
+149: White
+168: White
+.
+. TOP
+Recno: 1
+. SEEK LNAME = DAVIS
+Found at 4.
+. TUP
+50000003DavisSophia19970808MPHYS202505193.81sophia.davis3@student.mcc.edu
+; TUPLE: 50000003 | Davis | Sophia | 19970808 | M | PHYS | 20250519 | 3.81 | sophia.davis3@student.mcc.edu
+.
+. TOP
+Recno: 1
+. SEEK FNAME = ALEX
+Found at 6.
+. TUP
+50000005RodriguezAlex19900617MBUSN202312232.88alex.rodriguez5@student.mcc.edu
+; TUPLE: 50000005 | Rodriguez | Alex | 19900617 | M | BUSN | 20231223 | 2.88 | alex.rodriguez5@student.mcc.edu
+.
+. * ------------------------------------------------------------
+. * CLEAN SHUTDOWN
+. * ------------------------------------------------------------
+.
+. SCHEMAS
+SCHEMAS: Listing open work areas...
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'STUD_MAJ.DBF'
+  Area 8: opened 'STUDENTS.dbf'
+  Area 9: opened 'TASSIGN.DBF'
+  Area 10: opened 'TEACHERS.dbf'
+  Area 11: opened 'TERMS.DBF'
+  Area 12: --- closed ---
+  Area 13: --- closed ---
+  Area 14: --- closed ---
+  Area 15: --- closed ---
+  Area 16: --- closed ---
+  Area 17: --- closed ---
+  Area 18: --- closed ---
+  Area 19: --- closed ---
+  Area 20: --- closed ---
+  Area 21: --- closed ---
+  Area 22: --- closed ---
+  Area 23: --- closed ---
+  Area 24: --- closed ---
+  Area 25: --- closed ---
+  Area 26: --- closed ---
+  Area 27: --- closed ---
+  Area 28: --- closed ---
+  Area 29: --- closed ---
+  Area 30: --- closed ---
+  Area 31: --- closed ---
+SCHEMAS: 12 of 32 area(s) in use.
+. SCHEMAS CLOSE
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 12 area(s) closed.
+. ECHO ===== DotTalk++ MCC SHAKE-DOWN END =====
+. QUIT
+SHUTDOWN: running shutdown tasks...
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SHUTDOWN: done.
+PS D:\code\ccode>
+SET ECHO ON
+ECHO ===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) START =====
+
+ECHO -- Phase 0: clean slate --
+CLEAR VAR ALL
+SHOW VAR
+
+ECHO -- Phase 1: SET VAR (store-text) + hard error on undefined --
+SET VAR temp = fred
+ECHO Expect undefined-var hard error next line
+ECHO &fred
+ECHO Expect to print: fred (as plain text expansion)
+ECHO &temp
+
+ECHO -- Phase 2: SET VAR! typed/evaluated values --
+SET VAR! n = 1
+SET VAR! step = 1
+SET VAR! cutoff = CTOD("2026-01-01")
+SET VAR! who = "Grimwood"
+SET VAR! s = "20260101"
+
+SHOW VAR
+SHOW VAR n
+SHOW VAR cutoff
+SHOW VAR who
+SHOW VAR s
+
+ECHO -- Phase 3: true counter loop (n should step up) --
+LOOP 5
+  ECHO n=&n
+  SET VAR! n = (&n + &step)
+ENDLOOP
+SHOW VAR n
+
+ECHO -- Phase 4: DTOC styles (default/1/2) --
+ECHO Expect: 20260101
+CALC DTOC(CTOD("2026-01-01"))
+ECHO Expect: 2026-01-01
+CALC DTOC(CTOD("2026-01-01"), 1)
+ECHO Expect: 2026/01/01
+CALC DTOC(CTOD("2026-01-01"), 2)
+
+ECHO -- Phase 5: CTOD input variants (digits-only normalization) --
+ECHO Expect: 20260101
+CALC CTOD("2026-01-01")
+ECHO Expect: 20260101
+CALC CTOD("2026/01/01")
+ECHO Expect: 20260101
+CALC CTOD("20260101")
+
+ECHO -- Phase 6: CONCAT as COMMAND (CLI-level) --
+ECHO Expect: helpme
+CONCAT help, me
+ECHO Expect: one (single-arg allowed)
+CONCAT one
+
+ECHO -- Phase 7: CONCAT as FUNCTION inside CALC (expression-level) --
+ECHO Expect: helpme
+CALC CONCAT("help", "me")
+ECHO Expect: Cutoff=2026-01-01  (this also proves '=' inside quotes DOES NOT trigger CALCWRITE)
+CALC CONCAT("Cutoff=", DTOC(CTOD("2026-01-01"), 1))
+ECHO Expect: who="Grimwood"
+CALC CONCAT("who=", &who)
+
+ECHO -- Phase 8: open STUDENTS and exercise field + STR() + CONCAT() --
+USE STUDENTS
+
+ECHO Expect: Student: <LNAME>, <FNAME>  (non-empty line)
+CALC CONCAT("Student: ", LNAME, ", ", FNAME)
+
+ECHO Expect: GPA=<nn.nn>  (non-empty line)
+CALC CONCAT("GPA=", STR(GPA, 6, 2))
+
+ECHO Expect: Enroll=<yyyy-mm-dd>  (non-empty line; ENROLL_D is a D field)
+CALC CONCAT("Enroll=", DTOC(ENROLL_D, 1))
+
+ECHO -- Phase 9: CALCWRITE still works only on explicit assignment --
+ECHO (This should NOT print usage; it should update GPA in current record, then show it.)
+CALCWRITE GPA = (GPA + 0.01)
+CALC CONCAT("GPA(now)=", STR(GPA, 6, 2))
+
+ECHO -- Phase 10: CLEAR single var, then ALL --
+CLEAR VAR who
+ECHO Expect undefined-var hard error next line
+ECHO &who
+
+CLEAR VAR ALL
+SHOW VAR
+ECHO Expect undefined-var hard error next line
+ECHO &temp
+
+ECHO ===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) END =====
+
+
+. SET ECHO ON
+Echo is ON
+. ECHO ===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) START =====
+===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) START =====
+.
+. ECHO -- Phase 0: clean slate --
+-- Phase 0: clean slate --
+. CLEAR VAR ALL
+. SHOW VAR
+VARS: 0 defined.
+.
+. ECHO -- Phase 1: SET VAR (store-text) + hard error on undefined --
+-- Phase 1: SET VAR (store-text) + hard error on undefined --
+. SET VAR temp = fred
+. ECHO Expect undefined-var hard error next line
+Expect undefined-var hard error next line
+. ECHO &fred
+MACRO: undefined variable: fred
+. ECHO Expect to print: fred (as plain text expansion)
+Expect to print: fred (as plain text expansion)
+. ECHO &temp
+fred
+.
+. ECHO -- Phase 2: SET VAR! typed/evaluated values --
+-- Phase 2: SET VAR! typed/evaluated values --
+. SET VAR! n = 1
+. SET VAR! step = 1
+. SET VAR! cutoff = CTOD("2026-01-01")
+. SET VAR! who = "Grimwood"
+. SET VAR! s = "20260101"
+.
+. SHOW VAR
+VARS: 6 defined.
+  CUTOFF = 20260101
+  N = 1
+  S = "20260101"
+  STEP = 1
+  TEMP = fred
+  WHO = "Grimwood"
+. SHOW VAR n
+N = 1
+. SHOW VAR cutoff
+CUTOFF = 20260101
+. SHOW VAR who
+WHO = "Grimwood"
+. SHOW VAR s
+S = "20260101"
+.
+. ECHO -- Phase 3: true counter loop (n should step up) --
+-- Phase 3: true counter loop (n should step up) --
+. LOOP 5
+LOOP: buffering commands FOR 5. Type ENDLOOP to execute.
+.   ECHO n=&n
+.   SET VAR! n = (&n + &step)
+. ENDLOOP
+n=1
+n=2
+n=3
+n=4
+n=5
+ENDLOOP: 2 buffered line(s), FOR 5 -> 5 iteration(s)
+. SHOW VAR n
+N = 6
+.
+. ECHO -- Phase 4: DTOC styles (default/1/2) --
+-- Phase 4: DTOC styles (default/1/2) --
+. ECHO Expect: 20260101
+Expect: 20260101
+. CALC DTOC(CTOD("2026-01-01"))
+20260101
+. ECHO Expect: 2026-01-01
+Expect: 2026-01-01
+. CALC DTOC(CTOD("2026-01-01"), 1)
+2026-01-01
+. ECHO Expect: 2026/01/01
+Expect: 2026/01/01
+. CALC DTOC(CTOD("2026-01-01"), 2)
+2026/01/01
+.
+. ECHO -- Phase 5: CTOD input variants (digits-only normalization) --
+-- Phase 5: CTOD input variants (digits-only normalization) --
+. ECHO Expect: 20260101
+Expect: 20260101
+. CALC CTOD("2026-01-01")
+20260101
+. ECHO Expect: 20260101
+Expect: 20260101
+. CALC CTOD("2026/01/01")
+20260101
+. ECHO Expect: 20260101
+Expect: 20260101
+. CALC CTOD("20260101")
+20260101
+.
+. ECHO -- Phase 6: CONCAT as COMMAND (CLI-level) --
+-- Phase 6: CONCAT as COMMAND (CLI-level) --
+. ECHO Expect: helpme
+Expect: helpme
+. CONCAT help, me
+helpme
+. ECHO Expect: one (single-arg allowed)
+Expect: one (single-arg allowed)
+. CONCAT one
+one
+.
+. ECHO -- Phase 7: CONCAT as FUNCTION inside CALC (expression-level) --
+-- Phase 7: CONCAT as FUNCTION inside CALC (expression-level) --
+. ECHO Expect: helpme
+Expect: helpme
+. CALC CONCAT("help", "me")
+helpme
+. ECHO Expect: Cutoff=2026-01-01  (this also proves '=' inside quotes DOES NOT trigger CALCWRITE)
+Expect: Cutoff=2026-01-01  (this also proves '=' inside quotes DOES NOT trigger CALCWRITE)
+. CALC CONCAT("Cutoff=", DTOC(CTOD("2026-01-01"), 1))
+Cutoff=2026-01-01
+. ECHO Expect: who="Grimwood"
+Expect: who="Grimwood"
+. CALC CONCAT("who=", &who)
+who=Grimwood
+.
+. ECHO -- Phase 8: open STUDENTS and exercise field + STR() + CONCAT() --
+-- Phase 8: open STUDENTS and exercise field + STR() + CONCAT() --
+. USE STUDENTS
+USE: 'STUDENTS.dbf' is already open in current area 8.
+.
+. ECHO Expect: Student: <LNAME>, <FNAME>  (non-empty line)
+Expect: Student: <LNAME>, <FNAME>  (non-empty line)
+. CALC CONCAT("Student: ", LNAME, ", ", FNAME)
+Student: Washington, Davis
+.
+. ECHO Expect: GPA=<nn.nn>  (non-empty line)
+Expect: GPA=<nn.nn>  (non-empty line)
+. CALC CONCAT("GPA=", STR(GPA, 6, 2))
+GPA=  2.00
+.
+. ECHO Expect: Enroll=<yyyy-mm-dd>  (non-empty line; ENROLL_D is a D field)
+Expect: Enroll=<yyyy-mm-dd>  (non-empty line; ENROLL_D is a D field)
+. CALC CONCAT("Enroll=", DTOC(ENROLL_D, 1))
+Enroll=2026-01-29
+.
+. ECHO -- Phase 9: CALCWRITE still works only on explicit assignment --
+-- Phase 9: CALCWRITE still works only on explicit assignment --
+. ECHO (This should NOT print usage; it should update GPA in current record, then show it.)
+(This should NOT print usage; it should update GPA in current record, then show it.)
+. CALCWRITE GPA = (GPA + 0.01)
+CALCWRITE: wrote GPA = 2.01
+. CALC CONCAT("GPA(now)=", STR(GPA, 6, 2))
+GPA(now)=  2.01
+.
+. ECHO -- Phase 10: CLEAR single var, then ALL --
+-- Phase 10: CLEAR single var, then ALL --
+. CLEAR VAR who
+. ECHO Expect undefined-var hard error next line
+Expect undefined-var hard error next line
+. ECHO &who
+MACRO: undefined variable: who
+.
+. CLEAR VAR ALL
+. SHOW VAR
+VARS: 0 defined.
+. ECHO Expect undefined-var hard error next line
+Expect undefined-var hard error next line
+. ECHO &temp
+MACRO: undefined variable: temp
+.
+. ECHO ===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) END =====
+===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) END =====
+.

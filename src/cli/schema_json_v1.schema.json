@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dottalkpp/schemas/schema_json_v1.schema.json",
+  "title": "DotTalk++ Table Schema v1.0",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version","name","encoding","date_policy","null_policy","logical_policy","fields"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "name":    { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+    "encoding": { "type": "string" },
+    "date_policy": { "type": "string", "enum": ["ISO","FOX"] },
+    "null_policy": { "type": "string", "enum": ["EMPTY_AS_EMPTY","EMPTY_AS_NULL"] },
+    "logical_policy": { "type": "string", "enum": ["TF","ZERO_ONE"] },
+    "indexes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name","engine","order"],
+        "properties": {
+          "name":   { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+          "engine": { "type": "string", "enum": ["DBF","INX","CNX","SQLite"] },
+          "order":  {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "unique":   { "type": "boolean" },
+          "nullable": { "type": "string", "enum": ["ALLOW","DISALLOW"] },
+          "trim":     { "type": "string", "enum": ["right","none"] },
+          "collation":{ "type": "string", "enum": ["binary","nocase"] },
+          "filter":   { "type": ["string","null"] },
+          "x-opts":   { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name","parent_table","child_table","on","cardinality"],
+        "properties": {
+          "name":         { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+          "parent_table": { "type": "string" },
+          "child_table":  { "type": "string" },
+          "cardinality":  { "type": "string", "enum": ["1:1","1:N","N:1","N:N"] },
+          "enforce":      { "type": "string", "enum": ["SOFT","HARD"], "default": "SOFT" },
+          "nullable_fk":  { "type": "string", "enum": ["ALLOW","DISALLOW"], "default": "ALLOW" },
+          "cascade": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "delete": { "type": "string", "enum": ["NONE","RESTRICT","CASCADE"] },
+              "update": { "type": "string", "enum": ["NONE","RESTRICT","CASCADE"] }
+            }
+          },
+          "on": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["parent","child"],
+              "additionalProperties": true,
+              "properties": {
+                "parent": { "type": "string" },
+                "child":  { "type": "string" }
+              }
+            }
+          },
+          "x-opts": { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name","type"],
+        "properties": {
+          "name":     { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+          "type":     { "type": "string", "enum": ["C","N","D","L","M"] },
+          "length":   { "type": "integer", "minimum": 1 },
+          "decimals": { "type": "integer", "minimum": 0, "maximum": 15 },
+          "required": { "type": "boolean" },
+          "trim":     { "type": "string", "enum": ["right","none"] },
+          "zero_date":{ "type": "string", "enum": ["ALLOW","DISALLOW"] },
+          "range": {
+            "type": "object",
+            "required": ["min","max"],
+            "properties": {
+              "min": { "type": "number" },
+              "max": { "type": "number" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "C" } } },
+            "then": { "required": ["length"] }
+          },
+          {
+            "if": { "properties": { "type": { "const": "N" } } },
+            "then": { "required": ["length"], "properties": { "decimals": { "type": "integer", "minimum": 0, "maximum": 15 } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "D" } } },
+            "then": { "properties": { "length": { "const": 8 } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "L" } } },
+            "then": { "not": { "required": ["length","decimals"] } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "M" } } },
+            "then": { "not": { "required": ["length","decimals"] } }
+          }
+        ]
+      }
+    }
+  }
+}

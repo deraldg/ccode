@@ -209,3 +209,6 @@ bool predx::eval_expr(xbase::DbArea& A, std::string expr) {
     std::getline(is, rest);
     return predx::eval_triplet(A, lhsTok, op, rest);
 }
+
+
+

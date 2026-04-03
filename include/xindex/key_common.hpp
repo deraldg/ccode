@@ -5,7 +5,7 @@
 namespace xindex {
 
 using Key   = std::vector<std::uint8_t>;
-using RecNo = std::uint32_t;
+using RecNo = std::uint64_t;
 
 struct KeyLess {
     bool operator()(const Key& a, const Key& b) const noexcept {
@@ -15,3 +15,6 @@ struct KeyLess {
 };
 
 } // namespace xindex
+
+
+

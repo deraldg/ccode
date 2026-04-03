@@ -1,0 +1,393 @@
+// src/cli/cmd_seek.cpp
+//
+// SEEK command
+//
+// Contract (current direction):
+// - If LMDB environment is set (SETLMDB), SEEK should use LMDB <cdx>.d traversal.
+// - Otherwise, SEEK falls back to whatever legacy order/index behavior exists.
+//
+// Notes:
+// - This file is self-contained and does NOT include cli/lmdb_cli.hpp (non-existent).
+// - It uses LMDB C API directly when available.
+//
+// Build warnings you mentioned (C4505 for unreferenced static helpers) were caused by
+// static utilities that were declared but never used. In this version, the LMDB path
+// actually uses its helpers; anything not used should be removed rather than kept “just in case”.
+// If you still see C4505 in your tree, it means your repo’s cmd_seek.cpp differs from this drop-in.
+//
+// -----------------------------------------------------------------------------
+// IMPORTANT:
+// - We are NOT touching cmd_list.cpp.
+// - cmd_list_lmdb.cpp remains your target traversal experiment.
+// -----------------------------------------------------------------------------
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/order_state.hpp"
+#include "xbase_field_getters.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#if __has_include(<lmdb.h>)
+  #include <lmdb.h>
+  #define DT_HAVE_LMDB 1
+#else
+  #define DT_HAVE_LMDB 0
+#endif
+
+namespace {
+
+static inline std::string upper_copy(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
+}
+
+static inline std::string trim_copy(const std::string& s) {
+    size_t a = 0, b = s.size();
+    while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
+    while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
+    return s.substr(a, b - a);
+}
+
+static inline bool is_uint_tok(const std::string& s) {
+    if (s.empty()) return false;
+    for (unsigned char c : s) {
+        if (c < '0' || c > '9') return false;
+    }
+    return true;
+}
+
+struct SeekSpec {
+    std::string field;  // optional: SEEK <field> <value>
+    std::string value;  // required
+};
+
+static inline bool parse_seek_spec(std::istringstream& iss, SeekSpec& out) {
+    out = SeekSpec{};
+    std::string a, b;
+    if (!(iss >> a)) return false;
+    if (iss >> b) {
+        out.field = a;
+        out.value = trim_copy(b + std::string(std::istreambuf_iterator<char>(iss), {}));
+        out.value = trim_copy(out.value);
+        return !out.value.empty();
+    }
+    out.value = a;
+    return !out.value.empty();
+}
+
+} // anon
+
+// =============================================================================
+// Minimal LMDB CLI helpers (self-contained)
+// =============================================================================
+namespace dottalk::lmdbcli {
+
+#if DT_HAVE_LMDB
+
+static std::string g_envdir{};
+static std::string g_tag{};
+static bool g_opened = false;
+
+static inline const char* mdb_err(int rc) {
+    const char* s = mdb_strerror(rc);
+    return s ? s : "LMDB error";
+}
+
+static inline bool env_exists(const std::string& envdir) {
+    namespace fs = std::filesystem;
+    std::error_code ec{};
+    if (envdir.empty()) return false;
+    fs::path p(envdir);
+    if (!fs::exists(p, ec) || !fs::is_directory(p, ec)) return false;
+    if (!fs::exists(p / "data.mdb", ec)) return false;
+    return true;
+}
+
+static inline bool is_open() {
+    return g_opened && !g_envdir.empty();
+}
+
+static inline void clear() {
+    g_envdir.clear();
+    g_tag.clear();
+    g_opened = false;
+}
+
+static inline bool use_env(const std::string& envdir, std::string* err) {
+    if (!env_exists(envdir)) {
+        if (err) *err = "envdir not found or missing data.mdb";
+        return false;
+    }
+    g_envdir = envdir;
+    g_opened = true;
+    if (err) err->clear();
+    return true;
+}
+
+static inline bool use_db(const std::string& tag_upper, std::string* err) {
+    if (!is_open()) {
+        if (err) *err = "LMDB env not open";
+        return false;
+    }
+    if (tag_upper.empty()) {
+        if (err) *err = "empty tag";
+        return false;
+    }
+    g_tag = tag_upper;
+    if (err) err->clear();
+    return true;
+}
+
+// Resolve keylen/field_type for a DBF field name.
+// This assumes: LMDB tag corresponds to a field name (your current BUILDLMDB contract).
+struct KeySpec {
+    std::string field;
+    uint16_t keylen = 0;
+    char field_type = 0; // DBF type
+};
+
+static inline bool resolve_key_spec(xbase::DbArea& a, const std::string& field, KeySpec& out) {
+    out = KeySpec{};
+    if (!a.isOpen()) return false;
+    const auto& Fs = a.fields();
+    for (size_t i = 0; i < Fs.size(); ++i) {
+        if (textio::ieq(Fs[i].name, field)) {
+            out.field = Fs[i].name;
+            out.keylen = static_cast<uint16_t>(Fs[i].length);
+            out.field_type = Fs[i].type;
+            return out.keylen > 0;
+        }
+    }
+    return false;
+}
+
+// Normalize a base key (upper + pad/truncate to keylen).
+// BUILDLMDB stores composite key = base(keylen bytes) || recno(u64 LE).
+static inline std::vector<std::uint8_t> make_composite_probe(const std::string& base_in, uint16_t keylen, std::uint64_t recno) {
+    std::string base = trim_copy(base_in);
+    base = upper_copy(base);
+    if (base.size() > keylen) base.resize(keylen);
+    if (base.size() < keylen) base.append(static_cast<size_t>(keylen - base.size()), ' ');
+
+    std::vector<std::uint8_t> buf;
+    buf.resize(static_cast<size_t>(keylen) + 8u);
+
+    std::memcpy(buf.data(), base.data(), keylen);
+
+    // recno LE u64
+    for (int i = 0; i < 8; ++i) {
+        buf[static_cast<size_t>(keylen) + static_cast<size_t>(i)] =
+            static_cast<std::uint8_t>((recno >> (8u * i)) & 0xFFu);
+    }
+    return buf;
+}
+
+static inline std::uint64_t unpack_u64_le(const void* p, size_t n) {
+    if (!p || n < 8) return 0;
+    const auto* b = static_cast<const std::uint8_t*>(p);
+    std::uint64_t u = 0;
+    for (int i = 0; i < 8; ++i) u |= (std::uint64_t)b[i] << (8u * i);
+    return u;
+}
+
+// Seek the first record for a given base key (positions to first dup).
+// Returns found recno (DBF recno) and found_key (base key string, trimmed).
+static inline bool seek_key(const std::string& base_key,
+                            xbase::DbArea& area,
+                            const KeySpec& ks,
+                            int32_t& out_recno,
+                            std::string& out_key)
+{
+    out_recno = 0;
+    out_key.clear();
+
+    if (!is_open()) return false;
+    if (g_tag.empty()) return false;
+    if (!area.isOpen()) return false;
+    if (ks.keylen == 0) return false;
+
+    MDB_env* env = nullptr;
+    MDB_txn* txn = nullptr;
+    MDB_dbi dbi = 0;
+    MDB_cursor* cur = nullptr;
+
+    auto cleanup = [&]() {
+        if (cur) { mdb_cursor_close(cur); cur = nullptr; }
+        if (txn) { mdb_txn_abort(txn); txn = nullptr; }
+        if (env) { mdb_env_close(env); env = nullptr; }
+    };
+
+    int rc = mdb_env_create(&env);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_env_set_maxdbs(env, 1024);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_env_open(env, g_envdir.c_str(), MDB_RDONLY, 0664);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_txn_begin(env, nullptr, MDB_RDONLY, &txn);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_dbi_open(txn, g_tag.c_str(), 0, &dbi);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_cursor_open(txn, dbi, &cur);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    // Composite probe: base || recno(0) so SET_RANGE lands on first entry for that base
+    std::vector<std::uint8_t> probe = make_composite_probe(base_key, ks.keylen, 0ULL);
+
+    MDB_val k{}, v{};
+    k.mv_data = probe.data();
+    k.mv_size = probe.size();
+
+    rc = mdb_cursor_get(cur, &k, &v, MDB_SET_RANGE);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    // Confirm base matches (first keylen bytes)
+    if (k.mv_size < ks.keylen) { cleanup(); return false; }
+    const auto* kb = static_cast<const std::uint8_t*>(k.mv_data);
+    if (std::memcmp(kb, probe.data(), ks.keylen) != 0) { cleanup(); return false; }
+
+    // Value stores recno (u64 LE)
+    std::uint64_t rec = unpack_u64_le(v.mv_data, v.mv_size);
+    if (rec < 1 || rec > static_cast<std::uint64_t>(area.recCount())) { cleanup(); return false; }
+
+    out_recno = static_cast<int32_t>(rec);
+
+    // Extract base key for display
+    std::string base(reinterpret_cast<const char*>(kb), reinterpret_cast<const char*>(kb) + ks.keylen);
+    out_key = trim_copy(base);
+
+    cleanup();
+    return true;
+}
+
+#else // !DT_HAVE_LMDB
+
+static inline bool is_open() { return false; }
+static inline void clear() {}
+static inline bool use_env(const std::string&, std::string* err) { if (err) *err = "LMDB not available"; return false; }
+static inline bool use_db(const std::string&, std::string* err) { if (err) *err = "LMDB not available"; return false; }
+
+struct KeySpec { std::string field; uint16_t keylen = 0; char field_type = 0; };
+static inline bool resolve_key_spec(xbase::DbArea&, const std::string&, KeySpec&) { return false; }
+
+static inline bool seek_key(const std::string&, xbase::DbArea&, const KeySpec&, int32_t&, std::string&) { return false; }
+
+#endif
+
+} // namespace dottalk::lmdbcli
+
+// =============================================================================
+// SEEK command
+// =============================================================================
+void cmd_SEEK(xbase::DbArea& a, std::istringstream& iss)
+{
+    if (!a.isOpen()) {
+        std::cout << "SEEK: No table open.\n";
+        return;
+    }
+
+    SeekSpec spec{};
+    if (!parse_seek_spec(iss, spec)) {
+        std::cout << "SEEK: syntax: SEEK [<field>] <value>\n";
+        return;
+    }
+
+    // If LMDB is active, prefer LMDB seek.
+    // (This assumes SETLMDB has already selected envdir + tag.)
+#if DT_HAVE_LMDB
+    if (dottalk::lmdbcli::is_open()) {
+        // Determine which field to use as key (field arg wins, else activeTag if present).
+        std::string field = spec.field;
+        if (field.empty()) {
+            // Try orderstate activeTag first. If empty, we can still seek by fieldless value only if
+            // your LMDB tag is known elsewhere; for now require field or activeTag.
+            const std::string tag = orderstate::activeTag(a);
+            if (!tag.empty()) field = tag;
+        }
+
+        if (field.empty()) {
+            std::cout << "SEEK: LMDB is active, but no field/tag selected (use SEEK <field> <value>)\n";
+            return;
+        }
+
+        dottalk::lmdbcli::KeySpec keySpec{};
+        if (!dottalk::lmdbcli::resolve_key_spec(a, field, keySpec)) {
+            std::cout << "SEEK: LMDB key field '" << field << "' not found in table.\n";
+            return;
+        }
+
+        // Normalize user key for LMDB seek.
+        // - Strip a single pair of outer quotes.
+        // - Leave further normalization (uppercasing/padding) to lmdbcli::seek_key,
+        //   which follows the BUILDLMDB storage rules.
+        std::string needle = spec.value;
+        if (needle.size() >= 2) {
+            const char q0 = needle.front();
+            const char q1 = needle.back();
+            if ((q0 == '"' && q1 == '"') || (q0 == '\'' && q1 == '\'')) {
+                needle = needle.substr(1, needle.size() - 2);
+            }
+        }
+
+        int32_t found_recno = 0;
+        std::string found_key;
+
+        if (!dottalk::lmdbcli::seek_key(needle, a, keySpec, found_recno, found_key)) {
+            std::cout << "SEEK: not found\n";
+            return;
+        }
+
+        if (!a.gotoRec(found_recno) || !a.readCurrent()) {
+            std::cout << "SEEK: found recno " << found_recno << " but failed to read record\n";
+            return;
+        }
+
+        std::cout << "SEEK: found '" << found_key << "' at recno " << found_recno << "\n";
+        return;
+    }
+#endif
+
+    // Fallback: physical-order locate (simple and safe; no index assumptions).
+    // This is intentionally conservative until SEEK semantics are finalized across INX/CNX/CDX.
+    const std::string target = upper_copy(trim_copy(spec.value));
+    if (target.empty()) {
+        std::cout << "SEEK: empty key\n";
+        return;
+    }
+
+    // If user specified a field, search that field; else default to first field.
+    int fld = 1;
+    if (!spec.field.empty()) {
+        const auto& Fs = a.fields();
+        for (size_t i = 0; i < Fs.size(); ++i) {
+            if (textio::ieq(Fs[i].name, spec.field)) { fld = static_cast<int>(i) + 1; break; }
+        }
+    }
+
+    const int32_t total = a.recCount();
+    for (int32_t rn = 1; rn <= total; ++rn) {
+        if (!a.gotoRec(rn) || !a.readCurrent()) continue;
+        std::string v = trim_copy(a.get(fld));
+        v = upper_copy(v);
+        if (v == target) {
+            std::cout << "SEEK: found at recno " << rn << "\n";
+            return;
+        }
+    }
+
+    std::cout << "SEEK: not found\n";
+}

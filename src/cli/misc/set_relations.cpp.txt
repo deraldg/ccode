@@ -1,0 +1,366 @@
+// src/cli/set_relations.cpp — SET RELATIONS with tuple (multi-field) key support,
+// engine-backed (no workareas.hpp).
+//
+// Commands (registered in shell.cpp):
+//   SET RELATIONS CLEAR
+//   SET RELATIONS TO <fieldA[,fieldB,...]> INTO <areaNo|ALIAS> [ADDITIVE]
+//   RELATIONS LIST
+//   RELATIONS REFRESH
+//
+// Notes:
+// - Tuple keys are built by joining field values with ASCII Unit Separator '\x1F'.
+// - Child positioning is a linear TOP..SKIP scan (replace with SEEK when index API is ready).
+// - Area resolution supports numeric index or case-insensitive match to DbArea::name() (stem or full).
+// - Uses the global XBaseEngine accessor provided by shell.cpp: shell_engine().
+
+#include "xbase.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+using xbase::DbArea;
+
+// Provided by src/cli/shell.cpp
+extern "C" xbase::XBaseEngine* shell_engine();
+
+// ---------- small utils ----------
+
+static inline std::string trim(std::string s) {
+    auto ws = [](unsigned char ch){ return std::isspace(ch) != 0; };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c){ return !ws(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c){ return !ws(c); }).base(), s.end());
+    return s;
+}
+
+static inline std::vector<std::string> split_csv(const std::string& s) {
+    std::vector<std::string> out;
+    std::string tok;
+    std::istringstream ss(s);
+    while (std::getline(ss, tok, ',')) {
+        tok = trim(tok);
+        if (!tok.empty()) out.push_back(tok);
+    }
+    return out;
+}
+
+static inline std::string lower(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return char(std::tolower(c)); });
+    return s;
+}
+
+static inline bool ieq(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i=0;i<a.size();++i) {
+        if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i])) return false;
+    }
+    return true;
+}
+
+static inline std::string stem_of(const std::string& pathLike) {
+    // crude: strip trailing extension after last dot and directory after last slash/backslash
+    std::string s = pathLike;
+    size_t pos = s.find_last_of("/\\");
+    if (pos != std::string::npos) s = s.substr(pos+1);
+    pos = s.find_last_of('.');
+    if (pos != std::string::npos) s = s.substr(0, pos);
+    return s;
+}
+
+// ---------- engine helpers ----------
+
+static inline xbase::XBaseEngine* eng_or_complain() {
+    auto* e = shell_engine();
+    if (!e) std::cout << "[RELATIONS] Error: no engine available.\n";
+    return e;
+}
+
+static inline int current_area_index() {
+    if (auto* e = eng_or_complain()) return e->currentArea();
+    return -1;
+}
+
+static inline DbArea* area_by_index(int idx) {
+    auto* e = shell_engine();
+    if (!e) return nullptr;
+    if (idx < 0 || idx >= xbase::MAX_AREA) return nullptr;
+    return &e->area(idx);
+}
+
+// Best-effort alias/area resolver: try number; else scan names/stems case-insensitively.
+static inline std::optional<int> resolve_area_index_from_token(const std::string& token) {
+    // numeric?
+    try {
+        size_t pos = 0;
+        long v = std::stol(token, &pos, 10);
+        if (pos == token.size() && v >= 0 && v < xbase::MAX_AREA) return static_cast<int>(v);
+    } catch (...) {}
+
+    // name / stem match
+    auto* e = shell_engine();
+    if (!e) return std::nullopt;
+
+    const std::string want = lower(token);
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        DbArea& A = e->area(i);
+        if (!A.isOpen()) continue;
+        std::string nm = A.name();
+        std::string stem = stem_of(nm);
+        if (lower(nm) == want || lower(stem) == want) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
+// Try to discover an area index for a DbArea* by scanning engine.
+static inline std::optional<int> area_index_of(DbArea* ptr) {
+    if (!ptr) return std::nullopt;
+    auto* e = shell_engine();
+    if (!e) return std::nullopt;
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        if (&e->area(i) == ptr) return i;
+    }
+    return std::nullopt;
+}
+
+// ---------- field & tuple helpers ----------
+
+static inline std::optional<int> find_field_index(DbArea& A, const std::string& name) {
+    const auto& f = A.fields(); // vector<FieldDef>{ name, type, length, decimals }
+    for (size_t i=0;i<f.size();++i) {
+        if (ieq(f[i].name, name)) return static_cast<int>(i + 1); // 1-based
+    }
+    return std::nullopt;
+}
+
+static inline std::string get_field_as_string(DbArea& A, int one_based_idx) {
+    return A.get(one_based_idx);
+}
+
+static inline std::string build_tuple_key(DbArea& A, const std::vector<std::string>& field_names) {
+    static constexpr char SEP = '\x1F'; // ASCII Unit Separator
+    std::string out;
+    bool first = true;
+    for (const auto& fname : field_names) {
+        auto idx = find_field_index(A, fname);
+        std::string part = idx ? get_field_as_string(A, *idx) : std::string{};
+        if (!first) out.push_back(SEP);
+        out += part;
+        first = false;
+    }
+    return out;
+}
+
+// ---------- relation registry ----------
+
+struct Relation {
+    int child_area = -1;
+    std::vector<std::string> tuple_fields; // ordered
+};
+
+static std::unordered_map<int, std::vector<Relation>> g_relations_by_parent; // parent_area -> list
+
+static inline std::vector<Relation>& relations_for_parent(int parent_area) {
+    return g_relations_by_parent[parent_area];
+}
+
+static inline void clear_relations(int parent_area) {
+    g_relations_by_parent.erase(parent_area);
+}
+
+// ---------- child positioning (linear scan for now) ----------
+
+static bool child_first_match(DbArea& child, const std::vector<std::string>& tuple_fields, const std::string& parent_key) {
+    if (!child.isOpen()) return false;
+    if (!child.top()) return false;
+    const int n = child.recCount();
+    for (int i = 0; i < n; ++i) {
+        const std::string key = build_tuple_key(child, tuple_fields);
+        if (key == parent_key) {
+            return true; // positioned at first match
+        }
+        if (!child.skip(1)) break;
+    }
+    return false;
+}
+
+static void refresh_relations_for_parent(int parent_area) {
+    auto it = g_relations_by_parent.find(parent_area);
+    if (it == g_relations_by_parent.end()) return;
+
+    DbArea* parent = area_by_index(parent_area);
+    if (!parent || !parent->isOpen()) return;
+
+    for (const auto& rel : it->second) {
+        DbArea* child = area_by_index(rel.child_area);
+        if (!child) continue;
+
+        const std::string pkey = build_tuple_key(*parent, rel.tuple_fields);
+        const bool ok = child_first_match(*child, rel.tuple_fields, pkey);
+
+        std::cout << "[RELATIONS] parent " << parent_area
+                  << " -> child " << rel.child_area
+                  << " via (";
+        for (size_t i=0;i<rel.tuple_fields.size();++i) {
+            if (i) std::cout << ",";
+            std::cout << rel.tuple_fields[i];
+        }
+        std::cout << "): " << (ok ? "positioned" : "no match") << "\n";
+    }
+}
+
+// ---------- parsing ----------
+
+static bool parse_to_into_pair(std::istringstream& in,
+                               std::vector<std::string>& tuple_fields,
+                               int& child_area_out)
+{
+    // Expect: TO <fieldA[,fieldB,...]> INTO <areaNo|ALIAS>
+    std::string tok;
+    if (!(in >> tok) || !ieq(tok, "TO")) return false;
+
+    // Collect tuple spec until we encounter INTO
+    std::string accum;
+    std::streampos last_pos = in.tellg();
+    while (in >> tok) {
+        if (ieq(tok, "INTO")) break;
+        if (!accum.empty()) accum.push_back(' ');
+        accum += tok;
+        last_pos = in.tellg();
+    }
+
+    if (!ieq(tok, "INTO")) {
+        // If we never saw INTO, try single-token tupleSpec followed by INTO
+        in.clear();
+        in.seekg(last_pos);
+        std::string tuple_one;
+        if (!(in >> tuple_one)) return false;
+        if (!(in >> tok) || !ieq(tok, "INTO")) return false;
+        accum = std::move(tuple_one);
+    }
+
+    accum = trim(accum);
+    if (accum.empty()) return false;
+
+    // Destination
+    std::string dest;
+    if (!(in >> dest)) return false;
+
+    auto area_index = resolve_area_index_from_token(dest);
+    if (!area_index) {
+        std::cout << "SET RELATIONS: Unable to resolve child area from '" << dest << "'.\n";
+        return false;
+    }
+
+    // Build tuple vector
+    tuple_fields = split_csv(accum);
+    if (tuple_fields.empty()) {
+        std::cout << "SET RELATIONS: Empty tuple field list.\n";
+        return false;
+    }
+
+    child_area_out = *area_index;
+    return true;
+}
+
+// ---------- command entrypoints (exported) ----------
+
+void cmd_SET_RELATIONS(DbArea& /*cur*/, std::istringstream& in) {
+    const int parent_area = current_area_index();
+    if (parent_area < 0) {
+        std::cout << "SET RELATIONS: No active work area.\n";
+        return;
+    }
+
+    // Peek first token to route
+    std::string first;
+    if (!(in >> first)) {
+        std::cout << "Usage:\n"
+                     "  SET RELATIONS CLEAR\n"
+                     "  SET RELATIONS TO <fieldA[,fieldB,...]> INTO <areaNo|ALIAS> [ADDITIVE]\n";
+        return;
+    }
+
+    if (ieq(first, "CLEAR")) {
+        clear_relations(parent_area);
+        std::cout << "SET RELATIONS: Cleared for parent area " << parent_area << ".\n";
+        return;
+    }
+
+    if (!ieq(first, "TO")) {
+        std::cout << "SET RELATIONS: Expected TO or CLEAR.\n";
+        return;
+    }
+
+    // Rewind to let parser see the TO again
+    in.clear();
+    in.seekg(0, std::ios::beg);
+
+    std::vector<std::string> tuple_fields;
+    int child_area = -1;
+    if (!parse_to_into_pair(in, tuple_fields, child_area)) {
+        std::cout << "SET RELATIONS: Parse error (expected: TO <tuple> INTO <area|alias>).\n";
+        return;
+    }
+
+    bool additive = false;
+    {
+        std::string tok;
+        if (in >> tok) {
+            if (ieq(tok, "ADDITIVE")) additive = true;
+        }
+    }
+
+    if (!additive) clear_relations(parent_area);
+
+    Relation R;
+    R.child_area = child_area;
+    R.tuple_fields = std::move(tuple_fields);
+    relations_for_parent(parent_area).push_back(std::move(R));
+
+    const auto& v = relations_for_parent(parent_area).back().tuple_fields;
+    std::cout << "SET RELATIONS: parent " << parent_area
+              << " -> child " << child_area
+              << " via (";
+    for (size_t i=0;i<v.size();++i) { if (i) std::cout << ","; std::cout << v[i]; }
+    std::cout << ")";
+    if (additive) std::cout << " [ADDITIVE]";
+    std::cout << ".\n";
+}
+
+void cmd_RELATIONS_REFRESH(DbArea& /*cur*/, std::istringstream& /*in*/) {
+    const int parent_area = current_area_index();
+    if (parent_area < 0) {
+        std::cout << "RELATIONS REFRESH: No active work area.\n";
+        return;
+    }
+    refresh_relations_for_parent(parent_area);
+}
+
+void cmd_RELATIONS_LIST(DbArea& /*cur*/, std::istringstream& /*in*/) {
+    const int parent_area = current_area_index();
+    if (parent_area < 0) {
+        std::cout << "RELATIONS LIST: No active work area.\n";
+        return;
+    }
+    auto it = g_relations_by_parent.find(parent_area);
+    if (it == g_relations_by_parent.end() || it->second.empty()) {
+        std::cout << "No relations for parent area " << parent_area << ".\n";
+        return;
+    }
+    std::cout << "Relations for parent area " << parent_area << ":\n";
+    int i = 1;
+    for (const auto& r : it->second) {
+        std::cout << "  " << i++ << ") -> child area " << r.child_area << " via (";
+        for (size_t j=0;j<r.tuple_fields.size();++j) { if (j) std::cout << ","; std::cout << r.tuple_fields[j]; }
+        std::cout << ")\n";
+    }
+}

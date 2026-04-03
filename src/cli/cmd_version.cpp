@@ -2,7 +2,8 @@
 #include <iostream>
 
 #ifndef DOTTALKPP_VERSION
-#define DOTTALKPP_VERSION "alpha-v6.0"
+// #define DOTTALKPP_VERSION "alpha-v15.0"
+#define DOTTALKPP_VERSION "beta-0"
 #endif
 
 void cmd_VERSION(xbase::DbArea& area, std::istringstream& args) {
@@ -14,3 +15,5 @@ void cmd_VERSION(xbase::DbArea& area, std::istringstream& args) {
 
 }
  
+
+

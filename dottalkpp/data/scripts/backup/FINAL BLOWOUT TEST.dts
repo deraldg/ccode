@@ -1,0 +1,83 @@
+* ============================================================
+* FINAL BLOWOUT TEST (PARKED / DISABLED)
+*
+* Purpose:
+*   Reserved slot for the eventual large-size X64 memo stress test.
+*
+* Status:
+*   DO NOT ENABLE until:
+*     - CREATE X64 is stable
+*     - repeated memo self-append is stable
+*     - close/reopen persistence is stable
+*     - clear/reinsert is stable
+*     - no corruption/truncation is observed in normal growth tests
+*
+* Intended future behavior:
+*   Grow NOTES far beyond the baseline and stage-2 tests, using a
+*   dedicated large-chunk method once available.
+*
+* Preferred future implementation:
+*   1) file-to-memo ingestion, or
+*   2) purpose-built MEMOFILL / MEMOSTRESS command, or
+*   3) loop/variable support mature enough for safe scripted growth
+*
+* Suggested future checkpoints:
+*   - 1 MB
+*   - 10 MB
+*   - 100 MB
+*   - 1 GB
+*   - 2 GB
+*   - 4 GB+
+*
+* Suggested future proof points:
+*   - write succeeds
+*   - reopen succeeds
+*   - DISPLAY still works
+*   - TUPLE still works sensibly
+*   - memo clear still works
+*   - reinsert after clear still works
+*   - no DBF/DTX corruption
+*
+* ------------------------------------------------------------
+* PARKED BLOWOUT TEMPLATE
+* ------------------------------------------------------------
+*
+* ECHO ===== FINAL BLOWOUT TEST ENABLED =====
+* CLOSE
+* USE MEMO_SIZE_X64
+* DISPLAY
+* TUPLE *
+*
+* REPLACE NOTES WITH NOTES + " [BLOWOUT-START]"
+*
+* ------------------------------------------------------------
+* Replace the following parked section with the real future
+* large-growth mechanism once it exists.
+*
+* Examples of future intended forms:
+*
+*   * Option A: dedicated command
+*   * MEMOSTRESS NOTES 100MB
+*   * MEMOSTRESS NOTES 1GB
+*
+*   * Option B: file ingest
+*   * REPLACE NOTES WITH FILETOSTR("big_payload_100mb.txt")
+*   * REPLACE NOTES WITH NOTES + FILETOSTR("big_payload_1gb_part01.txt")
+*
+*   * Option C: mature loop support
+*   * WHILE <target not reached>
+*   *     REPLACE NOTES WITH NOTES + <chunk>
+*   * ENDWHILE
+*
+* ------------------------------------------------------------
+*
+* DISPLAY
+* TUPLE *
+* CLOSE
+* USE MEMO_SIZE_X64
+* DISPLAY
+* TUPLE *
+*
+* ECHO ===== FINAL BLOWOUT TEST COMPLETE =====
+*
+* ============================================================

@@ -1,0 +1,4 @@
+ECHO [CHILD_NESTED] entered
+ECHO [CHILD_NESTED] attempting nested subscript call
+DOTSCRIPT self_call.dts
+ECHO [CHILD_NESTED] leaving

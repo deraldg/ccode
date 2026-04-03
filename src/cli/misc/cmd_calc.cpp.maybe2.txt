@@ -1,0 +1,541 @@
+// src/cli/cmd_calc.cpp
+//
+// CALC command (DotTalk++).
+//
+// Goals:
+// - Keep "date algebra" fast (date +/- days, date - date).
+// - Support date/time builtins via fn_date registry (DATE/TODAY/TIME/NOW/DATETIME/CTOD/DATEADD/DATEDIFF/DTOC).
+// - For TUPLE, prefer eval_string_value_expr() so string builtins/field refs print strings.
+// - Delegate everything else to dottalk::expr::eval_any() OR (for predicates) compile_predicate().
+//
+// Notes:
+// - CALCWRITE ambiguity: any expression containing '=', '>=', '<=' should be wrapped in parentheses
+//   to avoid being treated as assignment syntax. This file preserves that behavior.
+//
+// - This implementation also tries eval_string_value_expr() as a fallback for non-TUPLE expressions
+//   that look like function calls / contain quotes, because many string/numeric builtins live there.
+
+#include "cli/cmd_calc.hpp"
+
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "cli/expr/evaluate.hpp"   // compile_predicate (same path EVAL uses)
+#include "cli/expr/fn_date.hpp"
+#include "cli/expr/value_eval.hpp" // eval_string_value_expr
+#include "cli_comment.hpp"         // cliutil::strip_inline_comments
+#include "xbase.hpp"
+
+// Forward decl (defined in cmd_calcwrite.cpp in your tree)
+void cmd_CALCWRITE(xbase::DbArea& area, std::istringstream& args);
+
+namespace {
+
+static inline std::string trim(std::string s) {
+    size_t b = 0;
+    while (b < s.size() && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
+    size_t e = s.size();
+    while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1]))) --e;
+    return s.substr(b, e - b);
+}
+
+static inline std::string up(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
+}
+
+static bool starts_with_kw_ci(const std::string& s, const char* kw_upper) {
+    const std::string t = trim(s);
+    const std::string U = up(t);
+    const std::string k = kw_upper;
+    if (U.rfind(k, 0) != 0) return false;
+    if (U.size() == k.size()) return true;
+    return std::isspace(static_cast<unsigned char>(U[k.size()])) != 0;
+}
+
+static std::string strip_outer_quotes(std::string s) {
+    s = trim(std::move(s));
+    if (s.size() >= 2) {
+        const char a = s.front();
+        const char b = s.back();
+        if ((a == '"' && b == '"') || (a == '\'' && b == '\'')) {
+            s = s.substr(1, s.size() - 2);
+        }
+    }
+    return trim(std::move(s));
+}
+
+static std::string digits_only(std::string_view sv) {
+    std::string out;
+    out.reserve(sv.size());
+    for (char c : sv) {
+        if (std::isdigit(static_cast<unsigned char>(c))) out.push_back(c);
+    }
+    return out;
+}
+
+// parse "lhs = rhs" only at top level (not inside quotes / parens).
+static bool parse_assign(const std::string& src, std::string& lhs, std::string& rhs) {
+    bool in_s = false, in_d = false;
+    int depth = 0;
+    for (size_t i = 0; i < src.size(); ++i) {
+        const char c = src[i];
+        if (c == '"' && !in_s) { in_d = !in_d; continue; }
+        if (c == '\'' && !in_d) { in_s = !in_s; continue; }
+        if (in_s || in_d) continue;
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { if (depth > 0) --depth; continue; }
+        if (depth == 0 && c == '=') {
+            lhs = trim(src.substr(0, i));
+            rhs = trim(src.substr(i + 1));
+            return !lhs.empty() && !rhs.empty();
+        }
+    }
+    return false;
+}
+
+static bool split_top_level_binary(const std::string& src, char op, std::string& left, std::string& right) {
+    bool in_s = false, in_d = false;
+    int depth = 0;
+    bool have_left_nonws = false;
+
+    for (size_t i = 0; i < src.size(); ++i) {
+        const char c = src[i];
+        if (c == '"' && !in_s) { in_d = !in_d; continue; }
+        if (c == '\'' && !in_d) { in_s = !in_s; continue; }
+        if (in_s || in_d) continue;
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { if (depth > 0) --depth; continue; }
+        if (depth != 0) continue;
+
+        if (!std::isspace(static_cast<unsigned char>(c))) have_left_nonws = true;
+
+        if (c == op) {
+            if (op == '-' && !have_left_nonws) continue; // unary leading '-'
+            left = trim(src.substr(0, i));
+            right = trim(src.substr(i + 1));
+            return !left.empty() && !right.empty();
+        }
+    }
+    return false;
+}
+
+static bool try_parse_int(const std::string& s, int& out) {
+    const std::string t = trim(s);
+    if (t.empty()) return false;
+    char* end = nullptr;
+    const long v = std::strtol(t.c_str(), &end, 10);
+    if (!end || *end != '\0') return false;
+    out = static_cast<int>(v);
+    return true;
+}
+
+static bool is_ident_like(const std::string& s) {
+    if (s.empty()) return false;
+    if (!(std::isalpha(static_cast<unsigned char>(s[0])) || s[0] == '_')) return false;
+    for (char c : s) {
+        const unsigned char uc = static_cast<unsigned char>(c);
+        if (!(std::isalnum(uc) || c == '_')) return false;
+    }
+    return true;
+}
+
+static int field_index_ci(xbase::DbArea& area, const std::string& name) {
+    const std::string want = up(trim(name));
+    if (want.empty()) return -1;
+    const auto defs = area.fields();
+    for (size_t i = 0; i < defs.size(); ++i) {
+        if (up(defs[i].name) == want) return static_cast<int>(i) + 1;
+    }
+    return -1;
+}
+
+// ------------------------------
+// Date builtin registry glue
+// ------------------------------
+static bool call_date_builtin(const std::string& name_upper,
+                             const std::vector<std::string>& argv,
+                             std::string& out) {
+    const auto* specs = dottalk::expr::date_fn_specs();
+    const std::size_t n = dottalk::expr::date_fn_specs_count();
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto& s = specs[i];
+        if (name_upper == s.name) {
+            const int argc = static_cast<int>(argv.size());
+            if (argc < s.minArgs || argc > s.maxArgs) return false;
+            try {
+                out = s.fn(argv);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        }
+    }
+    return false;
+}
+
+static bool split_call(const std::string& src, std::string& name_upper, std::string& inside) {
+    const std::string t = trim(src);
+    const auto lp = t.find('(');
+    if (lp == std::string::npos) return false;
+    if (t.empty() || t.back() != ')') return false;
+    name_upper = up(trim(t.substr(0, lp)));
+    inside = trim(t.substr(lp + 1, (t.size() - 1) - (lp + 1)));
+    return !name_upper.empty();
+}
+
+static std::vector<std::string> split_args_csv(const std::string& inside) {
+    std::vector<std::string> out;
+    bool in_s = false, in_d = false;
+    int depth = 0;
+    size_t start = 0;
+
+    for (size_t i = 0; i <= inside.size(); ++i) {
+        const char c = (i < inside.size()) ? inside[i] : ',';
+        if (i < inside.size()) {
+            if (c == '"' && !in_s) { in_d = !in_d; continue; }
+            if (c == '\'' && !in_d) { in_s = !in_s; continue; }
+            if (in_s || in_d) continue;
+            if (c == '(') { ++depth; continue; }
+            if (c == ')') { if (depth > 0) --depth; continue; }
+        }
+        if (depth == 0 && !in_s && !in_d && c == ',') {
+            out.push_back(trim(inside.substr(start, i - start)));
+            start = i + 1;
+        }
+    }
+
+    if (out.size() == 1 && out[0].empty()) out.clear();
+    return out;
+}
+
+static std::optional<std::string> try_eval_date_fn_call(xbase::DbArea* areaOrNull,
+                                                       const std::string& expr,
+                                                       int depth = 0);
+
+static std::string resolve_date_arg(xbase::DbArea* areaOrNull, const std::string& tok, int depth) {
+    std::string t = trim(tok);
+    if (t.empty()) return t;
+
+    // Nested date fn call (DATE(), CTOD(...), DATEADD(...), DATEDIFF(...), etc.)
+    if (depth < 2 && t.find('(') != std::string::npos && t.back() == ')') {
+        if (auto v = try_eval_date_fn_call(areaOrNull, t, depth + 1)) return *v;
+    }
+
+    // Quoted literal
+    if ((t.size() >= 2) && ((t.front() == '"' && t.back() == '"') || (t.front() == '\'' && t.back() == '\''))) {
+        return strip_outer_quotes(t);
+    }
+
+    // Field substitution (only for identifiers)
+    if (areaOrNull && areaOrNull->isOpen() && is_ident_like(t)) {
+        const int idx = field_index_ci(*areaOrNull, t);
+        if (idx > 0) {
+            try { return areaOrNull->get(idx); } catch (...) { /* fall through */ }
+        }
+    }
+
+    return t;
+}
+
+static std::optional<std::string> try_eval_date_fn_call(xbase::DbArea* areaOrNull,
+                                                       const std::string& expr,
+                                                       int depth) {
+    std::string name, inside;
+    if (!split_call(expr, name, inside)) return std::nullopt;
+
+    std::vector<std::string> argv = split_args_csv(inside);
+    for (std::string& a : argv) a = resolve_date_arg(areaOrNull, a, depth);
+
+    std::string out;
+    if (call_date_builtin(name, argv, out)) return out;
+    return std::nullopt;
+}
+
+// ------------------------------
+// Date atoms + date algebra
+// ------------------------------
+static std::optional<std::string> eval_date_atom_to_date8(xbase::DbArea& area, const std::string& atom) {
+    const std::string t = trim(atom);
+    if (t.empty()) return std::nullopt;
+
+    // Builtin call (DATE(), TODAY(), CTOD(...), DATEADD(...), etc.)
+    if (auto v = try_eval_date_fn_call(&area, t, 0)) {
+        const std::string dig = digits_only(*v);
+        if (dig.size() >= 8) return dig.substr(0, 8);
+        return std::nullopt;
+    }
+
+    // Field ref
+    if (area.isOpen() && is_ident_like(t)) {
+        const int idx = field_index_ci(area, t);
+        if (idx > 0) {
+            std::string raw;
+            try { raw = area.get(idx); } catch (...) { return std::nullopt; }
+            const std::string dig = digits_only(raw);
+            if (dig.empty()) return std::nullopt;
+            if (dig.size() >= 8) return dig.substr(0, 8);
+            return std::nullopt;
+        }
+    }
+
+    // Literal date form
+    {
+        const std::string raw = strip_outer_quotes(t);
+        const std::string dig = digits_only(raw);
+        if (dig.empty()) return std::nullopt;
+        if (dig.size() >= 8) return dig.substr(0, 8);
+    }
+
+    return std::nullopt;
+}
+
+static std::optional<std::string> try_eval_date_algebra(xbase::DbArea& area, const std::string& expr) {
+    std::string L, R;
+
+    if (split_top_level_binary(expr, '+', L, R)) {
+        int days = 0;
+        if (!try_parse_int(R, days)) return std::nullopt;
+        auto d = eval_date_atom_to_date8(area, L);
+        if (!d) return std::nullopt;
+        std::string out;
+        if (call_date_builtin("DATEADD", {*d, std::to_string(days)}, out)) return out;
+        return std::nullopt;
+    }
+
+    if (split_top_level_binary(expr, '-', L, R)) {
+        int days = 0;
+        if (try_parse_int(R, days)) {
+            auto d = eval_date_atom_to_date8(area, L);
+            if (!d) return std::nullopt;
+            std::string out;
+            if (call_date_builtin("DATEADD", {*d, std::to_string(-days)}, out)) return out;
+            return std::nullopt;
+        }
+
+        auto a = eval_date_atom_to_date8(area, L);
+        auto b = eval_date_atom_to_date8(area, R);
+        if (!a || !b) return std::nullopt;
+        std::string out;
+        if (call_date_builtin("DATEDIFF", {*a, *b}, out)) return out;
+        return std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
+static std::string format_number(double v) {
+    const double iv = std::floor(v);
+    if (std::fabs(v - iv) < 1e-9) {
+        std::ostringstream o;
+        o << static_cast<long long>(iv);
+        return o.str();
+    }
+    std::ostringstream o;
+    o << std::fixed << std::setprecision(10) << v;
+    std::string s = o.str();
+    while (!s.empty() && s.find('.') != std::string::npos && s.back() == '0') s.pop_back();
+    if (!s.empty() && s.back() == '.') s.pop_back();
+    return s.empty() ? "0" : s;
+}
+
+static bool contains_quote(const std::string& src) {
+    for (char c : src) {
+        if (c == '"' || c == '\'') return true;
+    }
+    return false;
+}
+
+static bool looks_like_function_call(const std::string& src) {
+    // Rough: IDENT '(' ... ')' (ignores whitespace before '(')
+    std::string t = trim(src);
+    if (t.empty()) return false;
+    // find first '('
+    size_t lp = t.find('(');
+    if (lp == std::string::npos) return false;
+    // must end with ')'
+    if (t.back() != ')') return false;
+
+    std::string name = trim(t.substr(0, lp));
+    if (!is_ident_like(name)) return false;
+    return true;
+}
+
+// If it looks like a boolean predicate, route it through compile_predicate()
+// (same pipeline as EVALUATE/EVAL), since that handles arithmetic + precedence
+// inside comparisons correctly (and may support function calls within predicates).
+static bool looks_like_predicate(const std::string& src) {
+    bool in_s = false, in_d = false;
+    int depth = 0;
+
+    auto is_word_char = [](unsigned char c) {
+        return std::isalnum(c) || c == '_';
+    };
+
+    // operator scan outside quotes
+    for (size_t i = 0; i < src.size(); ++i) {
+        const char c = src[i];
+
+        if (c == '"' && !in_s) { in_d = !in_d; continue; }
+        if (c == '\'' && !in_d) { in_s = !in_s; continue; }
+        if (in_s || in_d) continue;
+
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { if (depth > 0) --depth; continue; }
+
+        // any compare operator is a strong predicate signal
+        if (c == '=' || c == '<' || c == '>') return true;
+    }
+
+    // keyword scan with word boundaries (case-insensitive)
+    std::string U = up(src);
+    auto has_kw = [&](const char* kw) {
+        const std::string K = kw;
+        size_t pos = 0;
+        while ((pos = U.find(K, pos)) != std::string::npos) {
+            bool left_ok = (pos == 0) || !is_word_char((unsigned char)U[pos - 1]);
+            bool right_ok = (pos + K.size() >= U.size()) || !is_word_char((unsigned char)U[pos + K.size()]);
+            if (left_ok && right_ok) return true;
+            pos += K.size();
+        }
+        return false;
+    };
+
+    if (has_kw("AND") || has_kw("OR") || has_kw("NOT")) return true;
+    return false;
+}
+
+} // namespace
+
+void cmd_CALC(xbase::DbArea& area, std::istringstream& args) {
+    std::string expr;
+    std::getline(args, expr);
+    expr = cliutil::strip_inline_comments(trim(expr));
+
+    if (expr.empty()) {
+        std::cout << ".F.\n";
+        return;
+    }
+
+    // Assignment => delegate to CALCWRITE
+    // (Only triggers on top-level '=' not inside parentheses.)
+    {
+        std::string lhs, rhs;
+        if (parse_assign(expr, lhs, rhs)) {
+            std::istringstream pass(lhs + " = " + rhs);
+            cmd_CALCWRITE(area, pass);
+            return;
+        }
+    }
+
+    // Date/time builtins should work regardless of DBF state (only when the whole expr is a date fn call).
+    if (auto out = try_eval_date_fn_call(area.isOpen() ? &area : nullptr, expr, 0)) {
+        std::cout << *out << "\n";
+        return;
+    }
+
+    if (!area.isOpen()) {
+        std::cout << "CALC: no file open.\n";
+        return;
+    }
+
+    bool tuple = false;
+    if (starts_with_kw_ci(expr, "TUPLE")) {
+        tuple = true;
+        expr = trim(expr.substr(5));
+        if (expr.empty()) {
+            std::cout << "\n";
+            return;
+        }
+    }
+
+    // Allow DTOC(<date>) and other date builtins inside "CALC TUPLE ...".
+    if (tuple) {
+        if (auto out = try_eval_date_fn_call(&area, expr, 0)) {
+            std::cout << *out << "\n";
+            return;
+        }
+    }
+
+    // Plain field => raw value
+    if (is_ident_like(expr)) {
+        const int idx = field_index_ci(area, expr);
+        if (idx > 0) {
+            try {
+                std::cout << area.get(idx) << "\n";
+                return;
+            } catch (...) {
+                // fall through
+            }
+        }
+    }
+
+    // Date algebra fast-path (DATE +/- n, datefield +/- n, date - date)
+    if (auto out = try_eval_date_algebra(area, expr)) {
+        std::cout << *out << "\n";
+        return;
+    }
+
+    // TUPLE => prefer string value-expr evaluation
+    if (tuple) {
+        std::string out;
+        if (dottalk::expr::eval_string_value_expr(area, expr, out)) {
+            std::cout << out << "\n";
+            return;
+        }
+        // If it fails, fall through to predicate/eval_any attempts.
+    }
+
+    // Predicate routing (same behavior as EVALUATE/EVAL).
+    if (looks_like_predicate(expr)) {
+        auto co = dottalk::expr::compile_predicate(expr, area);
+        if (co.pred) {
+            try {
+                const bool result = co.pred.eval(co.pred.impl, area);
+                std::cout << (result ? ".T." : ".F.") << "\n";
+                return;
+            } catch (...) {
+                std::cout << ".F.\n";
+                return;
+            }
+        }
+        // If not a predicate after all (or compile failed), fall through.
+    }
+
+    // Non-TUPLE fallback: if it looks like a function call and/or contains quotes,
+    // try string evaluator first. This fixes many "CALC UPPER("x")" style cases.
+    if (looks_like_function_call(expr) || contains_quote(expr)) {
+        std::string out;
+        if (dottalk::expr::eval_string_value_expr(area, expr, out)) {
+            std::cout << out << "\n";
+            return;
+        }
+    }
+
+    // Default: general expression evaluation (numbers/strings/bools)
+    std::string err;
+    const dottalk::expr::EvalValue ev = dottalk::expr::eval_any(area, expr, &err);
+    switch (ev.kind) {
+        case dottalk::expr::EvalValue::K_Bool:
+            std::cout << (ev.tf ? ".T." : ".F.") << "\n";
+            return;
+        case dottalk::expr::EvalValue::K_Number:
+            std::cout << format_number(ev.number) << "\n";
+            return;
+        case dottalk::expr::EvalValue::K_String:
+            std::cout << ev.text << "\n";
+            return;
+        default:
+            std::cout << ".F.\n";
+            return;
+    }
+}

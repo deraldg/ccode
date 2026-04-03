@@ -1,5 +1,5 @@
 // src/cli/cmd_clear.cpp
-// DotTalk++ — CLEAR (and CLS alias via registry)
+// DotTalk++ ? CLEAR (and CLS alias via registry)
 // Cross-platform default: Windows -> cls; others -> ANSI escape.
 // We keep it minimal and non-invasive (no engine touches).
 
@@ -19,3 +19,6 @@ void cmd_CLEAR(xbase::DbArea& /*a*/, std::istringstream& /*iss*/) {
     std::cout.flush();
 #endif
 }
+
+
+

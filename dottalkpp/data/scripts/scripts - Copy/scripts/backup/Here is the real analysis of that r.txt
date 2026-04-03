@@ -1,0 +1,443 @@
+Here is the real analysis of that run, ignoring the explicitly marked known canaries.
+
+## Bottom line
+
+This run does **not** meaningfully test the MCC dataset after the memo section.
+
+The dominant failure is simple and severe:
+
+**`SELECT <alias>` is not selecting by table name.**
+Every `SELECT STUDENTS`, `SELECT BUILDING`, `SELECT ROOMS`, `SELECT DEPT`, etc. returned:
+
+`Usage: SELECT <0..31 | <name>>`
+
+But the command clearly did **not** accept the name and did **not** switch areas.
+
+So after the memo section, the current area stayed on **`MEMO_X64`**, and nearly every later “table” test was actually being run against the single-record memo table.
+
+That one defect poisons most of the rest of the regression.
+
+---
+
+## What actually passed
+
+### 1. Startup / environment / path surfaces
+
+These looked solid.
+
+* `SET PATH`, `SET PATH RESET`, `INIT`, `STATUS`, `WSREPORT`, `SHOW TABLE/COLUMNS/INDEX` all behaved coherently.
+* Directory layout looks sane.
+* Shutdown was clean.
+
+This is good public-surface stability.
+
+### 2. Date/time baseline primitives
+
+These looked good:
+
+* `DATE`, `TODAY`, `TIME`, `NOW`, `DATETIME`
+* `CALC DATE()`, `CALC TODAY()`, `CALC NOW()`, `CALC DATETIME()`
+* equality checks:
+
+  * `DATE() = TODAY()` → `.T.`
+  * `NOW() = DATETIME()` → `.T.`
+
+So the base generators are working.
+
+### 3. Basic scalar/string function layer
+
+Most of this worked:
+
+* `ALLTRIM`, `LTRIM`, `RTRIM`, `TRIM`
+* `UPPER`, `LOWER`, `PROPER`
+* `LEN`, `LEFT`, `RIGHT`, `SUBSTR`
+* `AT`, `ATC`
+* `CHR`, `ASC`, `SPACE`, `REPLICATE`
+* `PADC`, `PADL`, `PADR`
+* `STUFF`, `STR`, `VAL`
+* `LIKE`
+* `CONCAT`, `STRCAT`
+
+This is a healthy sign for the expression layer.
+
+### 4. Memo work
+
+This section is the strongest part of the run.
+
+#### Confirmed good:
+
+* `CREATE MSDOS ... NOTES M`
+* `CREATE FOX26 ... NOTES M`
+* `CREATE VFP ... NOTES M`
+* `CREATE X64 ... NOTES M`
+
+All four created, opened, accepted writes, survived close/reopen, and displayed back.
+
+#### Especially important:
+
+The **X64 memo path** worked end to end:
+
+* create
+* write
+* reopen/read
+* update existing memo
+* clear memo
+* reinsert after clear
+* reopen/read after each step
+
+That is substantial progress. The X64 memo backend is not theoretical anymore; it is functioning in public commands.
+
+### 5. SQLite
+
+Both file-backed and in-memory SQLite smoke passed.
+
+* `SQLITE OPEN`
+* `SQLITE EXEC`
+* `SQLITE SELECT`
+* `SQLITE CLOSE`
+
+Good.
+
+### 6. DotScript / scripting basics
+
+`DOTSCRIPT` ran a real script correctly.
+
+`IF/ELSE/ENDIF` behaved correctly.
+
+`SCAN ... ENDSCAN` executed and iterated.
+
+So the interpreter plumbing is alive.
+
+### 7. LMDB dev utilities
+
+This section is important because it proves something the public workflow did not.
+
+These worked:
+
+* `LMDB OPEN indexes/STUDENTS.cdx.d`
+* `LMDB USE LNAME`
+* `LMDB SEEK WILSON` → found recno
+* `LMDB SCAN A D` → returned plausible ordered names
+* `LMDB USE FNAME`
+* `LMDB SEEK AVA` → found recno
+* `LMDB SCAN M Z` → returned plausible ordered names
+
+That means:
+
+**The LMDB-backed tag data itself is present and readable.**
+
+So the LMDB data layer is not the main problem here. The public command integration is.
+
+---
+
+## What failed that matters
+
+## 1. `SELECT <name>` is broken in the regression context
+
+This is the single biggest issue.
+
+Examples:
+
+* `SELECT BUILDING` → usage
+* `SELECT ROOMS` → usage
+* `SELECT DEPT` → usage
+* `SELECT MAJORS` → usage
+* `SELECT STUD_MAJ` → usage
+* `SELECT TERMS` → usage
+* `SELECT COURSES` → usage
+* `SELECT TEACHERS` → usage
+* `SELECT STUDENTS` → usage
+* `SELECT ENROLL` → usage
+* `SELECT CLASSES` → usage
+
+Since those failed, the current area remained on `MEMO_X64`.
+
+That means all later operations that were supposed to test MCC tables were actually testing:
+
+* fields: `ID`, `TITLE`, `NOTES`
+* record count: `1`
+* data: `X641`, memo text, etc.
+
+So when you see:
+
+* `SEEK: unknown field: LNAME`
+* `REPLACE: field not found`
+* `CALCWRITE: unknown field 'GPA'`
+* `LOCATE lname = Taylor` → `Not Located.`
+* aggregates on GPA failing
+* relation setup failing against `MEMO_X64`
+
+those are mostly **downstream consequences**, not independent primary defects.
+
+### Conclusion:
+
+Before trusting this regression, fix or work around `SELECT <name>`.
+
+---
+
+## 2. Public index workflow is only half-integrated
+
+The public workflow appears to attach a CDX container and tag name, but it is not truly operating against the selected table because the area never changed.
+
+Example:
+
+* `SET INDEX TO students.cdx`
+* `SET ORDER TO TAG LNAME`
+
+Then `AREA` reported:
+
+* File: `MEMO_X64`
+* Index file: `students.cdx (LNAME)`
+
+That is a nonsense pairing: **MEMO_X64 table with STUDENTS index tag**.
+
+So the order state is being set without validating that the index belongs to the current table, or at least it is being reported that way.
+
+That is dangerous.
+
+### This tells you:
+
+The public order/index attachment surface needs a guardrail:
+
+* verify index/container belongs to current table
+* or reject mismatched attachment
+* or auto-switch appropriately, though rejection is safer
+
+Right now it can create a misleading state.
+
+---
+
+## 3. Public SEEK/FIND/LOCATE integration is not working
+
+Ignoring the poisoned table selection, the run still shows a real integration gap:
+
+* LMDB utility commands can seek real STUDENTS tags
+* public `SEEK` cannot use the current order/tag correctly in this scenario
+
+Examples:
+
+* `SEEK WILSON` → `SEEK: unknown field: LNAME`
+* `SEEK Davis` → same
+* `SEEK Alex` → `unknown field: FNAME`
+
+That means the public `SEEK` path is still too field-centric or is validating against current DBF fields in a way that breaks indexed seek semantics when using tag order.
+
+Since your dev LMDB tools can find records, the missing piece is not raw index storage. It is the **public command glue**.
+
+---
+
+## 4. Relation tests are invalidated by the same area problem
+
+All relation work was effectively attempted from `MEMO_X64` as parent.
+
+You can see it directly:
+
+* `Relations for parent: MEMO_X64`
+* `REL: add failed (parent/child not open)`
+
+So the relation engine may still have issues, but this run does **not** fairly test it.
+
+It mainly proves:
+
+* relation commands do not auto-correct a bad current area
+* relation diagnostics are visible
+* help text is present
+
+It does **not** prove the relation engine itself failed on the MCC tables.
+
+---
+
+## 5. Buffering / COMMIT tests are invalidated
+
+Same reason.
+
+Examples:
+
+* `REPLACE GPA WITH GPA + 0.01` → `field not found`
+* `REPLACE FNAME WITH "DeraldNew"` → `field not found`
+* `COMMIT: no changes in buffer`
+
+These are expected if you are still on `MEMO_X64`.
+
+So this run does **not** tell you whether buffering and commit are good or bad for STUDENTS.
+
+---
+
+## 6. `REINDEX` is still using the wrong file identity
+
+This one is real.
+
+When current order was set to `building.cdx` or `students.cdx`, `REINDEX` still tried to find:
+
+`D:\code\ccode\dottalkpp\data\indexes\MEMO_X64.inx`
+
+That is wrong.
+
+This means `REINDEX` is deriving its target from the current table identity rather than the actual attached order/container state, or mixing stale/current area identity with order identity.
+
+So there is a real bug here independent of the SELECT problem.
+
+---
+
+## 7. `RECORDVIEW` vs `DISPLAY` inconsistency for memo
+
+This is real and worth noting.
+
+For the same `MEMO_X64` record:
+
+* `DISPLAY` showed:
+
+  * `NOTES = third x64 memo after clear`
+* `RECORDVIEW` showed:
+
+  * `NOTES = 3`
+
+That strongly suggests `RECORDVIEW` is showing the memo link/object-id/raw stored memo reference, while `DISPLAY` resolves memo contents.
+
+That is inconsistent at the user surface.
+
+You need to decide whether `RECORDVIEW` is:
+
+* a raw-storage inspector, or
+* a user-facing field-value display
+
+Right now it behaves like the former while being named like the latter.
+
+---
+
+## 8. TUP / TUPLE / SMARTLIST / LIST memo presentation is inconsistent
+
+You can see this in several places:
+
+* `TUP` often showed shortened memo text
+* `DISPLAY` showed full memo text
+* `RECORDVIEW` showed `3`
+* `LIST` / `SL` showed `3`
+
+This is not necessarily wrong internally, but it is inconsistent enough to confuse users.
+
+The likely pattern is:
+
+* tuple/list code uses normalized/display-short/raw-field value
+* display command resolves memo content
+* recordview shows stored link
+
+That needs a deliberate policy.
+
+---
+
+## Smaller issues that are real but secondary
+
+### 1. `TRANSFORM 123`
+
+Returned:
+`TRANSFORM expects 2 argument(s).`
+
+That may be intentional if your syntax requires a picture clause, but it is not Fox-like enough to feel natural.
+
+### 2. `NORMALIZE`
+
+The command exists, but the test used the wrong grammar for the current implementation. Not a failure, just a mismatch.
+
+### 3. `MULTIREP`
+
+The command tested is not the string function the harness assumed. It routed to `REPLACE_MULTI` style syntax. Again, more a surface mismatch than a deep bug.
+
+### 4. Script buffering echo defect
+
+This is real:
+
+* `WHILE .F.` buffered body, but body text still echoed
+* `UNTIL .T.` same
+
+That means your script block buffering still leaks lines to output even when zero iterations execute.
+
+Not catastrophic, but definitely a shell/interpreter defect.
+
+---
+
+## What this run really proves
+
+### Strongly proven good
+
+* shell startup/shutdown
+* path/config/status surfaces
+* base scalar and string functions
+* X64 memo create/update/clear/reinsert/reopen
+* SQLite integration
+* DotScript basic execution
+* LMDB dev utility layer
+* help surfaces for REL, TUPLE, SEEK
+
+### Strongly proven bad
+
+* `SELECT <alias>` name-based selection
+* `REINDEX` target resolution
+* public surface consistency around memo display
+* block buffering output suppression
+
+### Not actually tested due to poisoned area state
+
+* MCC table navigation
+* public indexed traversal on real MCC tables
+* public SEEK/FIND/LOCATE on real indexed tables
+* relations engine on real parent/child areas
+* table buffering/commit on real editable MCC rows
+* calcwrite on real numeric/date fields
+* aggregates on real GPA data
+* filters on real STUDENTS rows
+
+---
+
+## Most important diagnosis
+
+This run was derailed by one architectural problem:
+
+### **Area selection and command targeting are too fragile**
+
+The harness assumed:
+
+`SELECT STUDENTS`
+
+would move the current area to the already-open STUDENTS work area.
+
+Instead, it did nothing useful and left the session on `MEMO_X64`.
+
+From that point on, the regression became largely a test of how commands fail when pointed at the wrong area.
+
+That is still useful, but it is **not** a Beta-0 proof run.
+
+---
+
+## Recommended priority order
+
+1. **Fix `SELECT <name>`** so it reliably selects an already-open area by alias/logical name.
+2. Add a visible sanity assertion in the harness after each select, such as:
+
+   * `AREA`
+   * or `SHOW TABLE`
+     so poisoned runs are caught immediately.
+3. Add guardrails so:
+
+   * `SET INDEX TO students.cdx` cannot quietly attach to `MEMO_X64`
+   * or at least emits a warning about table/container mismatch.
+4. Fix `REINDEX` so it uses actual active order/container state, not stale table-derived `.inx` identity.
+5. Only then rerun the public index / seek / relation / buffer gates.
+
+---
+
+## Practical verdict
+
+Ignoring known canaries, I would score this run like this:
+
+* **Core shell / utility surface:** good
+* **Memo64 milestone:** good, real progress
+* **LMDB backend data availability:** good
+* **Public integrated Beta-0 proof:** **failed**
+* **Reason for failure:** mainly **selection/context routing**, not raw engine collapse
+
+The encouraging part is that this does **not** look like a broad engine failure. It looks like a **glue/state management failure** at the command surface.
+
+That is much easier to repair than a broken storage engine.
+
+If you want, next I can turn this into a **clean defect list grouped by root cause** instead of by command symptoms.

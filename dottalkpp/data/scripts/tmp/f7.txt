@@ -1,0 +1,62 @@
+  <!-- PAGE 7: SQLSEL / SMARTLIST Query Engine (Retro Yellowed Paper) -->
+  <diagram id="p7_diagram" name="SQLSEL / SMARTLIST Query Engine">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFF2CC">
+      <root>
+        <mxCell id="p7_0"/>
+        <mxCell id="p7_1" parent="p7_0"/>
+
+        <!-- SQLSEL PARSER -->
+        <mxCell id="p7_sqlsel" value="SQLSEL Parser&#xa;---&#xa;SELECT&#xa;FROM&#xa;WHERE&#xa;ORDER BY&#xa;GROUP BY&#xa;Projection Builder"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="80" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- SMARTLIST ENGINE -->
+        <mxCell id="p7_smartlist" value="SMARTLIST Engine&#xa;---&#xa;Filter Expressions&#xa;Sort Expressions&#xa;Index Hints&#xa;Auto-Optimization"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="500" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- EXECUTION PLANNER -->
+        <mxCell id="p7_planner" value="Execution Planner&#xa;---&#xa;Index Selection&#xa;Scan Strategy&#xa;Predicate Pushdown&#xa;Join Strategy (future)"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="920" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CURSOR ENGINE -->
+        <mxCell id="p7_cursor" value="Cursor Engine&#xa;---&#xa;Record Navigation&#xa;Seek/Skip&#xa;Top-N&#xa;Range Scans&#xa;Bookmarking"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="80" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- FILTER ENGINE -->
+        <mxCell id="p7_filter" value="Filter Engine&#xa;---&#xa;Expression Evaluation&#xa;Index-Aware Filtering&#xa;Short-Circuit Logic&#xa;Record Tests"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="500" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- SORT ENGINE -->
+        <mxCell id="p7_sort" value="Sort Engine&#xa;---&#xa;In-Memory Sort&#xa;Index Sort&#xa;Multi-Key Sort&#xa;Collation Rules&#xa;Stability Guarantees"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="920" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p7_edge1" edge="1" parent="p7_1" source="p7_sqlsel" target="p7_smartlist"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge2" edge="1" parent="p7_1" source="p7_smartlist" target="p7_planner"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge3" edge="1" parent="p7_1" source="p7_planner" target="p7_cursor"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge4" edge="1" parent="p7_1" source="p7_cursor" target="p7_filter"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge5" edge="1" parent="p7_1" source="p7_filter" target="p7_sort"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

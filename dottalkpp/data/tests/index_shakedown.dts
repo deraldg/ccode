@@ -1,0 +1,207 @@
+SET ECHO ON
+ECHO ===== INDEX SHAKE-DOWN START =====
+
+ECHO --- Phase 0: Baseline (no assumptions) ---
+USE students
+FIELDS
+LIST
+TUP
+
+ECHO --- Phase 1: Without any active order (physical order) ---
+SETORDER 0
+TOP
+TUP
+SKIP 1
+TUP
+BOTTOM
+TUP
+SKIP -1
+TUP
+
+ECHO --- Phase 2: Existing INX (auto-attach behavior) ---
+CLOSE
+USE students
+ECHO (Confirm it auto-attached students.inx in your startup message)
+TOP
+TUP
+SKIP 1
+TUP
+SKIP 5
+TUP
+SKIP -2
+TUP
+BOTTOM
+TUP
+SKIP -1
+TUP
+
+ECHO --- Phase 3: Ascending vs Descending toggle (should affect ordered nav) ---
+ASCEND
+TOP
+TUP
+SKIP 1
+TUP
+DESCEND
+TOP
+TUP
+SKIP 1
+TUP
+ASCEND
+BOTTOM
+TUP
+DESCEND
+BOTTOM
+TUP
+
+ECHO --- Phase 4: SEEK / FIND / LOCATE without relying on indexes ---
+ECHO Pick a real last name and SID from LIST/TUP and plug in below.
+
+SEEK <LNAME1> IN lname
+TUP
+
+FIND <LNAME1> IN lname
+TUP
+
+LOCATE lname = "<LNAME1>"
+TUP
+CONTINUE
+TUP
+
+ECHO --- Phase 5: Create a disposable copy for destructive index tests ---
+CLOSE
+USE students
+COPY TO students_idxtest WITH SIDECARS OVERWRITE
+CLOSE
+USE students_idxtest
+COUNT
+TOP
+TUP
+
+ECHO --- Phase 6: Build a fresh INX (1INX), attach, and navigate ---
+ECHO Create a brand new INX:
+INDEX ON lname TAG students_idxtest_lname.inx
+
+ECHO Attach it as the active order:
+SETINDEX students_idxtest_lname.inx
+
+ASCEND
+TOP
+TUP
+SKIP 1
+TUP
+SKIP 10
+TUP
+
+DESCEND
+TOP
+TUP
+SKIP 1
+TUP
+
+ECHO --- Phase 7: Convert/rewrite to 2INX and repeat nav tests ---
+ECHO This should print that it wrote 2INX:
+REINDEX students_idxtest_lname.inx
+
+ASCEND
+TOP
+TUP
+SKIP 1
+TUP
+SKIP 25
+TUP
+
+DESCEND
+TOP
+TUP
+SKIP 1
+TUP
+
+ECHO --- Phase 8: Data mutation -> confirm index staleness -> rebuild -> confirm refresh ---
+ECHO Change an indexed field; order may become stale until REINDEX.
+ECHO Use a value that will sort to an extreme, like ZZZ... or AAA...
+
+TOP
+TUP
+REPLACE lname WITH "ZZZTEST"
+TUP
+
+ECHO Now test ordered behavior (it may be wrong/stale until rebuild):
+TOP
+TUP
+BOTTOM
+TUP
+
+ECHO Rebuild index and confirm order updates:
+REINDEX students_idxtest_lname.inx
+DESCEND
+TOP
+TUP
+ASCEND
+BOTTOM
+TUP
+
+ECHO --- Phase 9: CNX container build + tags + rebuild ---
+ECHO Create CNX container:
+CNX CREATE students_idxtest.cnx
+
+ECHO Add tags (field-based tags):
+CNX ADDTAG LNAME students_idxtest.cnx
+CNX ADDTAG SID students_idxtest.cnx
+
+ECHO List CNX tags:
+CNX LIST students_idxtest.cnx
+
+ECHO Build tag data:
+REBUILD students_idxtest.cnx
+
+ECHO Attach CNX + set active tag:
+SETCNX students_idxtest.cnx
+SETORDER students_idxtest.cnx LNAME --asc
+
+TOP
+TUP
+SKIP 1
+TUP
+SKIP 10
+TUP
+BOTTOM
+TUP
+
+ECHO Switch direction and repeat:
+DESCEND
+TOP
+TUP
+SKIP 1
+TUP
+
+ECHO Switch tag to SID and repeat:
+SETORDER students_idxtest.cnx SID --asc
+TOP
+TUP
+SKIP 1
+TUP
+BOTTOM
+TUP
+
+ECHO Clear order and confirm physical nav still works:
+SETORDER 0
+TOP
+TUP
+SKIP 1
+TUP
+BOTTOM
+TUP
+
+ECHO --- Phase 10: CNX search commands (still do, even if SEEK is currently sequential) ---
+SEEK LNAME = CLARK
+TUP
+FIND WHITE IN lname
+TUP
+LOCATE sid = 50000016
+TUP
+
+ECHO --- Phase 11: Cleanup (ERASE removes the test table + its sidecars/index artifacts) ---
+CLOSE
+ERASE TABLE students_idxtest CONFIRM
+
+ECHO ===== INDEX SHAKE-DOWN END =====

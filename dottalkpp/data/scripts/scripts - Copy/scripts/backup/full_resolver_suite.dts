@@ -1,0 +1,114 @@
+ECHO === DotTalk++ Full Resolver + Order + REINDEX + SL Suite ===
+
+ECHO === Resolver + Auto-Attach Smoke ===
+SCHEMAS CLOSE
+! cd
+DIR
+SETPATH
+USE dbf/students
+AREA
+SET ORDER TO students TAG LNAME
+AREA
+SET ORDER TO indexes/students TAG LNAME
+AREA
+SET INDEX TO students
+AREA
+
+SELECT 4
+USE dbf/teachers
+SET ORDER TO dbf/teachers.cnx LNAME
+AREA
+
+ECHO === Path Matrix ===
+SELECT 0
+USE dbf/students
+SET ORDER TO students TAG LNAME
+AREA
+SET ORDER TO indexes/students TAG LNAME
+AREA
+SET ORDER TO dbf/students.idx
+AREA
+SET ORDER TO dbf/students.cnx LNAME
+AREA
+SET ORDER TO students DESC
+AREA
+
+ECHO === REINDEX Targeting ===
+USE dbf/students
+SET ORDER TO indexes/students TAG LNAME
+REINDEX
+SET INDEX TO indexes/students.inx
+REINDEX
+
+SELECT 1
+USE dbf/students
+REINDEX
+
+ECHO === AREA Banner Truthiness ===
+USE dbf/students
+AREA
+SET ORDER TO students TAG LNAME
+AREA
+TOP
+LIST 3
+DESCEND
+AREA
+LIST 3
+ASCEND
+AREA
+
+ECHO === Error Paths ===
+USE dbf/students
+SET INDEX TO dbf/teachers.cnx
+SET ORDER TO no_such_base TAG LNAME
+SET ORDER TO students TAG NOPE
+REINDEX no_such_tag
+
+ECHO === Auto-Attach Order ===
+USE dbf/students
+AREA
+SELECT 2
+USE dbf/teachers
+AREA
+
+ECHO === SmartList Guard ===
+USE dbf/students
+SL 3
+SMARTLIST FOR LNAME = CLARK
+SMARTLIST FOR LNAME = "CLARK"
+SMARTLIST FOR LNAME = 'CLARK'
+SMARTLIST 5 FOR LNAME = CLARK AND FNAME = PARKER
+
+ECHO === SEEK/FIND Cursor ===
+USE dbf/students
+SET ORDER TO students TAG LNAME
+SEEK 'ANDERSON' IN lname
+RECNO
+LIST 3
+FIND lname = 'CLARK'
+LIST 3
+
+ECHO === Work Area Isolation ===
+SELECT 1
+USE dbf/students
+AREA
+LIST 2
+SELECT 2
+USE dbf/teachers
+AREA
+LIST 2
+SELECT 1
+AREA
+LIST 2
+
+ECHO === Append/Replace Scratch Row (non-destructive) ===
+SELECT 0
+USE dbf/students
+APPEND BLANK
+REPLACE lname WITH 'SHAKEDOWN'
+REPLACE fname WITH 'ALPHA8'
+TUPLE
+TOP
+AREA
+
+ECHO === Suite complete ===

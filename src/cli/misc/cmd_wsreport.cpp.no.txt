@@ -1,0 +1,274 @@
+// src/cli/cmd_wsreport.cpp
+// WSREPORT (workspace + index summary) + Environment (SET) report
+//
+// Usage:
+//   WSREPORT [ALL] [VERBOSE|INDEX] [ENV]
+//   WSREPORT ENV          -> environment only
+//
+// Notes:
+// - Settings are split today between cli::Settings and cli::OutputRouter.
+// - This report reads both, and prints what is actually driving behavior.
+
+#include <algorithm>
+#include <cctype>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "xbase.hpp"
+#include "workareas.hpp"
+#include "index_summary.hpp"
+
+#include "cli/settings.hpp"
+#include "cli/output_router.hpp"
+
+using dottalk::IndexSummary;
+
+namespace {
+
+// simple uppercase
+std::string upper(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
+    return s;
+}
+
+const char* kind_str(IndexSummary::OrderKind k) {
+    switch (k) {
+        case IndexSummary::OrderKind::Ascending:  return "ASCEND";
+        case IndexSummary::OrderKind::Descending: return "DESCEND";
+        default:                                  return "PHYSICAL";
+    }
+}
+
+bool is_open(const xbase::DbArea* a) {
+    if (!a) return false;
+    try { return a->isOpen() && !a->filename().empty(); }
+    catch (...) { return false; }
+}
+
+static inline const char* tf(bool v) { return v ? "ON" : "OFF"; }
+
+static void print_env_report(std::ostream& os) {
+    using cli::Settings;
+    using cli::OutputRouter;
+
+    Settings& S = Settings::instance();
+    OutputRouter& R = OutputRouter::instance();
+
+    // Read atomics once to avoid odd mixes mid-print.
+    const bool talk_on       = S.talk_on.load();
+    const bool status_on     = S.status_on.load();
+    const bool time_on       = S.time_on.load();
+    const bool clock_on      = S.clock_on.load();
+    const bool bell_on       = S.bell_on.load();
+
+    const bool safety_on     = S.safety_on.load();
+    const bool deleted_on    = S.deleted_on.load();
+    const bool exact_on      = S.exact_on.load();
+    const bool escape_on     = S.escape_on.load();
+    const bool carry_on      = S.carry_on.load();
+    const bool confirm_on    = S.confirm_on.load();
+    const bool exclusive_on  = S.exclusive_on.load();
+    const bool multilocks_on = S.multilocks_on.load();
+
+    const bool century_on    = S.century_on.load();
+    const bool fixed_on      = S.fixed_on.load();
+    const bool memo_error_on = S.memo_error_on.load();
+
+    // OutputRouter switches (these are what actually route output)
+    const bool r_console_on  = R.console_on();
+    const bool r_print_on    = R.print_on();
+    const bool r_alt_on      = R.alternate_on();
+    const bool r_talk_on     = R.talk_on();
+    const bool r_echo_on     = R.echo_on();
+
+    const std::string print_to = R.print_to_path();
+    const std::string alt_to   = R.alternate_to_path();
+
+    os << "Environment (SET)\n";
+    os << "----------------------------------------\n";
+
+    // ---- Output routing / console behavior
+    os << "Output Router\n";
+    os << "  CONSOLE    : " << tf(r_console_on) << "\n";
+    os << "  PRINT      : " << tf(r_print_on)   << "\n";
+    os << "  PRINT TO   : " << (print_to.empty() ? "(none)" : print_to) << "\n";
+    os << "  ALTERNATE  : " << tf(r_alt_on)     << "\n";
+    os << "  ALT TO     : " << (alt_to.empty() ? "(none)" : alt_to) << "\n";
+    os << "  TALK       : " << tf(r_talk_on)    << "  (router)\n";
+    os << "  ECHO       : " << tf(r_echo_on)    << "  (ECHO command enabled)\n";
+    os << "\n";
+
+    // ---- CLI settings (FoxPro-ish SET flags you track)
+    os << "CLI Settings\n";
+    os << "  TALK       : " << tf(talk_on)   << "  (settings)\n";
+    os << "  STATUS     : " << tf(status_on) << "\n";
+    os << "  TIME       : " << tf(time_on)   << "\n";
+    os << "  CLOCK      : " << tf(clock_on)  << "\n";
+    os << "  BELL       : " << tf(bell_on)   << "\n";
+    os << "\n";
+
+    os << "Data Handling\n";
+    os << "  SAFETY     : " << tf(safety_on)  << "\n";
+    os << "  DELETED    : " << (deleted_on ? "ON  (HIDE deleted)" : "OFF (SHOW deleted)") << "\n";
+    os << "  EXACT      : " << tf(exact_on)   << "\n";
+    os << "  ESCAPE     : " << tf(escape_on)  << "\n";
+    os << "  CARRY      : " << tf(carry_on)   << "\n";
+    os << "  CONFIRM    : " << tf(confirm_on) << "\n";
+    os << "  EXCLUSIVE  : " << tf(exclusive_on) << "\n";
+    os << "  MULTILOCKS : " << tf(multilocks_on) << "\n";
+    os << "\n";
+
+    os << "Formatting\n";
+    os << "  CENTURY    : " << tf(century_on) << "\n";
+    os << "  DATE       : " << (S.date_format.empty() ? "(default)" : S.date_format) << "\n";
+    os << "  DECIMALS   : " << S.decimals << "\n";
+    os << "  FIXED      : " << tf(fixed_on) << "\n";
+    os << "  MEMOWIDTH  : " << S.memo_width << "\n";
+    os << "  MEMOERROR  : " << tf(memo_error_on) << "\n";
+    os << "\n";
+
+    os << "Search / Relations\n";
+    os << "  FILTER     : " << (S.filter_expr.empty() ? "(none)" : S.filter_expr) << "\n";
+    os << "\n";
+
+    os << "Pathing / Files\n";
+    os << "  DEFAULT    : " << (S.default_dir.empty() ? "(none)" : S.default_dir) << "\n";
+    os << "  PATH       : " << (S.path_list.empty() ? "(none)" : S.path_list) << "\n";
+    os << "\n";
+
+    os << "Printing / Device\n";
+    os << "  (settings) PRINT      : " << tf(S.print_on.load()) << "\n";
+    os << "  PRINTER TO : " << (S.printer_target.empty() ? "(none)" : S.printer_target) << "\n";
+    os << "  DEVICE     : " << (S.device_target.empty() ? "(none)" : S.device_target) << "\n";
+    os << "  FORMAT     : " << (S.format_file.empty() ? "(none)" : S.format_file) << "\n";
+    os << "  REPORTBEH. : " << S.report_behavior << "\n";
+    os << "\n";
+
+    os << "Misc\n";
+    os << "  TYPEAHEAD  : " << S.typeahead << "\n";
+    os << "  REPROCESS  : " << S.reprocess_ms << " ms\n";
+    os << "\n";
+
+    // Useful diagnostic: show if TALK is “split brain”
+    if (talk_on != r_talk_on) {
+        os << "NOTE: TALK mismatch (Settings=" << tf(talk_on)
+           << ", OutputRouter=" << tf(r_talk_on) << ").\n\n";
+    }
+}
+
+} // namespace
+
+// WSREPORT [ALL] [VERBOSE] [INDEX] [ENV]
+void cmd_WSREPORT(xbase::DbArea& /*A*/, std::istringstream& args) {
+    const std::string rawU = upper(args.str());
+
+    const bool wantAll       = (rawU.find("ALL")     != std::string::npos);
+    const bool wantVerbose   = (rawU.find("VERBOSE") != std::string::npos) ||
+                               (rawU.find("INDEX")   != std::string::npos);
+
+    const bool wantEnv       = (rawU.find("ENV")     != std::string::npos) ||
+                               (rawU.find("SET")     != std::string::npos) ||
+                               (rawU.find("SETTINGS")!= std::string::npos);
+
+    // ENV-only mode (no workspace/index)
+    const bool env_only =
+        wantEnv &&
+        (rawU.find("ALL") == std::string::npos) &&
+        (rawU.find("VERBOSE") == std::string::npos) &&
+        (rawU.find("INDEX") == std::string::npos);
+
+    if (env_only) {
+        std::cout << "DotTalk Status Report\n\n";
+        print_env_report(std::cout);
+        return;
+    }
+
+    std::cout << "DotTalk Status Report\n\n";
+
+    if (wantEnv) {
+        print_env_report(std::cout);
+    }
+
+    // Header + area list
+    std::cout << "Workspace\n";
+    std::cout << "  Slot  Name\n"
+                 "  ----- --------\n";
+    for (std::size_t i = 0; i < workareas::count(); ++i) {
+        xbase::DbArea* ar = workareas::at(i);
+        if (!is_open(ar)) continue;
+        std::cout << "  " << std::setw(5) << i << " " << ar->filename() << "\n";
+    }
+    std::cout << "\n";
+
+    auto print_one = [&](std::size_t slot, xbase::DbArea& ar) {
+        std::cout << "Area " << slot << ": " << ar.filename() << "\n";
+        std::cout << "Index Summary\n----------------------------------------\n";
+
+        const IndexSummary S = dottalk::summarize_index(ar);
+        const bool hasOrder = (S.kind != IndexSummary::OrderKind::Physical);
+
+        // NOTE: your pasted wsreport.cpp references S.container_type and S.record_count.
+        // Your posted index_summary.hpp does NOT define those. Keep to the fields that exist.
+        std::cout << "Has Order   : " << (hasOrder ? "YES" : "NO") << "\n";
+        std::cout << "Container   : " << (S.index_path.empty() ? "(none)" : S.index_path) << "\n";
+        std::cout << "Tag         : " << (S.active_tag.empty() ? "(none)" : S.active_tag) << "\n";
+        std::cout << "Direction   : " << kind_str(S.kind) << "\n";
+        std::cout << "Record Count: " << ar.recCount() << "\n\n";
+
+        std::cout << "Tags\n";
+        if (S.tags.empty()) {
+            std::cout << "  (none)\n";
+        } else if (!wantVerbose) {
+            bool first = true;
+            std::cout << "  ";
+            for (const auto& t : S.tags) {
+                if (!first) std::cout << ", ";
+                std::cout << (t.tagName.empty() ? t.fieldName : t.tagName);
+                first = false;
+            }
+            std::cout << "\n";
+        } else {
+            std::cout << "  " << std::left << std::setw(14) << "Field Name"
+                      << std::setw(8)  << "Type"
+                      << std::setw(6)  << "Len"
+                      << std::setw(6)  << "Dec"
+                      << "Dir\n";
+            std::cout << "  ------------ ------- ------ ------ ----\n";
+            for (const auto& T : S.tags) {
+                const std::string field_name = !T.fieldName.empty() ? T.fieldName : T.tagName;
+                std::cout << "  " << std::left << std::setw(14) << field_name
+                          << std::setw(8)  << (T.type.empty() ? "" : T.type)
+                          << std::setw(6)  << T.len
+                          << std::setw(6)  << T.dec
+                          << (T.asc ? "ASC" : "DESC") << "\n";
+            }
+        }
+        std::cout << "\n";
+    };
+
+    if (wantAll) {
+        for (std::size_t i = 0; i < workareas::count(); ++i) {
+            xbase::DbArea* ar = workareas::at(i);
+            if (!is_open(ar)) continue;
+            print_one(i, *ar);
+        }
+    } else {
+        const std::size_t cur = workareas::current_slot();
+        xbase::DbArea* ar = (cur < workareas::count()) ? workareas::at(cur) : nullptr;
+        if (is_open(ar)) {
+            print_one(cur, *ar);
+        } else {
+            std::cout << "Area " << cur << ":   ()\n";
+            std::cout << "Index Summary\n----------------------------------------\n";
+            std::cout << "Has Order   : NO\n";
+            std::cout << "Container   : (none)\n";
+            std::cout << "Tag         : (none)\n";
+            std::cout << "Direction   : PHYSICAL\n";
+            std::cout << "Record Count: 0\n\n";
+            std::cout << "Tags\n  (none)\n\n";
+        }
+    }
+}

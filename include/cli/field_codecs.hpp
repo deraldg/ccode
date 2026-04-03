@@ -136,3 +136,6 @@ inline std::string pack_memo_ptr_ascii(uint32_t block_id, int length) {
 }
 
 } // namespace cli_planA
+
+
+

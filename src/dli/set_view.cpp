@@ -16,3 +16,6 @@ void cmd_SET_VIEW(xbase::DbArea& db, std::istringstream& args) {
 }
 
 } // namespace dli
+
+
+

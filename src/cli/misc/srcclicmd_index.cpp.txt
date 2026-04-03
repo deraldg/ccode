@@ -1,0 +1,217 @@
+// src/cli/cmd_index.cpp
+//
+// INDEX command: builds a simple on-disk index container (INX) for the current table.
+//
+// FoxPro-ish intent (practical subset):
+//   INDEX ON <expr> TO <name>[.inx]
+//
+// Implementation notes (current):
+// - Writes "2INX" format (v2) to match your existing containers.
+// - Header:
+//     char[4]  magic = "2INX"
+//     uint16   version = 2
+//     uint16   keyWidth   (fixed bytes per key)
+//     uint16   exprLen
+//     char[]   expr (bytes, as typed; trimmed; NOT uppercased)
+//     uint32   count
+// - Entries (count times):
+//     char[]   key[keyWidth] (space padded)
+//     uint32   recno (1-based record number)
+// - Footer (16 bytes; reserved for future):
+//     uint32   root = 1
+//     int32    free = -1
+//     uint32   levels = 1
+//     uint32   reserved = 0
+//
+// This INX is currently a flat sorted list (not a B-tree yet).
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/expr/api.hpp"
+#include "cli/expr/glue_xbase.hpp"
+#include "cli/path_resolver.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_hooks.hpp"
+
+namespace {
+
+static inline std::string trim_copy(std::string s) { return textio::trim(std::move(s)); }
+
+static inline std::string rtrim_spaces_and_nuls(std::string s) {
+    while (!s.empty()) {
+        const unsigned char c = static_cast<unsigned char>(s.back());
+        if (c == 0 || c == ' ') s.pop_back();
+        else break;
+    }
+    return s;
+}
+
+static inline std::string pad_key(const std::string& s, std::size_t keyWidth) {
+    if (s.size() >= keyWidth) return s.substr(0, keyWidth);
+    std::string out = s;
+    out.append(keyWidth - out.size(), ' ');
+    return out;
+}
+
+static inline bool write_u16(std::ofstream& f, std::uint16_t v) {
+    f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+    return static_cast<bool>(f);
+}
+static inline bool write_u32(std::ofstream& f, std::uint32_t v) {
+    f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+    return static_cast<bool>(f);
+}
+static inline bool write_i32(std::ofstream& f, std::int32_t v) {
+    f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+    return static_cast<bool>(f);
+}
+
+// Parse: INDEX ON <expr> TO <name>
+static bool parse_index_args(std::istringstream& args, std::string& outExpr, std::string& outName) {
+    std::string onTok;
+    args >> onTok;
+    if (onTok.empty()) return false;
+    if (!textio::ieq(onTok, "ON")) return false;
+
+    // Read until "TO" (FoxPro-ish); expr can contain spaces.
+    std::string exprPart;
+    std::string tok;
+    bool sawTo = false;
+
+    while (args >> tok) {
+        if (textio::ieq(tok, "TO")) { sawTo = true; break; }
+        if (!exprPart.empty()) exprPart.push_back(' ');
+        exprPart += tok;
+    }
+
+    if (!sawTo) return false;
+
+    std::string name;
+    args >> name;
+    if (name.empty()) return false;
+
+    outExpr = trim_copy(exprPart);
+    outName = trim_copy(name);
+    return !outExpr.empty() && !outName.empty();
+}
+
+} // namespace
+
+void cmd_INDEX(xbase::DbArea& area, std::istringstream& args)
+{
+    if (!area.isOpen()) {
+        std::cout << "INDEX: no table open.\n";
+        return;
+    }
+
+    std::string expr;
+    std::string name;
+    if (!parse_index_args(args, expr, name)) {
+        std::cout << "INDEX: syntax: INDEX ON <expr> TO <name>[.inx]\n";
+        return;
+    }
+
+    // Resolve output path in INDEXES root.
+    auto outPath = dottalk::paths::resolve_index(name);
+    if (!outPath.has_extension()) outPath.replace_extension(".inx");
+
+    // Compile expression.
+    auto compiled = dottalk::expr::compile(expr);
+    if (!compiled.ok) {
+        std::cout << "INDEX: compile error: " << compiled.err << "\n";
+        return;
+    }
+
+    // Build key list in physical order, skipping deleted (FoxPro default).
+    const int recs = area.recCount();
+    std::vector<std::pair<std::string, std::uint32_t>> pairs;
+    pairs.reserve(static_cast<std::size_t>(recs));
+
+    for (int r = 1; r <= recs; ++r) {
+        area.gotoRec(r);
+        if (area.isDeleted()) continue;
+
+        auto v = dottalk::expr::eval(*compiled.fn, area);
+        std::string key = dottalk::expr::to_string(v);
+
+        key = rtrim_spaces_and_nuls(std::move(key));
+        pairs.emplace_back(std::move(key), static_cast<std::uint32_t>(r));
+    }
+
+    // Determine fixed key width.
+    std::size_t keyWidth = 1;
+    for (const auto& kv : pairs) keyWidth = std::max(keyWidth, kv.first.size());
+    if (keyWidth > 65535u) keyWidth = 65535u;
+
+    // Sort by key (ASC), then recno.
+    std::sort(pairs.begin(), pairs.end(),
+        [](const auto& a, const auto& b) {
+            if (a.first < b.first) return true;
+            if (b.first < a.first) return false;
+            return a.second < b.second;
+        });
+
+    // Write 2INX file.
+    std::ofstream f(outPath, std::ios::binary | std::ios::trunc);
+    if (!f) {
+        std::cout << "INDEX: cannot write: " << outPath.string() << "\n";
+        return;
+    }
+
+    // Header
+    f.write("2INX", 4);
+    const std::uint16_t version = 2;
+    const std::uint16_t kw = static_cast<std::uint16_t>(keyWidth);
+    const std::uint16_t exprLen = static_cast<std::uint16_t>(expr.size());
+    const std::uint32_t count = static_cast<std::uint32_t>(pairs.size());
+
+    if (!write_u16(f, version) ||
+        !write_u16(f, kw) ||
+        !write_u16(f, exprLen) ||
+        !(f.write(expr.data(), static_cast<std::streamsize>(expr.size())), static_cast<bool>(f)) ||
+        !write_u32(f, count)) {
+        std::cout << "INDEX: write failed: " << outPath.string() << "\n";
+        return;
+    }
+
+    // Entries (flat list): key[keyWidth] + recno(u32)
+    for (const auto& kv : pairs) {
+        const std::uint32_t recno = kv.second;
+        const std::string keypad = pad_key(kv.first, keyWidth);
+
+        if (!(f.write(keypad.data(), static_cast<std::streamsize>(keypad.size())), static_cast<bool>(f)) ||
+            !write_u32(f, recno)) {
+            std::cout << "INDEX: write failed: " << outPath.string() << "\n";
+            return;
+        }
+    }
+
+    // Footer (reserved)
+    const std::uint32_t root = 1;
+    const std::int32_t  free = -1;
+    const std::uint32_t levels = 1;
+    const std::uint32_t reserved = 0;
+    (void)write_u32(f, root);
+    (void)write_i32(f, free);
+    (void)write_u32(f, levels);
+    (void)write_u32(f, reserved);
+
+    f.close();
+
+    // Attach + set active order (INX).
+    orderstate::setOrder(area, outPath.string());
+    orderstate::setAscending(area, true);
+    orderhooks::reconcile_after_mutation(area);
+
+    std::cout << "INDEX created: " << outPath.string() << " (keys: " << pairs.size() << ")\n";
+}

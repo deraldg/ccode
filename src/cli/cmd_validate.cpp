@@ -1,4 +1,4 @@
-// src/cli/cmd_validate.cpp — VALIDATE router
+// src/cli/cmd_validate.cpp -- VALIDATE router
 // Forwards subcommands like "VALIDATE UNIQUE ..." to their handlers.
 
 #include <sstream>
@@ -18,16 +18,14 @@ static inline std::string upcopy(std::string s) {
 
 void cmd_VALIDATE(xbase::DbArea& A, std::istringstream& in)
 {
-    // Peek the first word after "VALIDATE"
     std::streampos pos = in.tellg();
     std::string tok;
     if (!(in >> tok)) {
-        std::cout << "Usage: VALIDATE UNIQUE FIELD <name> [IGNORE DELETED] [REPORT TO <path>]\n";
+        std::cout << "Usage: VALIDATE UNIQUE FIELD <name> [IGNORE DELETED] [REPAIR] [REPORT TO <path>]\n";
         return;
     }
     const std::string U = upcopy(tok);
 
-    // Rewind so delegated handler sees the full tail ("UNIQUE FIELD ...")
     in.clear();
     in.seekg(pos);
 

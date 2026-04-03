@@ -1,0 +1,386 @@
+// src/cli/cmd_list.cpp
+#include "xbase.hpp"
+#include "xindex/index_manager.hpp"
+#include "textio.hpp"
+#include "predicates.hpp"
+#include "filters/filter_registry.hpp"
+#include "cli/expr/api.hpp"
+#include "cli/expr/ast.hpp"
+#include "cli/expr/glue_xbase.hpp"
+#include "cli/expr/parse_utils.hpp"
+#include "cli/expr/line_parse_utils.hpp"
+#include "value_normalize.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_iterator.hpp"
+
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <cctype>
+#include <algorithm>
+#include <sstream>
+#include <vector>
+#include <cstdlib>
+
+namespace {
+
+struct CursorRestore {
+    xbase::DbArea* a{nullptr};
+    int32_t saved{0};
+    bool active{false};
+
+    explicit CursorRestore(xbase::DbArea& area) : a(&area) {
+        saved = area.recno();
+        active = (saved >= 1 && saved <= area.recCount());
+    }
+
+    void cancel() noexcept { active = false; }
+
+    ~CursorRestore() {
+        if (!active || !a) return;
+        try {
+            a->gotoRec(saved);
+            a->readCurrent();
+        } catch (...) {
+            // best-effort
+        }
+    }
+};
+
+enum class DelFilter {
+    Any,          // default: hide deleted unless ALL
+    OnlyDeleted,  // show only deleted
+    OnlyAlive     // show only non-deleted (even if ALL)
+};
+
+struct Options {
+    bool all{false};
+    int  limit{20};
+
+    // classic FOR <field> <op> <value>
+    bool haveFieldFilter{false};
+    std::string fld, op, val;
+
+    // deleted filters
+    DelFilter del{DelFilter::Any};
+
+    // compiled FOR support
+    bool haveCompiledFor{false};
+    std::string forExpr;
+};
+
+static inline std::string upper_copy(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+static Options parse_opts(std::istringstream& iss) {
+    Options o{};
+
+    // First positional: ALL | <limit> | DELETED
+    std::string tok;
+    auto save = iss.tellg();
+    if (iss >> tok) {
+        if (textio::ieq(tok, "ALL")) {
+            o.all = true;
+        } else if (textio::ieq(tok, "DELETED")) {
+            o.del = DelFilter::OnlyDeleted;
+        } else if (is_uint(tok)) {
+            o.limit = std::max(0, std::stoi(tok));
+        } else {
+            iss.clear();
+            iss.seekg(save);
+        }
+    }
+
+    // Optional: FOR ...
+    save = iss.tellg();
+    std::string w;
+    if (iss >> w && textio::ieq(w, "FOR")) {
+        std::string a;
+        auto save2 = iss.tellg();
+        if (iss >> a) {
+            if (textio::ieq(a, "DELETED")) {
+                o.del = DelFilter::OnlyDeleted;
+            } else if (a.size() == 9 &&
+                       (a[0] == '!' || a[0] == '~') &&
+                       textio::ieq(a.c_str() + 1, "DELETED")) {
+                o.del = DelFilter::OnlyAlive;
+            } else {
+                // If the rest looks like a full expression (has arithmetic/parens),
+                // capture verbatim (after stripping trailing comments) and use compiled path.
+                {
+                    std::streampos save3 = iss.tellg();
+                    std::string rest_of_line;
+                    std::getline(iss, rest_of_line);
+                    std::string expr = a + " " + textio::trim(rest_of_line);
+
+                    // strip // and && comments before sniffing
+                    std::string cleaned = strip_line_comments(expr);
+
+                    if (has_unquoted_arith(cleaned) ||
+                        cleaned.find('(') != std::string::npos ||
+                        cleaned.find(')') != std::string::npos) {
+                        o.haveCompiledFor = true;
+                        o.forExpr = textio::trim(cleaned);
+                        return o;
+                    }
+
+                    // fall back to classic triplet parse
+                    iss.clear();
+                    iss.seekg(save3);
+                }
+
+                o.fld = a;
+                if (iss >> o.op) {
+                    std::string rest;
+                    std::getline(iss, rest);
+                    o.val = textio::trim(rest);
+                    o.haveFieldFilter = !o.fld.empty() && !o.op.empty() && !o.val.empty();
+                } else {
+                    iss.clear();
+                    iss.seekg(save2);
+                }
+            }
+        } else {
+            iss.clear();
+            iss.seekg(save);
+        }
+    } else {
+        iss.clear();
+        iss.seekg(save);
+    }
+
+    return o;
+}
+
+static int recno_width(const xbase::DbArea& a) {
+    int n = std::max(1, a.recCount());
+    int w = 0;
+    while (n) {
+        n /= 10;
+        ++w;
+    }
+    return std::max(3, w);
+}
+
+static void header(const xbase::DbArea& a, int recw) {
+    const auto& Fs = a.fields();
+    std::cout << "  " << std::setw(recw) << "" << " ";
+    for (const auto& f : Fs) {
+        std::cout << std::left << std::setw(static_cast<int>(f.length)) << f.name << " ";
+    }
+    std::cout << std::right << "\n";
+}
+
+static void row(const xbase::DbArea& a, int recw) {
+    const auto& Fs = a.fields();
+    std::cout << ' ' << (a.isDeleted() ? '*' : ' ') << ' '
+              << std::setw(recw) << a.recno() << " ";
+
+    for (int i = 1; i <= static_cast<int>(Fs.size()); ++i) {
+        std::string s = a.get(i);
+        const int w = static_cast<int>(Fs[static_cast<size_t>(i - 1)].length);
+        if (static_cast<int>(s.size()) > w) {
+            s.resize(static_cast<size_t>(w));
+        }
+        std::cout << std::left << std::setw(w) << s << " ";
+    }
+    std::cout << std::right << "\n";
+}
+
+static inline bool pass_deleted_filter(const xbase::DbArea& a, const Options& o) {
+    const bool isDel = a.isDeleted();
+    switch (o.del) {
+        case DelFilter::OnlyDeleted: return isDel;
+        case DelFilter::OnlyAlive:   return !isDel;
+        case DelFilter::Any:
+        default:                     return o.all ? true : !isDel;
+    }
+}
+
+static inline bool pass_all_filters(xbase::DbArea& a,
+                                    const Options& opt,
+                                    const std::shared_ptr<dottalk::expr::Expr>& prog)
+{
+    if (!pass_deleted_filter(a, opt)) return false;
+
+    // Persistent SET FILTER + compiled FOR expression
+    if (!filter::visible(&a, prog)) return false;
+
+    // Legacy classic FOR <field> <op> <value>
+    if (!opt.haveCompiledFor &&
+        opt.haveFieldFilter &&
+        !predicates::eval(a, opt.fld, opt.op, opt.val)) {
+        return false;
+    }
+
+    return true;
+}
+
+static const char* backend_name(cli::OrderBackend b) {
+    switch (b) {
+        case cli::OrderBackend::Natural:    return "natural";
+        case cli::OrderBackend::Inx:        return "inx";
+        case cli::OrderBackend::Cnx:        return "cnx";
+        case cli::OrderBackend::Cdx:        return "cdx";
+        case cli::OrderBackend::LmdbMirror: return "cdx(lmdb)";
+        default:                            return "ordered";
+    }
+}
+
+static void print_order_banner(const cli::OrderIterSpec& spec) {
+    if (spec.backend == cli::OrderBackend::Natural) return;
+
+    std::cout << "; ORDER: file '" << spec.container_path << "'";
+    if (!spec.tag.empty()) {
+        std::cout << "  TAG '" << upper_copy(spec.tag) << "'";
+    }
+    std::cout << "  " << (spec.ascending ? "ASC" : "DESC") << "\n";
+}
+
+static void print_summary(int printed,
+                          const Options& opt,
+                          const cli::OrderIterSpec& spec)
+{
+    if (spec.backend == cli::OrderBackend::Natural) {
+        if (!opt.all) {
+            std::cout << printed << " record(s) listed (limit " << opt.limit
+                      << "). Use LIST ALL to show more.\n";
+        } else {
+            std::cout << printed << " record(s) listed.\n";
+        }
+        return;
+    }
+
+    std::cout << printed << " " << backend_name(spec.backend) << " indexed record(s)";
+    if (!spec.tag.empty()) {
+        std::cout << " (tag=" << upper_copy(spec.tag) << ")";
+    }
+    if (!opt.all) {
+        std::cout << " listed (limit " << opt.limit << "). Use LIST ALL to show more.\n";
+    } else {
+        std::cout << " listed.\n";
+    }
+}
+
+static bool list_from_recnos(xbase::DbArea& a,
+                             const std::vector<uint32_t>& recnos_asc,
+                             const cli::OrderIterSpec& spec,
+                             const Options& opt,
+                             const std::shared_ptr<dottalk::expr::Expr>& prog,
+                             int recw,
+                             int32_t start_rn)
+{
+    int printed = 0;
+    bool started = (start_rn == 0);
+
+    if (spec.ascending) {
+        for (uint32_t rn : recnos_asc) {
+            if (!started) {
+                if (static_cast<int32_t>(rn) != start_rn) continue;
+                started = true;
+            }
+            if (!a.gotoRec(static_cast<int32_t>(rn)) || !a.readCurrent()) continue;
+            if (!pass_all_filters(a, opt, prog)) continue;
+            row(a, recw);
+            ++printed;
+            if (!opt.all && opt.limit > 0 && printed >= opt.limit) break;
+        }
+    } else {
+        for (auto it = recnos_asc.rbegin(); it != recnos_asc.rend(); ++it) {
+            const uint32_t rn = *it;
+            if (!started) {
+                if (static_cast<int32_t>(rn) != start_rn) continue;
+                started = true;
+            }
+            if (!a.gotoRec(static_cast<int32_t>(rn)) || !a.readCurrent()) continue;
+            if (!pass_all_filters(a, opt, prog)) continue;
+            row(a, recw);
+            ++printed;
+            if (!opt.all && opt.limit > 0 && printed >= opt.limit) break;
+        }
+    }
+
+    print_summary(printed, opt, spec);
+    return true;
+}
+
+} // namespace
+
+void cmd_LIST(xbase::DbArea& a, std::istringstream& iss) {
+    CursorRestore _restore_(a);
+
+    if (!a.isOpen()) {
+        std::cout << "No table open.\n";
+        return;
+    }
+
+    Options opt = parse_opts(iss);
+
+    std::shared_ptr<dottalk::expr::Expr> _prog;
+    if (opt.haveCompiledFor) {
+        auto cr = dottalk::expr::compile_where(opt.forExpr);
+        if (cr) {
+            _prog = std::shared_ptr<dottalk::expr::Expr>(std::move(cr.program));
+        } else {
+            std::cout << "; LIST FOR error: " << cr.error << " - ignoring FOR.\n";
+            opt.haveCompiledFor = false;
+        }
+    }
+
+    const int32_t total = a.recCount();
+    if (total <= 0) {
+        std::cout << "(empty)\n";
+        return;
+    }
+
+    if (opt.all) a.top();
+    else if (a.recno() <= 0) a.top();
+
+    const int recw = recno_width(a);
+    header(a, recw);
+
+    // Ordered path through the shared provider seam.
+    if (orderstate::hasOrder(a)) {
+        cli::OrderIterSpec spec{};
+        std::vector<uint32_t> recnos_asc;
+        std::string err;
+
+        const bool ok = cli::order_collect_recnos_asc(a, recnos_asc, &spec, &err);
+        const int32_t start_rn =
+            (!opt.all && a.recno() >= 1 && a.recno() <= a.recCount()) ? a.recno() : 0;
+
+        if (ok && !recnos_asc.empty()) {
+            print_order_banner(spec);
+            list_from_recnos(a, recnos_asc, spec, opt, _prog, recw, start_rn);
+            return;
+        }
+
+        // Ordered backend requested but unavailable: report and fall back to physical.
+        if (!err.empty()) {
+            std::cout << "; LIST order note: " << err << " - falling back to physical order\n";
+        } else {
+            std::cout << "; LIST order note: ordered backend unavailable - falling back to physical order\n";
+        }
+    }
+
+    // Physical order fallback.
+    int printed = 0;
+    const int32_t start = opt.all ? 1 : a.recno();
+
+    for (int32_t rn = start; rn <= total; ++rn) {
+        if (!a.gotoRec(rn) || !a.readCurrent()) continue;
+        if (!pass_all_filters(a, opt, _prog)) continue;
+        row(a, recw);
+        ++printed;
+        if (!opt.all && opt.limit > 0 && printed >= opt.limit) break;
+    }
+
+    cli::OrderIterSpec natural_spec{};
+    natural_spec.backend = cli::OrderBackend::Natural;
+    natural_spec.ascending = true;
+    print_summary(printed, opt, natural_spec);
+}

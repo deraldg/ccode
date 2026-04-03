@@ -1,0 +1,166 @@
+#pragma once
+#include <string>
+#include <optional>
+#include <cctype>
+#include <cstdint>
+#include <cstdio>
+#include <stdexcept>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+
+// Put everything in a tiny namespace to avoid collisions with local helpers.
+namespace xfg {
+
+// Resolve field name (case-insensitive, trims) -> 0-based index
+inline int resolve_field_index_std(xbase::DbArea& db, const std::string& nameIn) {
+    const std::string name = textio::trim(nameIn);
+    const auto& F = db.fields();
+    for (int i = 0; i < static_cast<int>(F.size()); ++i) {
+        if (textio::ieq(textio::trim(F[i].name), name)) return i;
+    }
+    return -1;
+}
+
+namespace detail {
+
+inline char upper_type(char t) {
+    return static_cast<char>(std::toupper(static_cast<unsigned char>(t)));
+}
+
+inline bool is_all_zero_or_space(const std::string& s) {
+    if (s.empty()) return true;
+    for (unsigned char c : s) {
+        if (c != 0x00 && c != 0x20) return false;
+    }
+    return true;
+}
+
+inline bool looks_like_ascii_yyyymmdd(const std::string& raw) {
+    if (raw.size() < 8) return false;
+    for (size_t i = 0; i < 8; ++i) {
+        const unsigned char c = static_cast<unsigned char>(raw[i]);
+        if (c == 0x20) continue;               // blank date
+        if (c < '0' || c > '9') return false;  // non-digit
+    }
+    return true;
+}
+
+inline uint32_t load_le_u32(const char* p) {
+    const auto b0 = static_cast<uint32_t>(static_cast<unsigned char>(p[0]));
+    const auto b1 = static_cast<uint32_t>(static_cast<unsigned char>(p[1]));
+    const auto b2 = static_cast<uint32_t>(static_cast<unsigned char>(p[2]));
+    const auto b3 = static_cast<uint32_t>(static_cast<unsigned char>(p[3]));
+    return (b0) | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+
+// Convert Julian Day Number (JDN) -> Gregorian Y/M/D.
+// Works for proleptic Gregorian calendar for positive JDN.
+inline bool jdn_to_ymd(int32_t jdn, int& y, int& m, int& d) {
+    if (jdn <= 0) return false;
+
+    int64_t l = static_cast<int64_t>(jdn) + 68569;
+    int64_t n = (4 * l) / 146097;
+    l = l - (146097 * n + 3) / 4;
+    int64_t i = (4000 * (l + 1)) / 1461001;
+    l = l - (1461 * i) / 4 + 31;
+    int64_t j = (80 * l) / 2447;
+    d = static_cast<int>(l - (2447 * j) / 80);
+    l = j / 11;
+    m = static_cast<int>(j + 2 - 12 * l);
+    y = static_cast<int>(100 * (n - 49) + i + l);
+
+    if (y < 1 || y > 9999 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+    return true;
+}
+
+inline std::string fmt_yyyymmdd(int y, int m, int d) {
+    char buf[9]{};
+    std::snprintf(buf, sizeof(buf), "%04d%02d%02d", y, m, d);
+    return std::string(buf);
+}
+
+inline std::string pad_or_trunc(std::string s, size_t n, char pad = ' ') {
+    if (s.size() > n) s.resize(n);
+    if (s.size() < n) s.append(n - s.size(), pad);
+    return s;
+}
+
+// FoxPro/VFP DateTime field ('T'): 8 bytes = [JDN (uint32 LE)] [msec since midnight (uint32 LE)].
+// We currently return date-only as "YYYYMMDD".
+inline std::string foxpro_T_to_yyyymmdd(const std::string& raw) {
+    if (raw.size() < 8) return pad_or_trunc(raw, 8, ' ');
+    if (is_all_zero_or_space(raw)) return std::string(8, ' ');
+
+    const uint32_t jdn_u = load_le_u32(raw.data());
+    if (jdn_u == 0) return std::string(8, ' ');
+
+    const int32_t jdn = static_cast<int32_t>(jdn_u);
+    int y = 0, m = 0, d = 0;
+    if (!jdn_to_ymd(jdn, y, m, d)) return std::string(8, ' ');
+    return fmt_yyyymmdd(y, m, d);
+}
+
+} // namespace detail
+
+// Date fields:
+//  - 'D' (xBase): 8-byte ASCII "YYYYMMDD" (often blank = 8 spaces)
+//  - 'T' (FoxPro/VFP DateTime): 8-byte binary, returns date-only "YYYYMMDD"
+inline std::string getFieldAsDateYYYYMMDD(xbase::DbArea& db, const std::string& name) {
+    const int idx0 = resolve_field_index_std(db, name);
+    if (idx0 < 0) return std::string{};
+
+    const auto& F = db.fields();
+    const char t = (idx0 < static_cast<int>(F.size())) ? detail::upper_type(F[static_cast<size_t>(idx0)].type) : '\0';
+
+    const std::string raw = db.get(idx0 + 1); // DbArea::get is 1-based
+    if (t == 'T') return detail::foxpro_T_to_yyyymmdd(raw);
+
+    if (t == 'D') {
+        if (detail::looks_like_ascii_yyyymmdd(raw)) return detail::pad_or_trunc(raw, 8, ' ');
+        // Some FoxPro 2.x tables are encountered with non-ASCII date payloads; decode as JDN.
+        return detail::foxpro_T_to_yyyymmdd(raw);
+    }
+
+    return detail::pad_or_trunc(raw, 8, ' ');
+}
+
+// Memo fields: stubbed (not yet decoded); always returns .T. (xBase true literal)
+inline std::string getFieldAsMemoStub(xbase::DbArea&, const std::string&) {
+    return ".T.";
+}
+
+// Get field as string:
+//  - Character-ish: right-trim DBF padding
+//  - Date ('D') / FoxPro DateTime ('T'): returns "YYYYMMDD" (no trimming to preserve blanks)
+//  - Memo ('M'): stubbed as ".T."
+inline std::string getFieldAsString(xbase::DbArea& db, const std::string& name) {
+    const int idx0 = resolve_field_index_std(db, name);
+    if (idx0 < 0) return std::string{};
+
+    const auto& F = db.fields();
+    const char t = (idx0 < static_cast<int>(F.size())) ? detail::upper_type(F[static_cast<size_t>(idx0)].type) : '\0';
+
+    if (t == 'M') return getFieldAsMemoStub(db, name);
+    if (t == 'D' || t == 'T') return getFieldAsDateYYYYMMDD(db, name);
+
+    std::string s = db.get(idx0 + 1); // DbArea::get is 1-based for get()
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
+    return s;
+}
+
+// Get field as number (throws on bad numeric; glue catches and returns nullopt)
+inline double getFieldAsNumber(xbase::DbArea& db, const std::string& name) {
+    std::string s = getFieldAsString(db, name);
+
+    size_t i = 0;
+    while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+    if (i) s.erase(0, i);
+
+    size_t pos = 0;
+    double v = std::stod(s, &pos);
+    if (pos != s.size()) throw std::runtime_error("trailing");
+    return v;
+}
+
+} // namespace xfg

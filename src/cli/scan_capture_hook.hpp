@@ -34,3 +34,6 @@ inline bool scanhook_maybe_capture_line(const std::string& rawLine) {
     if (!line.empty()) st.lines.push_back(line);
     return true;
 }
+
+
+

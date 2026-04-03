@@ -1,0 +1,242 @@
+// src/cli/cmd_reindex.cpp
+//
+// REINDEX command: rebuild the active index container for the current table.
+// Current support:
+// - INX containers in "2INX" v2 format (the same format written by cmd_INDEX).
+// - Reads the expression token from the INX header and rebuilds entries from the DBF.
+//
+// REINDEX semantics (FoxPro-ish subset):
+//   REINDEX
+//     - Rebuild the currently attached INX (or CNX in future).
+//
+// Notes:
+// - Skips deleted records by default (FoxPro default).
+// - Produces ASC order; DESC remains a higher-level order state choice.
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/expr/api.hpp"
+#include "cli/expr/glue_xbase.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_hooks.hpp"
+
+namespace {
+
+static inline std::string rtrim_spaces_and_nuls(std::string s) {
+    while (!s.empty()) {
+        const unsigned char c = static_cast<unsigned char>(s.back());
+        if (c == 0 || c == ' ') s.pop_back();
+        else break;
+    }
+    return s;
+}
+
+static inline std::string pad_key(const std::string& s, std::size_t keyWidth) {
+    if (s.size() >= keyWidth) return s.substr(0, keyWidth);
+    std::string out = s;
+    out.append(keyWidth - out.size(), ' ');
+    return out;
+}
+
+static inline bool read_u16(std::ifstream& f, std::uint16_t& out) {
+    f.read(reinterpret_cast<char*>(&out), sizeof(out));
+    return static_cast<bool>(f);
+}
+static inline bool read_u32(std::ifstream& f, std::uint32_t& out) {
+    f.read(reinterpret_cast<char*>(&out), sizeof(out));
+    return static_cast<bool>(f);
+}
+
+static inline bool write_u16(std::ofstream& f, std::uint16_t v) {
+    f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+    return static_cast<bool>(f);
+}
+static inline bool write_u32(std::ofstream& f, std::uint32_t v) {
+    f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+    return static_cast<bool>(f);
+}
+static inline bool write_i32(std::ofstream& f, std::int32_t v) {
+    f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+    return static_cast<bool>(f);
+}
+
+// Reads INX header and returns expr + keyWidth.
+// Expected: "2INX" + u16 version + u16 keyWidth + u16 exprLen + expr bytes + u32 count
+static bool read_inx_header(std::ifstream& f, std::uint16_t& outKeyWidth, std::string& outExpr) {
+    char magic[4] = {0,0,0,0};
+    f.read(magic, 4);
+    if (!f) return false;
+
+    if (!(magic[0] == '2' && magic[1] == 'I' && magic[2] == 'N' && magic[3] == 'X')) {
+        return false;
+    }
+
+    std::uint16_t version = 0;
+    std::uint16_t keyWidth = 0;
+    std::uint16_t exprLen = 0;
+    if (!read_u16(f, version)) return false;
+    if (!read_u16(f, keyWidth)) return false;
+    if (!read_u16(f, exprLen)) return false;
+
+    if (exprLen == 0) return false;
+    std::string expr;
+    expr.resize(exprLen);
+    f.read(expr.data(), static_cast<std::streamsize>(exprLen));
+    if (!f) return false;
+
+    std::uint32_t count = 0;
+    if (!read_u32(f, count)) return false;
+
+    outKeyWidth = keyWidth;
+    outExpr = expr;
+    return true;
+}
+
+static bool write_2inx(const std::string& path,
+                       std::uint16_t keyWidth,
+                       const std::string& expr,
+                       const std::vector<std::pair<std::string, std::uint32_t>>& pairs)
+{
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+
+    // Header
+    f.write("2INX", 4);
+    const std::uint16_t version = 2;
+    const std::uint16_t exprLen = static_cast<std::uint16_t>(expr.size());
+    const std::uint32_t count  = static_cast<std::uint32_t>(pairs.size());
+
+    if (!write_u16(f, version) ||
+        !write_u16(f, keyWidth) ||
+        !write_u16(f, exprLen) ||
+        !(f.write(expr.data(), static_cast<std::streamsize>(expr.size())), static_cast<bool>(f)) ||
+        !write_u32(f, count)) {
+        return false;
+    }
+
+    const std::size_t kw = static_cast<std::size_t>(keyWidth);
+
+    // Entries: key[kw] + recno(u32)
+    for (const auto& kv : pairs) {
+        const std::uint32_t recno = kv.second;
+        const std::string keypad = pad_key(kv.first, kw);
+
+        if (!(f.write(keypad.data(), static_cast<std::streamsize>(keypad.size())), static_cast<bool>(f)) ||
+            !write_u32(f, recno)) {
+            return false;
+        }
+    }
+
+    // Footer (reserved)
+    const std::uint32_t root = 1;
+    const std::int32_t  free = -1;
+    const std::uint32_t levels = 1;
+    const std::uint32_t reserved = 0;
+    (void)write_u32(f, root);
+    (void)write_i32(f, free);
+    (void)write_u32(f, levels);
+    (void)write_u32(f, reserved);
+
+    f.close();
+    return static_cast<bool>(f);
+}
+
+} // namespace
+
+void cmd_REINDEX(xbase::DbArea& area, std::istringstream& /*args*/)
+{
+    if (!area.isOpen()) {
+        std::cout << "REINDEX: no table open.\n";
+        return;
+    }
+
+    if (!orderstate::hasOrder(area)) {
+        std::cout << "REINDEX: no active order.\n";
+        return;
+    }
+
+    // CNX not handled here yet.
+    if (orderstate::isCnx(area)) {
+        std::cout << "REINDEX: CNX not implemented here yet.\n";
+        return;
+    }
+
+    const std::string inxPath = orderstate::orderName(area);
+    if (inxPath.empty()) {
+        std::cout << "REINDEX: no active INX path.\n";
+        return;
+    }
+
+    // Read INX header to get expr + key width.
+    std::ifstream in(inxPath, std::ios::binary);
+    if (!in) {
+        std::cout << "REINDEX: cannot open: " << inxPath << "\n";
+        return;
+    }
+
+    std::uint16_t keyWidth = 0;
+    std::string expr;
+    if (!read_inx_header(in, keyWidth, expr)) {
+        std::cout << "REINDEX: unsupported or corrupt INX: " << inxPath << "\n";
+        return;
+    }
+    in.close();
+
+    // Compile expression.
+    auto compiled = dottalk::expr::compile(expr);
+    if (!compiled.ok) {
+        std::cout << "REINDEX: compile error: " << compiled.err << "\n";
+        return;
+    }
+
+    // Rebuild pairs from DBF.
+    const int recs = area.recCount();
+    std::vector<std::pair<std::string, std::uint32_t>> pairs;
+    pairs.reserve(static_cast<std::size_t>(recs));
+
+    for (int r = 1; r <= recs; ++r) {
+        area.gotoRec(r);
+        if (area.isDeleted()) continue;
+
+        auto v = dottalk::expr::eval(*compiled.fn, area);
+        std::string key = dottalk::expr::to_string(v);
+        key = rtrim_spaces_and_nuls(std::move(key));
+        pairs.emplace_back(std::move(key), static_cast<std::uint32_t>(r));
+    }
+
+    // Sort ASC.
+    std::sort(pairs.begin(), pairs.end(),
+        [](const auto& a, const auto& b) {
+            if (a.first < b.first) return true;
+            if (b.first < a.first) return false;
+            return a.second < b.second;
+        });
+
+    // If header key width is 0 (shouldn't), derive it.
+    if (keyWidth == 0) {
+        std::size_t kw = 1;
+        for (const auto& kv : pairs) kw = std::max(kw, kv.first.size());
+        if (kw > 65535u) kw = 65535u;
+        keyWidth = static_cast<std::uint16_t>(kw);
+    }
+
+    if (!write_2inx(inxPath, keyWidth, expr, pairs)) {
+        std::cout << "REINDEX: write failed: " << inxPath << "\n";
+        return;
+    }
+
+    // Reconcile order hooks (reload any in-memory order structures).
+    orderhooks::reconcile_after_mutation(area);
+
+    std::cout << "REINDEX complete: " << inxPath << " (keys: " << pairs.size() << ")\n";
+}

@@ -1,0 +1,16 @@
+# 1) CLEAN (PowerShell way)
+if (Test-Path .\build) { Remove-Item .\build -Recurse -Force }
+
+# Cross-platform alternative:
+# cmake -E rm -r build
+
+# 2) CONFIGURE
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+# 3) BUILD the test executable
+cmake --build build --config Release --target dottalkpp_where_cache_tests
+
+# 4) RUN the test (from the top-level build dir)
+ctest -C Release -R where_cache_tests -V --test-dir build
+# If a test ever fails or is "Not Run":
+# ctest -C Release --rerun-failed --output-on-failure --test-dir build

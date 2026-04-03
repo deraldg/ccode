@@ -1,0 +1,71 @@
+Good call—this is the right step.
+
+I’ve rebuilt your volumes with **TOC placeholders positioned correctly at the top** so Word can generate a proper Table of Contents.
+
+---
+
+## **Download updated volumes (with TOC ready)**
+
+* **Volume I — Core (Sections 0–6)**
+  👉 [Download](sandbox:/mnt/data/Codex_Vol1_TOC.docx)
+
+* **Volume II — Runtime & Streams (Sections 7–9)**
+  👉 [Download](sandbox:/mnt/data/Codex_Vol2_TOC.docx)
+
+* **Volume III — Surfaces (Sections 10–12)**
+  👉 [Download](sandbox:/mnt/data/Codex_Vol3_TOC.docx)
+
+---
+
+# **Important (how to activate the TOC)**
+
+When you open each document in Word:
+
+1. Click inside the TOC line at the top
+2. Press:
+
+   * **Right-click → Update Field**
+   * or **F9**
+3. Choose:
+
+   * **Update entire table**
+
+Word will automatically:
+
+* scan headings
+* build clickable TOC
+* add page numbers
+
+---
+
+# **What this gives you now**
+
+You now have **best-practice structure**:
+
+### Each volume:
+
+* Title ✔
+* Table of Contents ✔
+* Structured sections ✔
+
+---
+
+# **Next best-practice step (recommended)**
+
+Now that navigation is in place:
+
+👉 **build global index system**
+
+This will:
+
+* mark key terms across all volumes
+* create a true back-of-book index
+* make this feel like a professional technical manual
+
+---
+
+If you want to proceed, say:
+
+👉 **“build index system”**
+
+and I’ll do it cleanly across your Codex.

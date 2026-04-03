@@ -1,0 +1,147 @@
+* =========================================================
+* Expression Comparison Shake-Down
+* Root-focus test: comparison semantics, not browser grammar
+* Uses COUNT FOR and LIST FOR only.
+* =========================================================
+
+CLOSE
+USE STUDENTS
+
+STATUS
+AREA
+
+* ---------------------------------------------------------
+* Baseline counts
+* ---------------------------------------------------------
+COUNT
+COUNT ALL
+
+* ---------------------------------------------------------
+* CASE OFF: folded matches should count as true
+* ---------------------------------------------------------
+SET CASE OFF
+
+COUNT FOR LNAME = "smith"
+COUNT FOR LNAME = "Smith"
+COUNT FOR LNAME = "SMITH"
+
+COUNT FOR LNAME = "white"
+COUNT FOR LNAME = "White"
+COUNT FOR LNAME = "WHITE"
+
+LIST FOR LNAME = "white"
+LIST FOR LNAME = "White"
+LIST FOR LNAME = "WHITE"
+
+* ---------------------------------------------------------
+* CASE ON: exact match only
+* ---------------------------------------------------------
+SET CASE ON
+
+COUNT FOR LNAME = "smith"
+COUNT FOR LNAME = "Smith"
+COUNT FOR LNAME = "SMITH"
+
+COUNT FOR LNAME = "white"
+COUNT FOR LNAME = "White"
+COUNT FOR LNAME = "WHITE"
+
+LIST FOR LNAME = "white"
+LIST FOR LNAME = "White"
+LIST FOR LNAME = "WHITE"
+
+* ---------------------------------------------------------
+* Unquoted literal checks
+* These help expose parser / token coercion issues.
+* ---------------------------------------------------------
+SET CASE OFF
+COUNT FOR LNAME = White
+COUNT FOR LNAME = WHITE
+COUNT FOR LNAME = Smith
+COUNT FOR LNAME = SMITH
+
+SET CASE ON
+COUNT FOR LNAME = White
+COUNT FOR LNAME = WHITE
+COUNT FOR LNAME = Smith
+COUNT FOR LNAME = SMITH
+
+* ---------------------------------------------------------
+* Inequality checks
+* ---------------------------------------------------------
+SET CASE OFF
+COUNT FOR LNAME != "White"
+COUNT FOR LNAME != "WHITE"
+
+SET CASE ON
+COUNT FOR LNAME != "White"
+COUNT FOR LNAME != "WHITE"
+
+* ---------------------------------------------------------
+* Ordering comparisons on text
+* ---------------------------------------------------------
+SET CASE OFF
+COUNT FOR LNAME < "M"
+COUNT FOR LNAME <= "M"
+COUNT FOR LNAME > "M"
+COUNT FOR LNAME >= "M"
+
+SET CASE ON
+COUNT FOR LNAME < "M"
+COUNT FOR LNAME <= "M"
+COUNT FOR LNAME > "M"
+COUNT FOR LNAME >= "M"
+
+* ---------------------------------------------------------
+* Numeric comparisons
+* Uses GPA if populated enough in this table.
+* ---------------------------------------------------------
+COUNT FOR GPA = 4
+COUNT FOR GPA >= 3
+COUNT FOR GPA < 2
+LIST FOR GPA >= 3
+
+* ---------------------------------------------------------
+* Boolean / combined expression checks
+* ---------------------------------------------------------
+SET CASE OFF
+COUNT FOR LNAME = "white" AND FNAME = "emma"
+COUNT FOR LNAME = "white" OR FNAME = "emma"
+COUNT FOR NOT LNAME = "white"
+
+SET CASE ON
+COUNT FOR LNAME = "white" AND FNAME = "emma"
+COUNT FOR LNAME = "White" AND FNAME = "Emma"
+COUNT FOR LNAME = "WHITE" AND FNAME = "EMMA"
+COUNT FOR NOT LNAME = "White"
+
+* ---------------------------------------------------------
+* Parentheses / precedence checks
+* ---------------------------------------------------------
+SET CASE OFF
+COUNT FOR (LNAME = "white" AND FNAME = "emma") OR LNAME = "smith"
+COUNT FOR LNAME = "white" AND (FNAME = "emma" OR LNAME = "smith")
+
+SET CASE ON
+COUNT FOR (LNAME = "White" AND FNAME = "Emma") OR LNAME = "Smith"
+COUNT FOR LNAME = "White" AND (FNAME = "Emma" OR LNAME = "Smith")
+
+* ---------------------------------------------------------
+* Deleted visibility interaction
+* ---------------------------------------------------------
+SET DELETED ON
+COUNT
+COUNT FOR LNAME = "white"
+
+SET DELETED OFF
+COUNT
+COUNT FOR LNAME = "white"
+
+SET DELETED ON
+
+* ---------------------------------------------------------
+* Reset
+* ---------------------------------------------------------
+SET CASE OFF
+AREA
+STATUS

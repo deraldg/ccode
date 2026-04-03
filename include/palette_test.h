@@ -1,3 +1,4 @@
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
 // include/palette_test.h
 #ifndef PALETTE_TEST_H
 #define PALETTE_TEST_H
@@ -24,3 +25,7 @@ private:
 };
 
 #endif // PALETTE_TEST_H
+#else
+// TVision not enabled: header declarations not required in non-TV build.
+
+#endif  // TVISION guard

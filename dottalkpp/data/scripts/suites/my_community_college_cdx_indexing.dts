@@ -1,0 +1,80 @@
+* ---- My Community College: build cdx containers + field-name tags ----
+* Assumes DBFs open correctly via USE and INDEXES slot resolver is configured.
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+
+select building
+cdx create
+cdx addtag bldg
+rebuild
+
+select rooms
+cdx create
+cdx addtag room
+cdx addtag bldg
+rebuild
+
+select terms
+cdx create
+cdx addtag term
+rebuild
+
+select dept
+cdx create
+cdx addtag dept_id
+rebuild
+
+select majors
+cdx create
+cdx addtag major
+cdx addtag dept_id
+rebuild
+
+select teachers
+cdx create
+cdx addtag tid
+cdx addtag dept_id
+cdx addtag lname
+cdx addtag fname
+rebuild
+
+select courses
+cdx create
+cdx addtag cid
+cdx addtag dept_id
+rebuild
+
+select students
+cdx create
+cdx addtag sid
+cdx addtag major
+cdx addtag lname
+cdx addtag fname
+rebuild
+
+select classes
+cdx create
+cdx addtag cls_id
+cdx addtag term
+cdx addtag cid
+cdx addtag room
+cdx addtag tid
+rebuild
+
+select enroll
+cdx create
+cdx addtag sid
+cdx addtag cls_id
+rebuild
+
+select stud_maj
+cdx create
+cdx addtag sid
+cdx addtag major
+rebuild
+
+select tassign
+cdx create
+cdx addtag cls_id
+cdx addtag tid
+rebuild

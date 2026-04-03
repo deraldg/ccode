@@ -1,0 +1,47 @@
+name: Build (Windows, MSVC + vcpkg)
+
+on:
+  push:
+    branches: [ main, dottalkpp-core ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-msvc:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      VCPKG_ROOT_TEMP: ${{ runner.temp }}\vcpkg
+      BUILD_DIR: build
+      CONFIG: Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bootstrap vcpkg
+        shell: cmd
+        run: |
+          git clone https://github.com/microsoft/vcpkg %VCPKG_ROOT_TEMP%
+          %VCPKG_ROOT_TEMP%\bootstrap-vcpkg.bat
+
+      - name: Configure (CMake + MSVC)
+        shell: cmd
+        run: >
+          cmake -S . -B %BUILD_DIR%
+          -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_BUILD_TYPE=%CONFIG%
+          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT_TEMP%\scripts\buildsystems\vcpkg.cmake
+          -DDOTTALK_WITH_TV=ON
+          -DDOTTALK_WITH_INDEX=ON
+          -DBUILD_PYDOTTALK=OFF
+
+      - name: Build (dottalkpp target)
+        shell: cmd
+        run: cmake --build %BUILD_DIR% --config %CONFIG% --target dottalkpp
+
+      - name: Test (ctest)
+        shell: cmd
+        continue-on-error: true
+        run: ctest --test-dir %BUILD_DIR% -C %CONFIG% --output-on-failure

@@ -1,0 +1,10 @@
+macro design plans
+
+function layer
+user function layer
+command registry
+user command registry - self registration
+SAP hooks
+Centralize Expressions and Parsing
+api reference
+commment pass through source

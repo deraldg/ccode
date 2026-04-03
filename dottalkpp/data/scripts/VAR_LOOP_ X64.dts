@@ -1,0 +1,55 @@
+clear
+SET ECHO OFF
+SET VAR cTable = X64_ALL_TYPES
+SET VAR n = 10
+SET VAR counter = 0
+
+CLOSE ALL
+ERASE &cTable CONFIRM
+
+LOOP 3 TIMES
+ECHO HELLO WORLD
+ENDLOOP
+
+LOOP &n TIMES
+* ECHO &N
+ENDLOOP
+
+CREATE X64 &cTable ( ;
+    ID      N(8,0), ;
+    CVAL    C(20), ;
+    NVAL    N(10,2), ;
+    DVAL    D, ;
+    LVAL    L, ;
+    MVAL    M )
+
+USE &cTable
+
+STRUCT
+
+* QUIT
+
+
+
+LOOP &n TIMES quiet
+    APPEND
+    &counter = 1 + &counter
+    calc ID = 1 + counter
+    REPLACE CVAL WITH "four score and seven years ago"
+    REPLACE DVAL WITH 19570301
+    REPLACE LVAL WITH T
+    ECHO counter
+    tup
+ENDLOOP
+
+SET VAR n = 1
+ECHO &n
+
+COUNT
+
+STRUCT
+
+TOP
+SL ALL
+
+* CLOSE

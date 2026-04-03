@@ -27,6 +27,33 @@ bool BPlusTreeBackend::MapCursor::next(Key& outKey, RecNo& outRec) {
     return true;
 }
 
+bool BPlusTreeBackend::MapCursor::last(Key& outKey, RecNo& outRec) {
+    started_ = true;
+    if (begin_ == end_) return false;
+    it_ = end_;
+    --it_;
+    outKey = it_->first;
+    outRec = it_->second;
+    return true;
+}
+
+bool BPlusTreeBackend::MapCursor::prev(Key& outKey, RecNo& outRec) {
+    if (!started_) return last(outKey, outRec);
+    if (begin_ == end_) return false;
+
+    if (it_ == end_) {
+        it_ = end_;
+        --it_;
+    } else {
+        if (it_ == begin_) return false;
+        --it_;
+    }
+
+    outKey = it_->first;
+    outRec = it_->second;
+    return true;
+}
+
 // -------- small helpers ------------------------------------------------------
 
 void BPlusTreeBackend::write_u32(std::ostream& os, std::uint32_t v) {

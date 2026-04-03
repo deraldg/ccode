@@ -1,118 +1,236 @@
-﻿// src/cli/order_hooks.cpp
-#include "order_hooks.hpp"
-
-// Prefer the OOP path if available, otherwise fall back to legacy orderstate
-#if __has_include("cli/table_context.hpp")
-  #include "cli/table_context.hpp"
-  #define DOTTALK_HAS_TABLE_CONTEXT 1
-#else
-  #include "order_state.hpp"
-  #define DOTTALK_HAS_TABLE_CONTEXT 0
-#endif
-
-#include "xbase.hpp"
-#include "xindex/index_manager.hpp"
-#include "xindex/attach.hpp"
+// src/cli/order_hooks.cpp
+#include "cli/order_hooks.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_nav.hpp"
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
-namespace order_hooks {
+#include "cnx/cnx.hpp"
+#include "cdx/cdx.hpp"
 
-// --- helper: rebuild all in-memory indexes (identity recno remap) ---
-static void rebuild_all_indexes(xbase::DbArea& a) noexcept {
-    try {
-        auto& mgr = xindex::ensure_manager(a);
-        // Identity mapping is fine for generic refresh; it fully rebuilds.
-        mgr.on_pack([](int i){ return i; });
-    } catch (...) {
-        // no manager attached yet; ignore
+namespace fs = std::filesystem;
+
+namespace orderhooks {
+
+static constexpr uint32_t TAGF_UNIQUE = 0x0001; // CNX/CDX tag flags bit for UNIQUE (keep in sync with cnx)
+
+static std::string up_copy(std::string s)
+{
+    for (char& c : s) {
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
     }
+    return s;
 }
 
-// Attach a default order if there is exactly one .inx next to the DBF
-void attach_default_order(xbase::DbArea& a) {
-    if (!a.isOpen()) return;
-    const std::string dbname = a.name();
-    if (dbname.empty()) return;
+static bool cnx_pick_default_tag(const std::string& cnx_path, std::string& out_tag_upper)
+{
+    out_tag_upper.clear();
 
-    namespace fs = std::filesystem;
+    cnxfile::CNXHandle* h = nullptr;
+    if (!cnxfile::open(cnx_path, h) || !h) {
+        return false;
+    }
 
-    // Already has an order selected? If so, do nothing.
-#if DOTTALK_HAS_TABLE_CONTEXT
-    auto& ord = dli::ensure_table(a).order();
-    if (!ord.orderName().empty()) return;
-#else
-    if (!orderstate::orderName(a).empty()) return;
-#endif
+    std::vector<cnxfile::TagInfo> tags;
+    const bool ok = cnxfile::read_tagdir(h, tags);
+    cnxfile::close(h);
 
-    // Look next to the DBF; if there's exactly one .inx, attach it
-    fs::path dir = fs::path(dbname).parent_path();
-    if (dir.empty()) return; // avoid scanning CWD when path is relative/unknown
+    if (!ok || tags.empty()) {
+        return false;
+    }
 
-    fs::path only;
-    size_t count = 0;
-    try {
-        for (auto const& de : fs::directory_iterator(dir)) {
-            if (de.is_regular_file() && de.path().extension() == ".inx") {
-                only = de.path();
-                if (++count > 1) break;
-            }
+    // Prefer UNIQUE tag if present; otherwise first tag.
+    for (const auto& t : tags) {
+        if ((t.flags & TAGF_UNIQUE) != 0 && !t.name.empty()) {
+            out_tag_upper = up_copy(t.name);
+            return true;
         }
-    } catch (...) {
-        return; // directory not accessible; just bail
     }
 
-    if (count == 1) {
-#if DOTTALK_HAS_TABLE_CONTEXT
-        ord.setOrder(only.string());
-#else
-        orderstate::setOrder(a, only.string());
-#endif
+    out_tag_upper = up_copy(tags.front().name);
+    return !out_tag_upper.empty();
+}
+
+static bool cdx_pick_default_tag(const std::string& cdx_path, std::string& out_tag_upper)
+{
+    out_tag_upper.clear();
+
+    cdxfile::CDXHandle* h = nullptr;
+    if (!cdxfile::open(cdx_path, h) || !h) {
+        return false;
     }
+
+    std::vector<cdxfile::TagInfo> tags;
+    const bool ok = cdxfile::read_tagdir(h, tags);
+    cdxfile::close(h);
+
+    if (!ok || tags.empty()) {
+        return false;
+    }
+
+    // Prefer UNIQUE tag if present; otherwise first tag.
+    for (const auto& t : tags) {
+        if ((t.flags & TAGF_UNIQUE) != 0 && !t.name.empty()) {
+            out_tag_upper = up_copy(t.name);
+            return true;
+        }
+    }
+
+    out_tag_upper = up_copy(tags.front().name);
+    return !out_tag_upper.empty();
 }
 
-// Notify that data changed in-place (append/replace/delete/recall unknown):
-// safest action is to rebuild in-memory indexes.
-void order_notify_mutation(xbase::DbArea& a) noexcept {
-    rebuild_all_indexes(a);
+static bool cnx_tag_exists(const std::string& cnx_path, const std::string& tag_upper)
+{
+    if (tag_upper.empty()) {
+        return false;
+    }
+
+    cnxfile::CNXHandle* h = nullptr;
+    if (!cnxfile::open(cnx_path, h) || !h) {
+        return false;
+    }
+
+    std::vector<cnxfile::TagInfo> tags;
+    const bool ok = cnxfile::read_tagdir(h, tags);
+    cnxfile::close(h);
+
+    if (!ok) {
+        return false;
+    }
+
+    for (const auto& t : tags) {
+        if (up_copy(t.name) == tag_upper) {
+            return true;
+        }
+    }
+    return false;
 }
 
-// Notify that a manual REFRESH happened â€” rebuild to sync with table
-void order_notify_refresh(xbase::DbArea& a) {
-    rebuild_all_indexes(a);
+static bool cdx_tag_exists(const std::string& cdx_path, const std::string& tag_upper)
+{
+    if (tag_upper.empty()) {
+        return false;
+    }
+
+    cdxfile::CDXHandle* h = nullptr;
+    if (!cdxfile::open(cdx_path, h) || !h) {
+        return false;
+    }
+
+    std::vector<cdxfile::TagInfo> tags;
+    const bool ok = cdxfile::read_tagdir(h, tags);
+    cdxfile::close(h);
+
+    if (!ok) {
+        return false;
+    }
+
+    for (const auto& t : tags) {
+        if (up_copy(t.name) == tag_upper) {
+            return true;
+        }
+    }
+    return false;
 }
 
-// Notify that PACK happened â€” indexes are stale; clear and reattach default if any
-void order_notify_pack(xbase::DbArea& a) {
+
+void reconcile_after_mutation(xbase::DbArea& area) noexcept
+{
     try {
-        auto& mgr = xindex::ensure_manager(a);
-        mgr.on_zap();
-    } catch (...) { /* ignore */ }
-    attach_default_order(a);
+        // Any mutation can invalidate cached endpoints / lists.
+        order_nav_invalidate(area);
+
+        const std::string name = orderstate::orderName(area);
+        if (name.empty()) {
+            return;
+        }
+
+        // If the backing container vanished, clear order state.
+        std::error_code ec;
+        if (!fs::exists(fs::path(name), ec) || ec) {
+            orderstate::clearOrder(area);
+            return;
+        }
+
+        // CNX must have a valid active tag.
+        if (orderstate::isCnx(area)) {
+            std::string tag = up_copy(orderstate::activeTag(area));
+
+            if (!tag.empty() && cnx_tag_exists(name, tag)) {
+                // Keep as-is.
+                orderstate::setActiveTag(area, tag);
+                return;
+            }
+
+            // If tag missing/invalid, pick a default from the CNX tagdir.
+            std::string chosen;
+            if (cnx_pick_default_tag(name, chosen)) {
+                orderstate::setActiveTag(area, chosen);
+                return;
+            }
+
+            // CNX unusable => clear order (SETORDER will report failure).
+            orderstate::clearOrder(area);
+        }
+        // CDX must have a valid active tag.
+        if (orderstate::isCdx(area)) {
+            std::string tag = up_copy(orderstate::activeTag(area));
+
+            if (!tag.empty() && cdx_tag_exists(name, tag)) {
+                // Keep as-is.
+                orderstate::setActiveTag(area, tag);
+                return;
+            }
+
+            // If tag missing/invalid, pick a default from the CDX tagdir.
+            std::string chosen;
+            if (cdx_pick_default_tag(name, chosen)) {
+                orderstate::setActiveTag(area, chosen);
+                return;
+            }
+
+            // CDX unusable => clear order (SETORDER will report failure).
+            orderstate::clearOrder(area);
+        }
+
+
+    }
+    catch (...) {
+        // never throw
+    }
 }
 
-// Optional: after index changes, some flows auto-top/bottom â€” keep as no-op for now
-void order_auto_top(xbase::DbArea& /*a*/) {
-    // Intentionally empty; explicit TOP/BOTTOM commands handle navigation.
+void auto_top(xbase::DbArea& area) noexcept
+{
+    try {
+        if (!area.isOpen()) {
+            return;
+        }
+
+        int32_t rn = 0;
+        if (order_first_recno(area, rn) && rn >= 1 && rn <= area.recCount()) {
+            if (area.gotoRec(rn)) {
+                (void)area.readCurrent();
+            }
+            return;
+        }
+
+        if (area.top()) {
+            (void)area.readCurrent();
+        }
+    }
+    catch (...) {
+        // never throw
+    }
 }
 
-} // namespace order_hooks
-
-// ---- Global wrappers for legacy call sites (keep binary linkage stable) ----
-void attach_default_order(xbase::DbArea& a) {
-    order_hooks::attach_default_order(a);
-}
-void order_notify_mutation(xbase::DbArea& a) noexcept {
-    order_hooks::order_notify_mutation(a);
-}
-void order_notify_refresh(xbase::DbArea& a) {
-    order_hooks::order_notify_refresh(a);
-}
-void order_notify_pack(xbase::DbArea& a) {
-    order_hooks::order_notify_pack(a);
-}
-void order_auto_top(xbase::DbArea& a) noexcept {
-    order_hooks::order_auto_top(a);
+void attach_default_order(xbase::DbArea& area) noexcept
+{
+    (void)area;
+    // No-op for now. Auto-attach is handled in USE; SETORDER explicitly sets an order.
 }
 
+} // namespace orderhooks

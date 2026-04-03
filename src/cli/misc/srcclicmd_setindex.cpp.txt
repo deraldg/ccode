@@ -1,0 +1,101 @@
+// src/cli/cmd_setindex.cpp
+//
+// SETINDEX command (INX attach).
+//
+// FoxPro-ish intent (subset):
+//   SET INDEX TO <file>[.inx]
+//   SET INDEX TO    (clears)
+//
+// Practical behavior in DotTalk++:
+// - Attaches an INX file as the active order for the current work area.
+// - Accepts 1INX/2INX magic; does not create files.
+// - Uses your path resolver to locate the index under INDEXES root.
+
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/path_resolver.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_hooks.hpp"
+
+namespace fs = std::filesystem;
+
+namespace {
+
+static bool looks_like_inx(const fs::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    if (!f) return false;
+    char m[4] = {0,0,0,0};
+    f.read(m, 4);
+    if (!f) return false;
+    const bool is1 = (m[0]=='1' && m[1]=='I' && m[2]=='N' && m[3]=='X');
+    const bool is2 = (m[0]=='2' && m[1]=='I' && m[2]=='N' && m[3]=='X');
+    return is1 || is2;
+}
+
+} // namespace
+
+void cmd_SETINDEX(xbase::DbArea& area, std::istringstream& args)
+{
+    std::string tok1;
+    args >> tok1;
+
+    if (!area.isOpen()) {
+        std::cout << "SET INDEX: no table open.\n";
+        return;
+    }
+
+    // SET INDEX (no args) -> report.
+    if (tok1.empty()) {
+        if (!orderstate::hasOrder(area) || orderstate::isCnx(area)) {
+            std::cout << "SET INDEX: none.\n";
+        } else {
+            std::cout << "SET INDEX: " << orderstate::orderName(area) << "\n";
+        }
+        return;
+    }
+
+    // SET INDEX TO ... (FoxPro keyword tolerance)
+    if (textio::ieq(tok1, "TO")) {
+        std::string tok2;
+        args >> tok2;
+        tok1 = tok2; // may be empty => clear
+    }
+
+    // Clear if empty after TO.
+    if (tok1.empty()) {
+        orderstate::clearOrder(area);
+        orderhooks::reconcile_after_mutation(area);
+        std::cout << "SET INDEX: cleared.\n";
+        return;
+    }
+
+    fs::path p = dottalk::paths::resolve_index(tok1);
+    if (!p.has_extension()) p.replace_extension(".inx");
+
+    if (!fs::exists(p)) {
+        std::cout << "SET INDEX: file not found: " << p.string() << "\n";
+        return;
+    }
+    if (!looks_like_inx(p)) {
+        std::cout << "SET INDEX: not an INX container: " << p.string() << "\n";
+        return;
+    }
+
+    // Activate as INX order.
+    orderstate::setOrder(area, p.string());
+    orderstate::setAscending(area, true);
+    orderhooks::reconcile_after_mutation(area);
+
+    if (!orderstate::hasOrder(area) || orderstate::isCnx(area)) {
+        std::cout << "SET INDEX: unable to activate: " << p.string() << "\n";
+        return;
+    }
+
+    std::cout << "SET INDEX: attached '" << orderstate::orderName(area) << "'\n";
+}

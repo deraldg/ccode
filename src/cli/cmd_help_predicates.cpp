@@ -1,4 +1,4 @@
-﻿#include <iostream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include "command_registry.hpp"
@@ -48,4 +48,7 @@ static bool s_reg = [](){
     dli::registry().add("PREDICATES",   &cmd_PREDICATES);
     return true;
 }();
+
+
+
 

@@ -1,0 +1,62 @@
+  <!-- PAGE 8: DIAL / WebSurface / draw.io Integration (Retro Amiga Lilac) -->
+  <diagram id="p8_diagram" name="DIAL / WebSurface / draw.io Integration">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#E0CCFF">
+      <root>
+        <mxCell id="p8_0"/>
+        <mxCell id="p8_1" parent="p8_0"/>
+
+        <!-- DIAL LANGUAGE -->
+        <mxCell id="p8_dial" value="DIAL Language&#xa;---&#xa;Declarative UI&#xa;Layout Rules&#xa;Bindings&#xa;Events&#xa;Components"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="80" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- DIAL RUNTIME -->
+        <mxCell id="p8_dialrt" value="DIAL Runtime&#xa;---&#xa;Parser&#xa;Renderer&#xa;Event Loop&#xa;State Manager&#xa;Hot Reload (future)"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="500" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- WEBSURFACE -->
+        <mxCell id="p8_websurface" value="WebSurface&#xa;---&#xa;HTML Bridge&#xa;CSS Themes&#xa;JS Event Proxy&#xa;DOM Sync&#xa;Viewport Manager"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="920" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- DRAW.IO INTEGRATION -->
+        <mxCell id="p8_drawio" value="draw.io Integration&#xa;---&#xa;Diagram Import&#xa;Diagram Export&#xa;XML Bridge&#xa;Canvas Sync&#xa;Node Mapping"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="80" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- UI WINDOWS -->
+        <mxCell id="p8_ui" value="UI Windows&#xa;---&#xa;Panels&#xa;Dialogs&#xa;Forms&#xa;Toolbars&#xa;Split Views&#xa;Navigation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="500" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- EVENT ROUTER -->
+        <mxCell id="p8_events" value="Event Router&#xa;---&#xa;Keyboard&#xa;Mouse&#xa;Touch&#xa;Focus&#xa;Custom Events&#xa;Propagation Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="920" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p8_edge1" edge="1" parent="p8_1" source="p8_dial" target="p8_dialrt"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge2" edge="1" parent="p8_1" source="p8_dialrt" target="p8_websurface"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge3" edge="1" parent="p8_1" source="p8_websurface" target="p8_drawio"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge4" edge="1" parent="p8_1" source="p8_drawio" target="p8_ui"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge5" edge="1" parent="p8_1" source="p8_ui" target="p8_events"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

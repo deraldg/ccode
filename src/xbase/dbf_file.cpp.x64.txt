@@ -1,0 +1,322 @@
+// src/xbase/dbf_file.cpp  (ASCII only)
+
+#include "xbase.hpp"
+#include "xbase_vfp.hpp"
+#include "xbase_64.hpp"
+// NOTE: removed "utils.hpp" include to avoid current header parser issue
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cstddef>
+#include <filesystem>
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#if DOTTALK_WITH_INDEX
+  #include "xindex/index_manager.hpp"
+#endif
+
+namespace xbase {
+
+// --- local, self-contained ends_with_ci (so we don't need utils.hpp right now)
+static inline bool ends_with_ci_local(const std::string& s, const std::string& suf) noexcept {
+    if (s.size() < suf.size()) return false;
+    const size_t off = s.size() - suf.size();
+    for (size_t i = 0; i < suf.size(); ++i) {
+        const unsigned char a_uc = static_cast<unsigned char>(s[off + i]);
+        const unsigned char b_uc = static_cast<unsigned char>(suf[i]);
+        const int a = std::tolower(static_cast<int>(a_uc));
+        const int b = std::tolower(static_cast<int>(b_uc));
+        if (a != b) return false;
+    }
+    return true;
+}
+
+// --- DBF version helpers ----------------------------------------------------
+static inline bool is_vfp_family(std::uint8_t ver) noexcept {
+    // VFP-style headers commonly use 0x30 with memo/autoinc/varfield flag bits.
+    // Accept the VFP family conservatively here.
+    return (ver & 0x30) == 0x30;
+}
+
+static inline int32_t clamp_i32_u64(std::uint64_t v) noexcept {
+    return (v > static_cast<std::uint64_t>(std::numeric_limits<int32_t>::max()))
+        ? std::numeric_limits<int32_t>::max()
+        : static_cast<int32_t>(v);
+}
+
+// ---- helpers exposed in header ----
+std::string dbNameWithExt(std::string s) {
+    while (!s.empty() && s.back() == ' ') s.pop_back();
+    if (!ends_with_ci_local(s, ".dbf")) s += ".dbf";
+    return s;
+}
+
+// ---- DbArea: file/open/structure/navigation ----
+
+void DbArea::open(const std::string& filename)
+{
+    close();
+
+    namespace fs = std::filesystem;
+
+    fs::path p(filename);
+    if (!p.is_absolute()) p = fs::absolute(p);
+
+    // Normalize without full canonicalization.
+    const fs::path norm = p.lexically_normal();
+    const std::string abs = norm.string();
+
+    if (!fs::exists(norm)) {
+        throw std::runtime_error("DbArea: file does not exist: " + abs);
+    }
+    if (!fs::is_regular_file(norm)) {
+        throw std::runtime_error("DbArea: not a regular file: " + abs);
+    }
+
+    const auto sz = fs::file_size(norm);
+    if (sz < static_cast<std::uintmax_t>(sizeof(HeaderRec))) {
+        throw std::runtime_error("DbArea: invalid DBF header (file too small): " + abs);
+    }
+
+    // Canonical contract (xbase.hpp): compute + store absolute DBF path + derived names.
+    _compute_paths_and_names_(abs);
+
+    // Open using the canonical absolute path (single source of truth).
+    // IMPORTANT: Do not auto-create files here. USE/OPEN must never create files.
+    _fp.open(_dbf_abs_path, std::ios::in | std::ios::out | std::ios::binary);
+    if (!_fp.is_open()) {
+        throw std::runtime_error("DbArea: cannot open file (access denied/locked?): " + _dbf_abs_path);
+    }
+
+    readHeader();
+    readFields();
+
+    _recbuf.assign(static_cast<size_t>(_hdr.cpr), ' ');
+
+    // 1-based field values
+    _fd.assign(_fields.size() + 1, std::string{});
+    _fd_snapshot.assign(_fields.size() + 1, std::string{});
+
+    // If the loader did not stamp the authoritative 64-bit count, fall back to
+    // the compatibility header projection.
+    if (_rec_count64 == 0 && _hdr.num_of_recs > 0) {
+        _rec_count64 = static_cast<std::uint64_t>(_hdr.num_of_recs);
+    }
+
+    // start at record 1 (FoxPro-ish default) when records exist
+    if (_rec_count64 > 0) {
+        _crn64 = 1;
+        _crn = 1;
+        readCurrent();
+    } else {
+        _crn64 = 0;
+        _crn = 0;
+        _del = NOT_DELETED;
+    }
+
+#if DOTTALK_WITH_INDEX
+    // Construct the manager bound to this area. No default ctor exists.
+    if (!_idx) {
+        _idx = std::make_unique<xindex::IndexManager>(*this);
+    }
+#endif
+}
+
+void DbArea::readHeader()
+{
+    if (!_fp.is_open()) {
+        throw std::runtime_error("DbArea: file not open in readHeader");
+    }
+
+    _fp.clear();
+    _fp.seekg(0, std::ios::beg);
+
+    const std::uint8_t ver = vfp_loader::peekVersion(_fp);
+
+    if (ver == DBF_VERSION_64) {
+        x64_loader::readHeader(*this, _fp);
+        return;
+    }
+
+    // Current project path: use VFP loader for VFP and legacy DBFs.
+    // That matches the existing implementation behavior, but now with x64 excluded.
+    vfp_loader::readHeader(*this, _fp);
+
+    // Classic/VFP paths do not currently stamp the authoritative 64-bit runtime count.
+    _rec_count64 = (_hdr.num_of_recs < 0)
+        ? 0u
+        : static_cast<std::uint64_t>(_hdr.num_of_recs);
+}
+
+void DbArea::readFields()
+{
+    if (!_fp.is_open()) {
+        throw std::runtime_error("DbArea: file not open in readFields");
+    }
+
+    _fp.clear();
+    _fp.seekg(0, std::ios::beg);
+
+    const std::uint8_t ver = vfp_loader::peekVersion(_fp);
+    std::vector<VfpFieldExtras> extras;
+
+    if (ver == DBF_VERSION_64) {
+        x64_loader::readFields(*this, _fp, extras);
+        return;
+    }
+
+    // Existing behavior for VFP and classic DBFs in this codebase.
+    _fp.seekg(sizeof(HeaderRec), std::ios::beg);
+    vfp_loader::readFields(*this, _fp, extras);
+
+    // extras currently remain loader-local by design.
+    // If/when VFP nullable/binary/autoinc metadata becomes first-class runtime
+    // state, store them on DbArea here rather than re-parsing elsewhere.
+}
+
+bool DbArea::gotoRec(int32_t recno) {
+    if (recno < 1) return false;
+    if (static_cast<std::uint64_t>(recno) > _rec_count64) return false;
+
+    _crn64 = static_cast<std::uint64_t>(recno);
+    _crn = recno;
+
+    const std::streampos pos =
+        static_cast<std::streampos>(_hdr.data_start) +
+        static_cast<std::streamoff>((static_cast<std::uint64_t>(recno) - 1ULL) *
+                                    static_cast<std::uint64_t>(_hdr.cpr));
+    _fp.seekg(pos, std::ios::beg);
+    return readCurrent();
+}
+
+bool DbArea::top()    { return (_rec_count64 == 0) ? false : gotoRec(1); }
+
+bool DbArea::bottom() {
+    if (_rec_count64 == 0) return false;
+    if (_rec_count64 > static_cast<std::uint64_t>(std::numeric_limits<int32_t>::max())) {
+        // Compatibility navigation API cannot address beyond int32_t yet.
+        return false;
+    }
+    return gotoRec(static_cast<int32_t>(_rec_count64));
+}
+
+bool DbArea::skip(int delta) {
+    if (_crn64 == 0) return false;
+
+    const std::int64_t cur = static_cast<std::int64_t>(_crn64);
+    const std::int64_t want = cur + static_cast<std::int64_t>(delta);
+
+    if (want < 1) return false;
+    if (static_cast<std::uint64_t>(want) > _rec_count64) return false;
+    if (static_cast<std::uint64_t>(want) > static_cast<std::uint64_t>(std::numeric_limits<int32_t>::max())) {
+        // Compatibility navigation API cannot address beyond int32_t yet.
+        return false;
+    }
+
+    return gotoRec(static_cast<int32_t>(want));
+}
+
+bool DbArea::appendBlank() {
+    // Empty freshly-opened tables can leave the stream in fail/eof state because
+    // open() sets _crn=1 and readCurrent() fails when num_of_recs == 0.
+    _fp.clear();
+
+    std::vector<char> blank(static_cast<size_t>(_hdr.cpr), ' ');
+    blank[0] = NOT_DELETED;
+
+    // Append at the logical end of table, not physical EOF. This avoids
+    // resurrecting stale tail bytes when the authoritative record count is lower
+    // than the file's physical payload.
+    const std::streamoff recPos =
+        static_cast<std::streamoff>(_hdr.data_start) +
+        static_cast<std::streamoff>(_rec_count64 * static_cast<std::uint64_t>(_hdr.cpr));
+
+    _fp.seekp(recPos, std::ios::beg);
+    _fp.write(blank.data(), static_cast<std::streamsize>(blank.size()));
+
+    const char eof = static_cast<char>(0x1A);
+    _fp.write(&eof, 1);
+
+    if (!_fp) return false;
+
+    // Advance authoritative count first, then refresh 32-bit compatibility view.
+    ++_rec_count64;
+    _hdr.num_of_recs = clamp_i32_u64(_rec_count64);
+
+    // Do not rewrite the entire 32-byte header through HeaderRec for VFP/x64.
+    // That would clobber dialect-specific tail bytes.
+    // Patch the common 32-bit record count at offset 4.
+    _fp.clear();
+    _fp.seekp(4, std::ios::beg);
+    _fp.write(reinterpret_cast<const char*>(&_hdr.num_of_recs), sizeof(_hdr.num_of_recs));
+
+    // x64 dialect also keeps the authoritative record count in the 64-byte
+    // extension block immediately after the 32-byte VFP-style header.
+    // Keep that extension count in sync so a reopen reports the correct count.
+    if (_dbf_version_byte == DBF_VERSION_64) {
+        const std::uint64_t rc64 = _rec_count64;
+        _fp.seekp(static_cast<std::streamoff>(sizeof(VfpHeader)) +
+                      static_cast<std::streamoff>(offsetof(LargeHeaderExtension, record_count)),
+                  std::ios::beg);
+        _fp.write(reinterpret_cast<const char*>(&rc64), sizeof(rc64));
+    }
+
+    _fp.flush();
+
+    if (!_fp) return false;
+
+    _fp.clear();
+
+    // Defensive reset: do not let the previous current record leak into the
+    // newly appended blank row if the decode path is imperfect.
+    _recbuf.assign(static_cast<size_t>(_hdr.cpr), ' ');
+    _fd.assign(_fields.size() + 1, std::string{});
+    _fd_snapshot.assign(_fields.size() + 1, std::string{});
+    _del = NOT_DELETED;
+
+    if (_rec_count64 > static_cast<std::uint64_t>(std::numeric_limits<int32_t>::max())) {
+        // New row exists, header/ext count is correct, but the current navigation API
+        // cannot address it yet. Leave cursor on the last representable row.
+        _crn64 = _rec_count64;
+        _crn = std::numeric_limits<int32_t>::max();
+        return true;
+    }
+
+    const bool ok = gotoRec(static_cast<int32_t>(_rec_count64));
+
+#if DOTTALK_WITH_INDEX
+    if (ok && _idx && _idx->has_active()) {
+        _fd_snapshot = _fd;
+        _idx->on_append(static_cast<int32_t>(_recno64 > static_cast<std::uint64_t>(std::numeric_limits<int32_t>::max())
+                            ? std::numeric_limits<int32_t>::max()
+                            : _crn64));
+    }
+#endif
+
+    return ok;
+}
+
+bool DbArea::deleteCurrent() {
+    if (_crn64 == 0) return false;
+    _del = IS_DELETED;
+
+    const bool ok = writeCurrent();
+
+#if DOTTALK_WITH_INDEX
+    if (ok && _idx && _idx->has_active()) {
+        _idx->on_delete(_crn);
+    }
+#endif
+
+    return ok;
+}
+
+XBaseEngine::XBaseEngine() {
+    for (auto& p : _areas) p = std::make_unique<DbArea>();
+}
+
+} // namespace xbase

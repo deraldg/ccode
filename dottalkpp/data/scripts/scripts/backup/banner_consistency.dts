@@ -1,0 +1,27 @@
+* Verify LIST banner matches STATUS/STRUCT INDEX for tag and direction at each step
+COLOR DEFAULT
+
+USE students noindex
+SELECT STUDENTS
+SETCNX students.cnx
+* choose tag & direction, snapshot trio
+SETORDER students.cnx LNAME --asc
+LIST 10
+STATUS
+STRUCT INDEX
+* flip direction and snapshot again
+DESCEND
+LIST 10
+STATUS
+STRUCT INDEX
+* switch tag and snapshot
+SETORDER students.cnx GPA --asc
+LIST 10
+STATUS
+STRUCT INDEX
+* final: switch to SID desc and snapshot
+SETORDER students.cnx SID --desc
+LIST 10
+STATUS
+STRUCT INDEX
+* end

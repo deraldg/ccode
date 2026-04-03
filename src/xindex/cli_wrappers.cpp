@@ -41,8 +41,8 @@ namespace {
     }
     static inline bool ends_with_icase(std::string s, std::string suf) {
         if (s.size() < suf.size()) return false;
-        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
-        std::transform(suf.begin(), suf.end(), suf.begin(), ::tolower);
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+        std::transform(suf.begin(), suf.end(), suf.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
         return s.compare(s.size() - suf.size(), suf.size(), suf) == 0;
     }
 }
@@ -113,3 +113,6 @@ void db_render_current(const xbase::DbArea& a) {
 }
 
 } // namespace xindex
+
+
+

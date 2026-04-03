@@ -1,5 +1,0 @@
-USE students
-REPLACE notes WITH FILE "sample_memo.txt"
-TYPE notes TO "out_notes.txt"
-MEMOSTATS
-QUIT

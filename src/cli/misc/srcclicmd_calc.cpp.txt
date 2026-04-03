@@ -1,0 +1,768 @@
+// src/cli/cmd_calc.cpp
+//
+// NOTE (CTOD fix):
+// Added a date-algebra boolean compare fast-path so expressions like
+//   (CTOD("2000-01-01") - 1 = CTOD("1999-12-31"))
+// evaluate correctly instead of falling through to eval_any() and returning .F.
+//
+// Drop-in replacement for your current cmd_calc.cpp.
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <ctime>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <locale>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "xbase.hpp"
+#include "cli/expr/api.hpp"
+#include "cli/expr/fn_string.hpp"
+#include "cli/expr/fn_date.hpp"
+#include "cli/expr/ast.hpp"
+#include "cli/expr/glue_xbase.hpp"
+#include "value_normalize.hpp"
+#include "parse.hpp"
+#include "predicate.hpp"
+#include "predicate_chain.hpp"
+#include "cli/cmd_calc.hpp"
+
+// ------------------------------------------------------------
+// tiny helpers
+// ------------------------------------------------------------
+
+namespace {
+
+static inline std::string ltrim(std::string s) {
+    size_t i = 0;
+    while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+    return s.substr(i);
+}
+
+static inline std::string rtrim(std::string s) {
+    size_t i = s.size();
+    while (i > 0 && std::isspace(static_cast<unsigned char>(s[i - 1]))) --i;
+    return s.substr(0, i);
+}
+
+static inline std::string trim(std::string s) {
+    return rtrim(ltrim(std::move(s)));
+}
+
+static inline std::string upper(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
+}
+
+static inline bool contains_any(const std::string& s, const std::string& chars) {
+    for (char c : s) {
+        if (chars.find(c) != std::string::npos) return true;
+    }
+    return false;
+}
+
+static inline bool contains_quote(const std::string& s) {
+    return s.find('"') != std::string::npos || s.find('\'') != std::string::npos;
+}
+
+static inline std::string dequote(std::string s) {
+    s = trim(s);
+    if (s.size() >= 2) {
+        if ((s.front() == '"'  && s.back() == '"') ||
+            (s.front() == '\'' && s.back() == '\'')) {
+            return s.substr(1, s.size() - 2);
+        }
+    }
+    return s;
+}
+
+static inline bool looks_like_function_call(const std::string& sIn) {
+    const std::string s = trim(sIn);
+    // crude: IDENT(
+    size_t i = 0;
+    while (i < s.size() && (std::isalpha(static_cast<unsigned char>(s[i])) || s[i] == '_')) ++i;
+    if (i == 0) return false;
+    while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+    return (i < s.size() && s[i] == '(');
+}
+
+// Split on top-level '=' (not inside parens/quotes). Returns false if none.
+static inline bool split_top_level_equal(const std::string& s, std::string& lhs, std::string& rhs) {
+    bool in_s = false, in_d = false;
+    int depth = 0;
+
+    for (size_t i = 0; i < s.size(); ++i) {
+        const char c = s[i];
+
+        if (!in_d && c == '\'') { in_s = !in_s; continue; }
+        if (!in_s && c == '"')  { in_d = !in_d; continue; }
+        if (in_s || in_d) continue;
+
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { --depth; continue; }
+        if (depth != 0) continue;
+
+        if (c == '=') {
+            lhs = s.substr(0, i);
+            rhs = s.substr(i + 1);
+            return true;
+        }
+    }
+    return false;
+}
+
+// Split on first top-level binary operator (one-char) among ops, left-to-right.
+// opOut is set to the operator found.
+static bool split_top_level_binary(const std::string& s, const std::string& ops, std::string& lhs, char& opOut, std::string& rhs) {
+    bool in_s = false, in_d = false;
+    int depth = 0;
+
+    for (size_t i = 0; i < s.size(); ++i) {
+        const char c = s[i];
+
+        if (!in_d && c == '\'') { in_s = !in_s; continue; }
+        if (!in_s && c == '"')  { in_d = !in_d; continue; }
+        if (in_s || in_d) continue;
+
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { --depth; continue; }
+        if (depth != 0) continue;
+
+        if (ops.find(c) != std::string::npos) {
+            lhs = s.substr(0, i);
+            rhs = s.substr(i + 1);
+            opOut = c;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Strip one or more layers of wrapping parentheses: "( ... )" -> "..."
+static inline std::string strip_wrapping_parens(std::string s) {
+    s = trim(s);
+    for (;;) {
+        if (s.size() < 2) break;
+        if (s.front() != '(' || s.back() != ')') break;
+
+        bool in_s = false, in_d = false;
+        int depth = 0;
+        bool wraps = true;
+
+        for (size_t i = 0; i < s.size(); ++i) {
+            const char c = s[i];
+
+            if (!in_d && c == '\'' ) { in_s = !in_s; continue; }
+            if (!in_s && c == '"'  ) { in_d = !in_d; continue; }
+            if (in_s || in_d) continue;
+
+            if (c == '(') ++depth;
+            else if (c == ')') --depth;
+
+            // If we close the outermost parens before the end, it's not a pure wrapper.
+            if (depth == 0 && i != s.size() - 1) { wraps = false; break; }
+            if (depth < 0) { wraps = false; break; }
+        }
+
+        if (!wraps || depth != 0) break;
+
+        s = trim(s.substr(1, s.size() - 2));
+    }
+    return s;
+}
+
+// Split a top-level comparison expression into LHS, OP, RHS.
+// OP supports: <= >= == != <> = < >
+static inline bool split_top_level_cmp(const std::string& sIn, std::string& lhsOut, std::string& opOut, std::string& rhsOut) {
+    const std::string s = strip_wrapping_parens(sIn);
+    bool in_s = false, in_d = false;
+    int depth = 0;
+
+    for (size_t i = 0; i < s.size(); ++i) {
+        const char c = s[i];
+
+        if (!in_d && c == '\'') { in_s = !in_s; continue; }
+        if (!in_s && c == '"')  { in_d = !in_d; continue; }
+        if (in_s || in_d) continue;
+
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { --depth; continue; }
+        if (depth != 0) continue;
+
+        // 2-char ops first
+        if (i + 1 < s.size()) {
+            const char c2 = s[i + 1];
+            if (c == '<' && c2 == '=') { lhsOut = s.substr(0, i); opOut = "<="; rhsOut = s.substr(i + 2); return true; }
+            if (c == '>' && c2 == '=') { lhsOut = s.substr(0, i); opOut = ">="; rhsOut = s.substr(i + 2); return true; }
+            if (c == '=' && c2 == '=') { lhsOut = s.substr(0, i); opOut = "=="; rhsOut = s.substr(i + 2); return true; }
+            if (c == '!' && c2 == '=') { lhsOut = s.substr(0, i); opOut = "!="; rhsOut = s.substr(i + 2); return true; }
+            if (c == '<' && c2 == '>') { lhsOut = s.substr(0, i); opOut = "<>"; rhsOut = s.substr(i + 2); return true; }
+        }
+
+        // 1-char ops
+        if (c == '=' || c == '<' || c == '>') {
+            lhsOut = s.substr(0, i);
+            opOut  = std::string(1, c);
+            rhsOut = s.substr(i + 1);
+            return true;
+        }
+    }
+    return false;
+}
+
+static inline bool parse_int64_literal(const std::string& sIn, long long& out) {
+    const std::string s = trim(sIn);
+    if (s.empty()) return false;
+
+    size_t i = 0;
+    if (s[i] == '+' || s[i] == '-') ++i;
+    if (i >= s.size()) return false;
+
+    for (; i < s.size(); ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
+    }
+
+    try {
+        out = std::stoll(s);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+static inline std::vector<std::string> split_args_csv(const std::string& insideParens) {
+    std::vector<std::string> out;
+    std::string cur;
+    bool in_s = false, in_d = false;
+    int depth = 0;
+
+    for (size_t i = 0; i < insideParens.size(); ++i) {
+        const char c = insideParens[i];
+
+        if (!in_d && c == '\'') { in_s = !in_s; cur.push_back(c); continue; }
+        if (!in_s && c == '"')  { in_d = !in_d; cur.push_back(c); continue; }
+
+        if (!in_s && !in_d) {
+            if (c == '(') { ++depth; cur.push_back(c); continue; }
+            if (c == ')') { --depth; cur.push_back(c); continue; }
+            if (depth == 0 && c == ',') {
+                out.push_back(trim(cur));
+                cur.clear();
+                continue;
+            }
+        }
+        cur.push_back(c);
+    }
+    if (!trim(cur).empty()) out.push_back(trim(cur));
+    return out;
+}
+
+static inline bool split_call(const std::string& sIn, std::string& fnOut, std::vector<std::string>& argsOut) {
+    const std::string s = trim(sIn);
+    // IDENT ( ... )
+    size_t i = 0;
+    while (i < s.size() && (std::isalpha(static_cast<unsigned char>(s[i])) || s[i] == '_')) ++i;
+    if (i == 0) return false;
+    fnOut = upper(s.substr(0, i));
+
+    while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+    if (i >= s.size() || s[i] != '(') return false;
+
+    // find matching ')'
+    bool in_s = false, in_d = false;
+    int depth = 0;
+    size_t start = i + 1;
+    size_t end = std::string::npos;
+
+    for (size_t k = i; k < s.size(); ++k) {
+        const char c = s[k];
+        if (!in_d && c == '\'') { in_s = !in_s; continue; }
+        if (!in_s && c == '"')  { in_d = !in_d; continue; }
+        if (in_s || in_d) continue;
+
+        if (c == '(') ++depth;
+        else if (c == ')') {
+            --depth;
+            if (depth == 0) { end = k; break; }
+        }
+    }
+    if (end == std::string::npos) return false;
+
+    const std::string inside = s.substr(start, end - start);
+    argsOut = split_args_csv(inside);
+    return true;
+}
+
+// ------------------------------------------------------------
+// Date algebra helpers (CTOD/DATEADD/...) used by CALC fast-path
+// ------------------------------------------------------------
+
+static inline bool is_date8(const std::string& sIn) {
+    const std::string s = trim(sIn);
+    if (s.size() != 8) return false;
+    for (char c : s) {
+        if (!std::isdigit(static_cast<unsigned char>(c))) return false;
+    }
+    return true;
+}
+
+static inline std::string digits_only(std::string s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if (std::isdigit(static_cast<unsigned char>(c))) out.push_back(c);
+    }
+    return out;
+}
+
+static inline bool looks_like_iso_date_text(const std::string& sIn) {
+    // allow 2000-01-01 or 2000/01/01 or 2000.01.01
+    const std::string s = trim(sIn);
+    if (s.size() < 8) return false;
+    int d = 0;
+    for (char c : s) if (std::isdigit(static_cast<unsigned char>(c))) ++d;
+    return d == 8;
+}
+
+static inline bool get_field_as_date8(xbase::DbArea& A, const std::string& fieldName, std::string& outDate8) {
+    const auto F = A.fields();
+    const std::string want = upper(trim(fieldName));
+
+    int idx0 = -1;
+    for (int i = 0; i < static_cast<int>(F.size()); ++i) {
+        if (upper(trim(F[i].name)) == want) { idx0 = i; break; }
+    }
+    if (idx0 < 0) return false;
+
+    const char t = F[idx0].type;
+    if (t != 'D') return false;
+
+    const std::string raw = A.get(idx0 + 1); // 1-based
+    const std::string d8 = digits_only(raw);
+    if (!is_date8(d8)) return false;
+
+    outDate8 = d8;
+    return true;
+}
+
+static inline std::string call_date_builtin(const std::string& fn, const std::vector<std::string>& args) {
+    // unify with fn_date.cpp spec list
+    const auto specs = dottalk::expr::date_fn_specs();
+    for (const auto& s : specs) {
+        if (s.name == fn) {
+            std::string out;
+            if (s.fn(args, out)) return out;
+            return std::string{};
+        }
+    }
+    return std::string{};
+}
+
+static inline std::optional<std::string> try_eval_date_fn_call(xbase::DbArea& A, const std::string& token) {
+    std::string fn;
+    std::vector<std::string> args;
+    if (!split_call(token, fn, args)) return std::nullopt;
+
+    // Pre-resolve bare field tokens inside date fn args that are expected to be dates.
+    // (fn_date.cpp already handles flexible parsing, but if user passes a field name
+    // unquoted, we want to feed the field value.)
+    std::vector<std::string> cooked = args;
+    for (std::string& a : cooked) {
+        const std::string aa = trim(a);
+        if (aa.empty()) continue;
+        // If quoted, leave it.
+        if ((aa.size() >= 2) && ((aa.front() == '"' && aa.back() == '"') || (aa.front() == '\'' && aa.back() == '\''))) continue;
+        // If looks like date text, leave it.
+        if (is_date8(aa) || looks_like_iso_date_text(aa)) continue;
+        // If looks like nested call, leave it.
+        if (looks_like_function_call(aa)) continue;
+
+        std::string d8;
+        if (get_field_as_date8(A, aa, d8)) {
+            a = d8;
+        }
+    }
+
+    const std::string out = call_date_builtin(fn, cooked);
+    if (out.empty()) return std::nullopt;
+    return out;
+}
+
+static inline bool resolve_date_arg(xbase::DbArea& A, const std::string& tokenIn, std::string& outDate8) {
+    const std::string token = trim(tokenIn);
+    if (token.empty()) return false;
+
+    // quoted literal date text
+    const std::string dq = dequote(token);
+    if (dq != token) {
+        const std::string d8 = digits_only(dq);
+        if (is_date8(d8)) { outDate8 = d8; return true; }
+        if (looks_like_iso_date_text(dq)) {
+            const std::string d8b = digits_only(dq);
+            if (is_date8(d8b)) { outDate8 = d8b; return true; }
+        }
+    }
+
+    // direct date8
+    if (is_date8(token)) { outDate8 = token; return true; }
+
+    // direct ISO-ish text without quotes
+    if (looks_like_iso_date_text(token)) {
+        const std::string d8 = digits_only(token);
+        if (is_date8(d8)) { outDate8 = d8; return true; }
+    }
+
+    // field
+    if (get_field_as_date8(A, token, outDate8)) return true;
+
+    // function call
+    if (auto out = try_eval_date_fn_call(A, token)) {
+        const std::string d8 = digits_only(*out);
+        if (is_date8(d8)) { outDate8 = d8; return true; }
+        // Some date builtins may already return date8 digits; accept that directly.
+        if (is_date8(*out)) { outDate8 = *out; return true; }
+        return false;
+    }
+
+    return false;
+}
+
+static inline std::tm tm_from_date8(const std::string& d8) {
+    std::tm tm{};
+    tm.tm_isdst = -1;
+
+    const int y = std::stoi(d8.substr(0, 4));
+    const int m = std::stoi(d8.substr(4, 2));
+    const int d = std::stoi(d8.substr(6, 2));
+
+    tm.tm_year = y - 1900;
+    tm.tm_mon  = m - 1;
+    tm.tm_mday = d;
+    tm.tm_hour = 12; // midday to avoid DST edge
+    tm.tm_min  = 0;
+    tm.tm_sec  = 0;
+    return tm;
+}
+
+static inline std::string date8_from_time_t(std::time_t t) {
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    std::ostringstream oss;
+    oss.imbue(std::locale::classic());
+    oss << std::setw(4) << std::setfill('0') << (tm.tm_year + 1900)
+        << std::setw(2) << std::setfill('0') << (tm.tm_mon + 1)
+        << std::setw(2) << std::setfill('0') << tm.tm_mday;
+    return oss.str();
+}
+
+static inline bool add_days_date8(const std::string& d8, int days, std::string& outDate8) {
+    if (!is_date8(d8)) return false;
+    std::tm tm = tm_from_date8(d8);
+    std::time_t t = std::mktime(&tm);
+    if (t == static_cast<std::time_t>(-1)) return false;
+
+    constexpr int64_t SEC_DAY = 24 * 60 * 60;
+    const int64_t t2 = static_cast<int64_t>(t) + static_cast<int64_t>(days) * SEC_DAY;
+
+    outDate8 = date8_from_time_t(static_cast<std::time_t>(t2));
+    return is_date8(outDate8);
+}
+
+static inline bool diff_days_date8(const std::string& d8a, const std::string& d8b, int& outDays) {
+    if (!is_date8(d8a) || !is_date8(d8b)) return false;
+    std::tm ta = tm_from_date8(d8a);
+    std::tm tb = tm_from_date8(d8b);
+    std::time_t A = std::mktime(&ta);
+    std::time_t B = std::mktime(&tb);
+    if (A == static_cast<std::time_t>(-1) || B == static_cast<std::time_t>(-1)) return false;
+
+    constexpr int64_t SEC_DAY = 24 * 60 * 60;
+    const int64_t da = static_cast<int64_t>(A) / SEC_DAY;
+    const int64_t db = static_cast<int64_t>(B) / SEC_DAY;
+    outDays = static_cast<int>(da - db);
+    return true;
+}
+
+static std::string eval_date_algebra_expr(xbase::DbArea& A, const std::string& exprIn, bool& ok);
+
+// Evaluate a single atom to date8 (YYYYMMDD) string.
+static std::optional<std::string> eval_date_atom_to_date8(xbase::DbArea& A, const std::string& atomIn) {
+    const std::string atom = trim(atomIn);
+    if (atom.empty()) return std::nullopt;
+
+    // strip wrapping parens
+    if (atom.front() == '(' && atom.back() == ')') {
+        // Let eval_date_algebra_expr handle nested, but only if it resolves to date8.
+        bool ok = false;
+        std::string out = eval_date_algebra_expr(A, atom, ok);
+        if (ok && is_date8(out)) return out;
+    }
+
+    std::string d8;
+    if (resolve_date_arg(A, atom, d8)) return d8;
+    return std::nullopt;
+}
+
+// Date algebra evaluator supports:
+//   <date> + <int>  -> date8
+//   <date> - <int>  -> date8
+//   <date> - <date> -> integer days (stringified)
+// plus builtin calls that yield date8 (CTOD, DATE, TODAY, DATEADD, etc.)
+static std::string eval_date_algebra_expr(xbase::DbArea& A, const std::string& exprIn, bool& ok) {
+    ok = false;
+    const std::string expr = strip_wrapping_parens(exprIn);
+
+    // First try top-level + or - splits
+    {
+        std::string L, R;
+        char op = 0;
+        if (split_top_level_binary(expr, "+-", L, op, R)) {
+            auto leftD = eval_date_atom_to_date8(A, L);
+            if (!leftD) return std::string{};
+
+            const std::string rightT = trim(R);
+
+            // RHS may be an integer literal (days)
+            long long days = 0;
+            if (parse_int64_literal(rightT, days)) {
+                std::string out;
+                if (op == '+') {
+                    if (!add_days_date8(*leftD, static_cast<int>(days), out)) return std::string{};
+                    ok = true; return out;
+                } else {
+                    if (!add_days_date8(*leftD, static_cast<int>(-days), out)) return std::string{};
+                    ok = true; return out;
+                }
+            }
+
+            // date - date => day diff
+            if (op == '-') {
+                auto rightD = eval_date_atom_to_date8(A, rightT);
+                if (rightD) {
+                    int dd = 0;
+                    if (!diff_days_date8(*leftD, *rightD, dd)) return std::string{};
+                    ok = true;
+                    return std::to_string(dd);
+                }
+            }
+
+            // If RHS is another expression, allow nested evaluation (e.g., DATEADD(...) etc)
+            // but only in date - date scenario.
+            if (op == '-') {
+                bool ok2 = false;
+                std::string out2 = eval_date_algebra_expr(A, rightT, ok2);
+                if (ok2 && is_date8(out2)) {
+                    int dd = 0;
+                    if (!diff_days_date8(*leftD, out2, dd)) return std::string{};
+                    ok = true;
+                    return std::to_string(dd);
+                }
+            }
+
+            return std::string{};
+        }
+    }
+
+    // If expression itself is a date atom / builtin that resolves to date8
+    if (auto d = eval_date_atom_to_date8(A, expr)) {
+        ok = true;
+        return *d;
+    }
+
+    // If expression is a date builtin call that returns a non-date numeric string (e.g., DATEDIFF)
+    if (auto out = try_eval_date_fn_call(A, expr)) {
+        ok = true;
+        return *out;
+    }
+
+    return std::string{};
+}
+
+static std::optional<std::string> try_eval_date_algebra(xbase::DbArea& A, const std::string& exprIn) {
+    bool ok = false;
+    std::string out = eval_date_algebra_expr(A, exprIn, ok);
+    if (!ok) return std::nullopt;
+    return out;
+}
+
+static std::optional<bool> try_eval_date_algebra_bool(xbase::DbArea& A, const std::string& exprIn) {
+    // Handle cases like: (CTOD("2000-01-01") - 1 = CTOD("1999-12-31"))
+    std::string lhs, op, rhs;
+    if (!split_top_level_cmp(exprIn, lhs, op, rhs)) return std::nullopt;
+
+    auto eval_side = [&](const std::string& s, std::string& outStr) -> bool {
+        bool ok = false;
+        outStr = eval_date_algebra_expr(A, s, ok);
+        if (ok && !outStr.empty()) return true;
+
+        // Allow plain integer literals on either side for compares like DATEDIFF(...) = 1
+        long long n = 0;
+        if (parse_int64_literal(s, n)) {
+            outStr = trim(s);
+            return true;
+        }
+        return false;
+    };
+
+    std::string Ls, Rs;
+    if (!eval_side(lhs, Ls)) return std::nullopt;
+    if (!eval_side(rhs, Rs)) return std::nullopt;
+
+    // Date8 compare (YYYYMMDD) if both are date8.
+    if (is_date8(Ls) && is_date8(Rs)) {
+        const long long L = std::stoll(Ls);
+        const long long R = std::stoll(Rs);
+
+        if (op == "=" || op == "==") return (L == R);
+        if (op == "<>" || op == "!=") return (L != R);
+        if (op == "<")  return (L <  R);
+        if (op == "<=") return (L <= R);
+        if (op == ">")  return (L >  R);
+        if (op == ">=") return (L >= R);
+        return std::nullopt;
+    }
+
+    // Integer compare if both sides are integer literals.
+    long long Li = 0, Ri = 0;
+    if (parse_int64_literal(Ls, Li) && parse_int64_literal(Rs, Ri)) {
+        if (op == "=" || op == "==") return (Li == Ri);
+        if (op == "<>" || op == "!=") return (Li != Ri);
+        if (op == "<")  return (Li <  Ri);
+        if (op == "<=") return (Li <= Ri);
+        if (op == ">")  return (Li >  Ri);
+        if (op == ">=") return (Li >= Ri);
+        return std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
+// ------------------------------------------------------------
+// predicate / value eval glue used by CALC
+// ------------------------------------------------------------
+
+static inline bool looks_like_simple_predicate(const std::string& expr) {
+    const std::string s = trim(expr);
+    // fast reject if any parens/quotes or function call or arithmetic; keep predicate grammar simple
+    if (contains_quote(s)) return false;
+    if (s.find('(') != std::string::npos || s.find(')') != std::string::npos) return false;
+    if (looks_like_function_call(s)) return false;
+    if (contains_any(s, "+-*/")) return false;
+    return (s.find('=') != std::string::npos ||
+            s.find('<') != std::string::npos ||
+            s.find('>') != std::string::npos);
+}
+
+static inline std::string make_record_view_for_area(xbase::DbArea& A, dottalk::expr::RecordView& rv) {
+    // Provide field accessors expected by the expr engines.
+    rv.get_field_str = [&](std::string_view name) -> std::string {
+        const std::string n = upper(trim(std::string(name)));
+        const auto F = A.fields();
+        for (int i = 0; i < static_cast<int>(F.size()); ++i) {
+            if (upper(trim(F[i].name)) == n) return A.get(i + 1);
+        }
+        return std::string{};
+    };
+    rv.get_field_num = [&](std::string_view name) -> std::optional<double> {
+        const std::string n = upper(trim(std::string(name)));
+        const auto F = A.fields();
+        for (int i = 0; i < static_cast<int>(F.size()); ++i) {
+            if (upper(trim(F[i].name)) == n) {
+                // numeric fields: N, F, I?
+                const char t = F[i].type;
+                if (t == 'N' || t == 'F' || t == 'I') {
+                    const std::string raw = trim(A.get(i + 1));
+                    if (raw.empty()) return std::nullopt;
+                    try { return std::stod(raw); } catch (...) { return std::nullopt; }
+                }
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    };
+    return std::string{};
+}
+
+// ------------------------------------------------------------
+// CALC command
+// ------------------------------------------------------------
+
+void cmd_CALC(xbase::DbArea& A, std::istringstream& in) {
+    std::string expr;
+    std::getline(in, expr);
+    expr = trim(expr);
+
+    if (expr.empty()) {
+        std::cout << "CALC: missing expression.\n";
+        return;
+    }
+
+    // Date algebra fast-path
+    if (auto out = try_eval_date_algebra(A, expr)) {
+        std::cout << *out << "\n";
+        return;
+    }
+
+    // Date algebra boolean compare fast-path (e.g., (CTOD(...) - 1 = CTOD(...)))
+    if (auto b = try_eval_date_algebra_bool(A, expr)) {
+        std::cout << (*b ? ".T." : ".F.") << "\n";
+        return;
+    }
+
+    // Predicate fast-path for simple field compares
+    if (looks_like_simple_predicate(expr)) {
+        try {
+            auto P = dottalk::expr::compile_predicate(expr);
+            dottalk::expr::RecordView rv{};
+            make_record_view_for_area(A, rv);
+            const bool b = P->eval(rv);
+            std::cout << (b ? ".T." : ".F.") << "\n";
+            return;
+        } catch (const std::exception& e) {
+            std::cout << "CALC: predicate error: " << e.what() << "\n";
+            return;
+        }
+    }
+
+    // If it looks like a function call or contains quotes, try string/value expression
+    if (looks_like_function_call(expr) || contains_quote(expr)) {
+        auto s = dottalk::expr::eval_string_value_expr(A, expr);
+        if (s) {
+            std::cout << *s << "\n";
+            return;
+        }
+    }
+
+    // General evaluator (bool/number/string)
+    const dottalk::expr::EvalValue v = dottalk::expr::eval_any(A, expr);
+    switch (v.k) {
+        case dottalk::expr::EvalValue::K_Bool:
+            std::cout << (v.b ? ".T." : ".F.") << "\n";
+            break;
+        case dottalk::expr::EvalValue::K_Number:
+            std::cout << v.n << "\n";
+            break;
+        case dottalk::expr::EvalValue::K_String:
+            std::cout << v.s << "\n";
+            break;
+        default:
+            std::cout << ".F.\n";
+            break;
+    }
+}
+
+} // namespace

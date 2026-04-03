@@ -1,0 +1,23 @@
+* Ensure switching between INX auto-attach and CNX manual attach is consistent
+COLOR DEFAULT
+* Start with default (likely INX auto-attach)
+USE students
+STATUS
+STRUCT
+LIST 5
+* Move to CNX explicitly
+USE students noindex
+SETCNX students.cnx
+STATUS
+STRUCT INDEX
+* Choose a CNX tag, verify reports
+SETORDER students.cnx TAG LNAME --asc
+STATUS
+STRUCT INDEX
+LIST 5
+* Switch CNX tag & direction
+SETORDER students.cnx TAG SID --desc
+STATUS
+STRUCT INDEX
+LIST 5
+* end

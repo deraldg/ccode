@@ -1,0 +1,20 @@
+* Full baseline sweep (safe, read-only)
+COLOR DEFAULT
+USE students
+AREA
+STATUS
+STRUCT
+* ensure INX reports correctly
+LIST
+* switch to CNX
+USE students noindex
+SETCNX students.cnx
+SETORDER students.cnx TAG LNAME --asc
+STATUS
+STRUCT INDEX
+LIST
+DESCEND
+LIST
+ASCEND
+LIST
+* end

@@ -1,0 +1,7 @@
+* INX baseline: open and confirm single-tag INX shows as active
+COLOR DEFAULT
+USE students
+AREA
+STATUS
+STRUCT
+* end

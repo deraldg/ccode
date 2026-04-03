@@ -1,0 +1,18 @@
+DTSHEMA 1
+AREA 0 | dbf=D:\code\ccode\dottalkpp\data\dbf\BUILDING.DBF | index=none | alias=BUILDING
+AREA 1 | dbf=D:\code\ccode\dottalkpp\data\dbf\CLASSES.DBF | index=none | alias=CLASSES
+AREA 2 | dbf=D:\code\ccode\dottalkpp\data\dbf\CLIENTS.dbf | index=none | alias=CLIENTS
+AREA 3 | dbf=D:\code\ccode\dottalkpp\data\dbf\COURSES.DBF | index=none | alias=COURSES
+AREA 4 | dbf=D:\code\ccode\dottalkpp\data\dbf\DEPT.DBF | index=none | alias=DEPT
+AREA 5 | dbf=D:\code\ccode\dottalkpp\data\dbf\ENROLL.DBF | index=D:\code\ccode\dottalkpp\data\indexes\enroll.cnx | alias=ENROLL
+AREA 6 | dbf=D:\code\ccode\dottalkpp\data\dbf\MAJORS.DBF | index=none | alias=MAJORS
+AREA 7 | dbf=D:\code\ccode\dottalkpp\data\dbf\ROOMS.DBF | index=none | alias=ROOMS
+AREA 8 | dbf=D:\code\ccode\dottalkpp\data\dbf\STUD_MAJ.DBF | index=none | alias=STUD_MAJ
+AREA 9 | dbf=D:\code\ccode\dottalkpp\data\dbf\STUDENTS.DBF | index=DBF\STUDENTS.inx | alias=STUDENTS
+AREA 10 | dbf=D:\code\ccode\dottalkpp\data\dbf\TASSIGN.DBF | index=none | alias=TASSIGN
+AREA 11 | dbf=D:\code\ccode\dottalkpp\data\dbf\TEACHERS.DBF | index=D:\code\ccode\dottalkpp\data\indexes\teachers.cnx | alias=TEACHERS
+AREA 12 | dbf=D:\code\ccode\dottalkpp\data\dbf\TERMS.DBF | index=none | alias=TERMS
+RELATION STUDENTS ENROLL ON SID
+RELATION ENROLL CLASSES ON CLS_ID
+RELATION CLASSES TASSIGN ON CLS_ID
+RELATION TASSIGN TEACHERS ON TID

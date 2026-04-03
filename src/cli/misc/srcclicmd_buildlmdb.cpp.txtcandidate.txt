@@ -1,0 +1,459 @@
+// src/cli/cmd_buildlmdb.cpp
+//
+// BUILDLMDB / REBUILD for CDX containers → LMDB backing store
+// One LMDB env per table container; multiple tags as named DBs inside (MDB_MAXDBS=1024).
+//
+// Compatibility policy:
+// - If <indexes>/<stem>.cdx exists as a *file*, keep existing RUN1 persistence.
+// - If <indexes>/<stem>.cdx is a *directory*, treat it as LMDB env directory.
+// - If file exists and you still want LMDB, env directory defaults to "<file>.d".
+//
+// New safety: prompt before destructive rebuild of existing LMDB env dir
+// (unless CLEAN/FORCE is used, which archives first).
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/path_resolver.hpp"
+#include "cli/order_state.hpp"
+#include "cnx/cdx.hpp"
+#include "xindex/cdx_backend.hpp" // existing file-based backend (RUN1) path
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <system_error>
+#include <vector>
+#include <lmdb.h>
+
+namespace fs = std::filesystem;
+
+namespace {
+
+static std::string up_copy(std::string s) {
+    for (auto& c : s) c = (char)std::toupper((unsigned char)c);
+    return s;
+}
+
+static const char* lmdb_err(int rc) {
+    return mdb_strerror(rc);
+}
+
+static fs::path default_cdx_container_path(xbase::DbArea& area)
+{
+    std::string stem;
+    if (area.isOpen()) {
+        stem = area.dbfBasename();
+        if (stem.empty()) stem = area.logicalName();
+        if (stem.empty()) {
+            fs::path n(area.name());
+            stem = n.stem().string();
+        }
+    }
+    if (stem.empty()) stem = "table";
+    fs::path p = dottalk::paths::resolve_index(stem);
+    if (!p.has_extension()) p.replace_extension(".cdx");
+    return p;
+}
+
+// Decide LMDB environment dir based on the container path.
+// If container is already a directory -> use it.
+// If container is a file or missing -> use "<file>.d" (safe coexistence).
+static fs::path lmdb_env_dir_for_container(const fs::path& cdx_path)
+{
+    std::error_code ec;
+    if (fs::exists(cdx_path, ec) && fs::is_directory(cdx_path, ec)) {
+        return cdx_path;
+    }
+    return fs::path(cdx_path.string() + ".d");
+}
+
+static bool ensure_dir(const fs::path& p)
+{
+    std::error_code ec;
+    if (fs::exists(p, ec)) return fs::is_directory(p, ec);
+    return fs::create_directories(p, ec);
+}
+
+static std::string timestamp_ymdhms()
+{
+    std::time_t t = std::time(nullptr);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    char buf[32]{};
+    std::snprintf(buf, sizeof(buf),
+                  "%04d%02d%02d_%02d%02d%02d",
+                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                  tm.tm_hour, tm.tm_min, tm.tm_sec);
+    return std::string(buf);
+}
+
+// Move envdir to backups folder next to it
+static bool archive_envdir_to_backups(const fs::path& envdir)
+{
+    std::error_code ec;
+    if (!fs::exists(envdir, ec)) return true;
+    if (!fs::is_directory(envdir, ec)) {
+        std::cout << "BUILDLMDB CLEAN: env path exists but is not a directory: " << envdir.string() << "\n";
+        return false;
+    }
+
+    fs::path backups = envdir.parent_path() / "backups";
+    if (!ensure_dir(backups)) {
+        std::cout << "BUILDLMDB CLEAN: unable to create backups dir: " << backups.string() << "\n";
+        return false;
+    }
+
+    fs::path dst = backups / (envdir.filename().string() + "_" + timestamp_ymdhms());
+    fs::rename(envdir, dst, ec);
+    if (ec) {
+        // fallback copy+remove
+        ec.clear();
+        fs::copy(envdir, dst, fs::copy_options::recursive, ec);
+        if (ec) {
+            std::cout << "BUILDLMDB CLEAN: copy failed: " << ec.message() << "\n";
+            return false;
+        }
+        ec.clear();
+        fs::remove_all(envdir, ec);
+        if (ec) {
+            std::cout << "BUILDLMDB CLEAN: remove_all failed after copy: " << ec.message() << "\n";
+            return false;
+        }
+    }
+    std::cout << "BUILDLMDB CLEAN: archived envdir to: " << dst.string() << "\n";
+    return true;
+}
+
+// Returns true if the directory looks like it contains an active LMDB env
+static bool looks_like_existing_lmdb_env(const fs::path& envdir)
+{
+    std::error_code ec;
+    if (!fs::exists(envdir, ec) || !fs::is_directory(envdir, ec)) {
+        return false;
+    }
+
+    // Strong indicators
+    const fs::path data_mdb = envdir / "data.mdb";
+    const fs::path lock_mdb = envdir / "lock.mdb";
+    if (fs::exists(data_mdb, ec) || fs::exists(lock_mdb, ec)) {
+        return true;
+    }
+
+    // Fallback: non-empty directory
+    return !fs::is_empty(envdir, ec);
+}
+
+// Prompt user for confirmation before destructive rebuild
+static bool user_confirms_rebuild(const fs::path& envdir)
+{
+    std::cout << "\nWARNING: LMDB environment directory already exists and appears to contain data:\n"
+              << "  " << envdir.string() << "\n"
+              << "Rebuilding will DROP and recreate all tag databases inside it.\n"
+              << "This is a destructive operation — existing index data will be lost.\n\n"
+              << "Continue anyway? [y/N] ";
+
+    std::string response;
+    std::getline(std::cin, response);
+    response = textio::trim(response);
+    if (response.empty()) return false;
+
+    char first = static_cast<char>(std::toupper(static_cast<unsigned char>(response[0])));
+    return first == 'Y';
+}
+
+// Read ASCII-ish keys from main DB (fallback tag list)
+static std::vector<std::string> lmdb_read_main_keys(MDB_env* env, size_t max_keys = 2048)
+{
+    std::vector<std::string> out;
+    if (!env) return out;
+
+    MDB_txn* txn = nullptr;
+    int rc = mdb_txn_begin(env, nullptr, MDB_RDONLY, &txn);
+    if (rc != MDB_SUCCESS || !txn) return out;
+
+    MDB_dbi main_dbi = 0;
+    rc = mdb_dbi_open(txn, nullptr, 0, &main_dbi);
+    if (rc != MDB_SUCCESS) { mdb_txn_abort(txn); return out; }
+
+    MDB_cursor* cur = nullptr;
+    rc = mdb_cursor_open(txn, main_dbi, &cur);
+    if (rc != MDB_SUCCESS || !cur) { mdb_txn_abort(txn); return out; }
+
+    MDB_val k{}, v{};
+    rc = mdb_cursor_get(cur, &k, &v, MDB_FIRST);
+    while (rc == MDB_SUCCESS) {
+        if (k.mv_data && k.mv_size > 0 && k.mv_size <= 64) {
+            const unsigned char* b = static_cast<const unsigned char*>(k.mv_data);
+            bool ok = true;
+            for (size_t i = 0; i < k.mv_size; ++i) {
+                unsigned char c = b[i];
+                if (c < 0x20 || c > 0x7E) { ok = false; break; }
+            }
+            if (ok) {
+                std::string s(reinterpret_cast<const char*>(k.mv_data), k.mv_size);
+                s = textio::trim(s);
+                s = up_copy(s);
+                if (!s.empty()) {
+                    bool tok_ok = true;
+                    for (char c : s) {
+                        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_')) {
+                            tok_ok = false; break;
+                        }
+                    }
+                    if (tok_ok) out.push_back(s);
+                }
+            }
+        }
+        if (out.size() >= max_keys) break;
+        rc = mdb_cursor_get(cur, &k, &v, MDB_NEXT);
+    }
+
+    mdb_cursor_close(cur);
+    mdb_txn_abort(txn);
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+// Pack recno as 8-byte LE uint64_t
+static void pack_recno_le8(uint64_t recno, unsigned char out[8])
+{
+    out[0] = (unsigned char)(recno & 0xFF);
+    out[1] = (unsigned char)((recno >> 8) & 0xFF);
+    out[2] = (unsigned char)((recno >> 16) & 0xFF);
+    out[3] = (unsigned char)((recno >> 24) & 0xFF);
+    out[4] = (unsigned char)((recno >> 32) & 0xFF);
+    out[5] = (unsigned char)((recno >> 40) & 0xFF);
+    out[6] = (unsigned char)((recno >> 48) & 0xFF);
+    out[7] = (unsigned char)((recno >> 56) & 0xFF);
+}
+
+// Build one tag from a field name (uppercase, fixed-length + recno suffix)
+static bool build_tag_lmdb_from_field(xbase::DbArea& area,
+                                      MDB_env* env,
+                                      const std::string& tag_name_uc)
+{
+    if (!area.isOpen()) return false;
+
+    int fld = -1;
+    const auto& Fs = area.fields();
+    for (int i = 0; i < (int)Fs.size(); ++i) {
+        if (textio::ieq(Fs[(size_t)i].name, tag_name_uc)) { fld = i + 1; break; }
+    }
+    if (fld < 1) return false;
+
+    const auto& fdef = Fs[(size_t)(fld - 1)];
+    const int keylen = (int)fdef.length;
+
+    MDB_txn* txn = nullptr;
+    int rc0 = mdb_txn_begin(env, nullptr, 0, &txn);
+    if (rc0 != MDB_SUCCESS) {
+        std::cout << "BUILDLMDB: mdb_txn_begin failed for tag " << tag_name_uc
+                  << ": " << rc0 << " (" << lmdb_err(rc0) << ")\n";
+        return false;
+    }
+
+    MDB_dbi dbi = 0;
+    int rc = mdb_dbi_open(txn, tag_name_uc.c_str(), MDB_CREATE, &dbi);
+    if (rc != MDB_SUCCESS) {
+        std::cout << "BUILDLMDB: dbi_open failed for tag " << tag_name_uc
+                  << ": " << rc << " (" << lmdb_err(rc) << ")\n";
+        mdb_txn_abort(txn);
+        return false;
+    }
+
+    // Clear existing contents
+    rc = mdb_drop(txn, dbi, 0);
+    if (rc != MDB_SUCCESS) {
+        std::cout << "BUILDLMDB: drop/clear failed for tag " << tag_name_uc
+                  << ": " << rc << " (" << lmdb_err(rc) << ")\n";
+        mdb_txn_abort(txn);
+        return false;
+    }
+
+    const int32_t total = area.recCount();
+    std::string k;
+    k.reserve((size_t)keylen);
+    std::string keybuf;
+    keybuf.resize((size_t)keylen + 8);
+    unsigned char recbuf[8]{};
+
+    for (int32_t rn = 1; rn <= total; ++rn) {
+        if (!area.gotoRec(rn) || !area.readCurrent()) continue;
+        if (area.isDeleted()) continue;
+
+        k = area.get(fld);
+        if (fdef.type == 'C' || fdef.type == 'c') {
+            for (char& c : k) c = (char)std::toupper((unsigned char)c);
+        }
+        if ((int)k.size() > keylen) k.resize((size_t)keylen);
+        if ((int)k.size() < keylen) k.append((size_t)(keylen - (int)k.size()), ' ');
+
+        std::memcpy(&keybuf[0], k.data(), (size_t)keylen);
+        pack_recno_le8((uint64_t)rn, recbuf);
+        std::memcpy(&keybuf[(size_t)keylen], recbuf, 8);
+
+        MDB_val mkey{ keybuf.size(), (void*)keybuf.data() };
+        MDB_val mval{ 8, recbuf };
+
+        rc = mdb_put(txn, dbi, &mkey, &mval, 0);
+        if (rc != MDB_SUCCESS) {
+            std::cout << "BUILDLMDB: put failed for tag " << tag_name_uc
+                      << " rec " << rn << ": " << rc << " (" << lmdb_err(rc) << ")\n";
+            mdb_txn_abort(txn);
+            return false;
+        }
+    }
+
+    rc = mdb_txn_commit(txn);
+    if (rc != MDB_SUCCESS) {
+        std::cout << "BUILDLMDB: txn_commit failed for tag " << tag_name_uc
+                  << ": " << rc << " (" << lmdb_err(rc) << ")\n";
+        return false;
+    }
+
+    return true;
+}
+
+static bool build_lmdb_env_for_cdx(xbase::DbArea& area,
+                                   const fs::path& cdx_container,
+                                   std::vector<std::string>* out_tags_built)
+{
+    if (out_tags_built) out_tags_built->clear();
+
+    const fs::path envdir = lmdb_env_dir_for_container(cdx_container);
+    if (!ensure_dir(envdir)) {
+        std::cout << "BUILDLMDB: unable to create env dir: " << envdir.string() << "\n";
+        return false;
+    }
+
+    MDB_env* env = nullptr;
+    int rc = mdb_env_create(&env);
+    if (rc != MDB_SUCCESS || !env) {
+        std::cout << "BUILDLMDB: mdb_env_create failed: " << rc << " (" << lmdb_err(rc) << ")\n";
+        return false;
+    }
+
+    rc = mdb_env_set_maxdbs(env, 1024);
+    if (rc != MDB_SUCCESS) {
+        std::cout << "BUILDLMDB: mdb_env_set_maxdbs failed: " << rc << " (" << lmdb_err(rc) << ")\n";
+        mdb_env_close(env);
+        return false;
+    }
+
+    (void)mdb_env_set_mapsize(env, 1024ULL * 1024ULL * 1024ULL);
+
+    rc = mdb_env_open(env, envdir.string().c_str(), 0, 0664);
+    if (rc != MDB_SUCCESS) {
+        std::cout << "BUILDLMDB: mdb_env_open failed: " << rc << " (" << lmdb_err(rc) << ")\n";
+        mdb_env_close(env);
+        return false;
+    }
+
+    // Tag discovery
+    std::vector<cdxfile::TagInfo> tags;
+    std::error_code ec;
+    if (fs::exists(cdx_container, ec) && fs::is_regular_file(cdx_container, ec)) {
+        cdxfile::CDXHandle* h = nullptr;
+        if (cdxfile::open(cdx_container.string(), h)) {
+            (void)cdxfile::read_tagdir(h, tags);
+            cdxfile::close(h);
+        }
+    }
+
+    if (tags.empty()) {
+        const std::string active = up_copy(orderstate::activeTag(area));
+        if (!active.empty()) {
+            tags.push_back(cdxfile::TagInfo{1, active, 0, 0});
+        } else {
+            const auto keys = lmdb_read_main_keys(env);
+            for (const auto& k : keys) {
+                tags.push_back(cdxfile::TagInfo{1, k, 0, 0});
+            }
+        }
+    }
+
+    int ok = 0;
+    for (const auto& t : tags) {
+        const std::string tag_uc = up_copy(t.name);
+        if (tag_uc.empty()) continue;
+        if (build_tag_lmdb_from_field(area, env, tag_uc)) {
+            ++ok;
+            if (out_tags_built) out_tags_built->push_back(tag_uc);
+        }
+    }
+
+    mdb_env_close(env);
+    return ok > 0;
+}
+
+} // anonymous namespace
+
+// Command entrypoint
+void cmd_BUILDLMDB(xbase::DbArea& area, std::istringstream& args)
+{
+    std::string opt;
+    bool do_clean = false;
+    bool do_force = false;
+
+    while (args >> opt) {
+        opt = up_copy(textio::trim(opt));
+        if (opt == "CLEAN" || opt == "FORCE") {
+            do_clean = true;
+            do_force = (opt == "FORCE");
+        }
+    }
+
+    if (!area.isOpen()) {
+        std::cout << "BUILDLMDB: No table open.\n";
+        return;
+    }
+
+    fs::path cdx_container;
+    if (orderstate::hasOrder(area) && orderstate::isCdx(area)) {
+        cdx_container = fs::path(orderstate::orderName(area));
+    } else {
+        cdx_container = default_cdx_container_path(area);
+    }
+
+    std::cout << "BUILDLMDB: target container " << cdx_container.string() << "\n";
+
+    const fs::path envdir = lmdb_env_dir_for_container(cdx_container);
+
+    // Safety check: warn before destructive rebuild of existing env
+    if (!do_clean && !do_force && looks_like_existing_lmdb_env(envdir)) {
+        if (!user_confirms_rebuild(envdir)) {
+            std::cout << "BUILDLMDB: Operation cancelled by user.\n";
+            return;
+        }
+        std::cout << "Proceeding with rebuild (user confirmed).\n";
+    }
+
+    // CLEAN/FORCE: archive first
+    if (do_clean || do_force) {
+        if (!archive_envdir_to_backups(envdir)) {
+            std::cout << "BUILDLMDB: archive failed — aborting.\n";
+            return;
+        }
+    }
+
+    std::vector<std::string> built;
+    if (build_lmdb_env_for_cdx(area, cdx_container, &built)) {
+        for (size_t i = 0; i < built.size(); ++i) {
+            std::cout << " [" << (i + 1) << "] " << built[i] << " : OK\n";
+        }
+        std::cout << "BUILDLMDB: done OK=" << built.size() << " tags rebuilt.\n";
+        std::cout << "LMDB environment: " << envdir.string() << "\n";
+        return;
+    }
+
+    std::cout << "BUILDLMDB: failed to build LMDB environment.\n";
+}

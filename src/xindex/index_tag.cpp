@@ -32,3 +32,6 @@ int IndexTag::top() const { return entries_.empty() ? -1 : entries_.front().recn
 int IndexTag::bottom() const { return entries_.empty() ? -1 : entries_.back().recno; }
 
 } // namespace xindex
+
+
+

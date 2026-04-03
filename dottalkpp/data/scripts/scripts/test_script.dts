@@ -1,0 +1,44 @@
+clear
+
+SET ECHO OFF
+ECHO ===== X64BASE FIELD-TYPE CREATE + APPEND LOOP =====
+
+* ------------------------------------------------------------
+* config
+* ------------------------------------------------------------
+SET VAR cTable = X64_ALL_TYPES
+SET VAR n = 10
+
+* ------------------------------------------------------------
+* clean slate
+* ------------------------------------------------------------
+CLOSE ALL
+ERASE &cTable CONFIRM
+
+* ------------------------------------------------------------
+* create x64 table with one field of each common supported type
+* ------------------------------------------------------------
+CREATE X64 &cTable ( ;
+    ID      N(8,0), ;
+    CVAL    C(20), ;
+    NVAL    N(10,2), ;
+    DVAL    D, ;
+    LVAL    L, ;
+    MVAL    M )
+
+USE &cTable
+STRUCT
+FIELDS
+
+* ------------------------------------------------------------
+* append N blank records
+* ------------------------------------------------------------
+LOOP 1 TO &n
+    APPEND
+    ECHO &n
+ENDLOOP
+
+COUNT
+CLOSE
+
+ECHO ===== DONE =====

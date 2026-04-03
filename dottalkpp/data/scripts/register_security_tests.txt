@@ -1,0 +1,14 @@
+#include "xbase_security_tests.hpp"
+
+if (args.has("--self-test"))
+{
+    int failures = xbase::tests::run_xbase_security_tests();
+
+    if (failures == 0) {
+        std::cout << "All xBase_64 security tests passed.\n";
+        return 0;
+    } else {
+        std::cout << failures << " security tests failed.\n";
+        return 1;
+    }
+}

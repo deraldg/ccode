@@ -44,3 +44,6 @@ void cmd_RECNO(xbase::DbArea& a, std::istringstream& iss) {
 
     std::cout << a.recno() << "\n";
 }
+
+
+

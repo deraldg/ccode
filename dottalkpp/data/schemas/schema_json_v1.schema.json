@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/dottalkpp/schema-json/v1",
+  "title": "DotTalk++ Field Schema Definition (FSD) \u2014 schema.json v1.0",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version",
+    "name",
+    "encoding",
+    "date_policy",
+    "null_policy",
+    "logical_policy",
+    "fields"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version. Must be '1.0' for this spec."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_]+$",
+      "description": "Logical table name (A\u2013Z, 0\u20139, underscore)."
+    },
+    "encoding": {
+      "type": "string",
+      "enum": [
+        "UTF-8",
+        "utf-8",
+        "UTF8"
+      ],
+      "description": "Character encoding (recommend UTF-8)."
+    },
+    "date_policy": {
+      "type": "string",
+      "enum": [
+        "ISO",
+        "FOX"
+      ],
+      "description": "Date serialization policy."
+    },
+    "null_policy": {
+      "type": "string",
+      "enum": [
+        "EMPTY_AS_EMPTY",
+        "EMPTY_AS_NULL"
+      ],
+      "description": "Empty string/date handling during conversions."
+    },
+    "logical_policy": {
+      "type": "string",
+      "enum": [
+        "TF",
+        "ZERO_ONE"
+      ],
+      "description": "Logical serialization policy."
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/field"
+      },
+      "description": "Ordered list of field definitions."
+    }
+  },
+  "$defs": {
+    "numericRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "C",
+            "N",
+            "D",
+            "L",
+            "M"
+          ]
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Required for C and N types."
+        },
+        "decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "description": "Only valid for N."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "trim": {
+          "type": "string",
+          "enum": [
+            "right",
+            "none"
+          ],
+          "description": "Only valid for C."
+        },
+        "zero_date": {
+          "type": "string",
+          "enum": [
+            "ALLOW",
+            "DISALLOW"
+          ],
+          "description": "Only valid for D."
+        },
+        "range": {
+          "$ref": "#/$defs/numericRange"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "C"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "length"
+            ],
+            "properties": {
+              "decimals": {
+                "not": {}
+              },
+              "zero_date": {
+                "not": {}
+              },
+              "range": {
+                "not": {}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "N"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "length"
+            ],
+            "properties": {
+              "trim": {
+                "not": {}
+              },
+              "zero_date": {
+                "not": {}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "D"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "length": {
+                "type": "integer",
+                "enum": [
+                  8
+                ]
+              },
+              "decimals": {
+                "not": {}
+              },
+              "trim": {
+                "not": {}
+              },
+              "range": {
+                "not": {}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "L"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "length": {
+                "not": {}
+              },
+              "decimals": {
+                "not": {}
+              },
+              "trim": {
+                "not": {}
+              },
+              "zero_date": {
+                "not": {}
+              },
+              "range": {
+                "not": {}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "M"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "length": {
+                "not": {}
+              },
+              "decimals": {
+                "not": {}
+              },
+              "trim": {
+                "not": {}
+              },
+              "zero_date": {
+                "not": {}
+              },
+              "range": {
+                "not": {}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

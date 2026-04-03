@@ -1,0 +1,45 @@
+// cli/expr/fn_string.cpp
+#include "cli/expr/fn_string.hpp"
+#include <string>
+#include <vector>
+
+namespace dottalk::expr {
+
+// --- Example implementations (fill in real ones as you add functions) ---
+static std::string dt_upper(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    std::string s = args[0];
+    for (auto& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
+}
+static std::string dt_lower(const std::vector<std::string>& args) {
+    if (args.empty()) return {};
+    std::string s = args[0];
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+// --- Registry table (define locally; do NOT extern these) ---
+static const BuiltinFnSpec kStringFns[] = {
+    // name,   minArgs, maxArgs, eval
+    { "UPPER", 1,       1,       &dt_upper },
+    { "LOWER", 1,       1,       &dt_lower },
+    // Add more here?
+};
+static constexpr unsigned long long kCount =
+    static_cast<unsigned long long>(sizeof(kStringFns) / sizeof(kStringFns[0]));
+
+// --- API expected by fn_string_autoreg.obj ---
+const BuiltinFnSpec* string_fn_specs() {
+    // Return nullptr if you temporarily want ?no string builtins?.
+    return kCount ? kStringFns : nullptr;
+}
+unsigned long long string_fn_specs_count() {
+    return kCount; // exact MSVC-mangled type
+}
+
+} // namespace dottalk::expr
+
+
+
+

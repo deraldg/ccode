@@ -1,0 +1,679 @@
+<mxfile host="app.diagrams.net" modified="2026-01-01T00:00:00.000Z" agent="5.0 (Windows)" version="24.3.1">
+  <diagram id="sys-entity-001" name="System–Entity Chart">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCE0FF">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- SYSTEM LAYER -->
+        <mxCell id="sys" value="System Layer&#xa;---&#xa;Platform&#xa;OS&#xa;Runtime&#xa;Environment"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="300" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- ENGINE LAYER -->
+        <mxCell id="engine" value="Engine Layer&#xa;---&#xa;DotTalk++ Core&#xa;Command Engine&#xa;Expression Engine&#xa;Index/Storage"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="420" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- APPLICATION LAYER -->
+        <mxCell id="app" value="Application Layer&#xa;---&#xa;DIAL&#xa;WebSurface&#xa;draw.io Integration&#xa;UI Windows"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="820" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CURRICULUM LAYER -->
+        <mxCell id="curr" value="Curriculum Layer&#xa;---&#xa;Chapters&#xa;Sections&#xa;Examples&#xa;Exercises&#xa;Diagrams"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="320" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CODEX LAYER -->
+        <mxCell id="codex" value="Codex Layer&#xa;---&#xa;Documentation&#xa;Glossary&#xa;Cross-Refs&#xa;Templates&#xa;Build System"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="460" y="320" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- BRANDING LAYER -->
+        <mxCell id="brand" value="Branding Layer&#xa;---&#xa;Trademark&#xa;Logo System&#xa;Color System&#xa;Typography&#xa;Usage Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="860" y="320" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell edge="1" parent="1" source="sys" target="engine"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell edge="1" parent="1" source="engine" target="app"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell edge="1" parent="1" source="app" target="curr"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell edge="1" parent="1" source="curr" target="codex"
+          style="endArrow=block;endSize=6;html=1;"/>
+        <mxCell edge="1" parent="1" source="codex" target="brand"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>  <!-- PAGE 2: x64base Architecture (Retro Blue) -->
+  <diagram id="p2_diagram" name="x64base Architecture">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCE0FF">
+      <root>
+        <mxCell id="p2_0"/>
+        <mxCell id="p2_1" parent="p2_0"/>
+
+        <!-- X64BASE CORE -->
+        <mxCell id="p2_core" value="x64base Core&#xa;---&#xa;Platform Kernel&#xa;Runtime&#xa;Environment&#xa;System Services"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="80" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- DOTTalk++ ENGINE -->
+        <mxCell id="p2_engine" value="DotTalk++ Engine&#xa;---&#xa;Command Engine&#xa;Expression Engine&#xa;Index Manager&#xa;Storage Layer"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="480" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- APPLICATION LAYER -->
+        <mxCell id="p2_app" value="Application Layer&#xa;---&#xa;DIAL&#xa;WebSurface&#xa;draw.io Integration&#xa;UI Windows&#xa;Event Loop"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="900" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- STORAGE SUBSYSTEM -->
+        <mxCell id="p2_storage" value="Storage Subsystem&#xa;---&#xa;DBF Files&#xa;Index Files&#xa;Memo Files&#xa;Locking&#xa;LMDB Integration"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="80" y="340" width="340" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- QUERY ENGINE -->
+        <mxCell id="p2_query" value="Query Engine&#xa;---&#xa;SQLSEL&#xa;SMARTLIST&#xa;Filter Engine&#xa;Sort Engine&#xa;Cursor Manager"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="480" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- CURRICULUM + CODEX -->
+        <mxCell id="p2_docs" value="Curriculum + Codex&#xa;---&#xa;Chapters&#xa;Sections&#xa;Examples&#xa;Exercises&#xa;Glossary&#xa;Build System"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="900" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- BRANDING -->
+        <mxCell id="p2_brand" value="Branding System&#xa;---&#xa;Trademark&#xa;Logo System&#xa;Color System&#xa;Typography&#xa;Usage Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p2_1">
+          <mxGeometry x="480" y="640" width="360" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p2_edge1" edge="1" parent="p2_1" source="p2_core" target="p2_engine"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge2" edge="1" parent="p2_1" source="p2_engine" target="p2_app"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge3" edge="1" parent="p2_1" source="p2_engine" target="p2_storage"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge4" edge="1" parent="p2_1" source="p2_engine" target="p2_query"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge5" edge="1" parent="p2_1" source="p2_app" target="p2_docs"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p2_edge6" edge="1" parent="p2_1" source="p2_docs" target="p2_brand"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 3: DotTalk++ Command Engine (Retro Green) -->
+  <diagram id="p3_diagram" name="DotTalk++ Command Engine">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCFFCC">
+      <root>
+        <mxCell id="p3_0"/>
+        <mxCell id="p3_1" parent="p3_0"/>
+
+        <!-- COMMAND PARSER -->
+        <mxCell id="p3_parser" value="Command Parser&#xa;---&#xa;Tokenize&#xa;Normalize&#xa;Resolve Aliases&#xa;Syntax Validation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="80" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- COMMAND DISPATCHER -->
+        <mxCell id="p3_dispatcher" value="Command Dispatcher&#xa;---&#xa;Lookup Handler&#xa;Bind Parameters&#xa;Execute&#xa;Return Status"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="480" y="40" width="360" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- COMMAND HANDLERS -->
+        <mxCell id="p3_handlers" value="Command Handlers&#xa;---&#xa;Navigation&#xa;Record Ops&#xa;Index Ops&#xa;Query Ops&#xa;System Ops"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="900" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- EXPRESSION ENGINE -->
+        <mxCell id="p3_expr" value="Expression Engine&#xa;---&#xa;Lexer&#xa;Parser&#xa;Evaluator&#xa;Type System&#xa;Runtime Functions"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="80" y="340" width="340" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- CURSOR MANAGER -->
+        <mxCell id="p3_cursor" value="Cursor Manager&#xa;---&#xa;Active Cursor&#xa;Record Pointer&#xa;Buffer&#xa;Dirty Flags&#xa;Navigation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="480" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- ERROR SYSTEM -->
+        <mxCell id="p3_errors" value="Error System&#xa;---&#xa;Codes&#xa;Messages&#xa;Recovery&#xa;Logging&#xa;User Feedback"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p3_1">
+          <mxGeometry x="900" y="340" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p3_edge1" edge="1" parent="p3_1" source="p3_parser" target="p3_dispatcher"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge2" edge="1" parent="p3_1" source="p3_dispatcher" target="p3_handlers"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge3" edge="1" parent="p3_1" source="p3_handlers" target="p3_cursor"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge4" edge="1" parent="p3_1" source="p3_handlers" target="p3_expr"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p3_edge5" edge="1" parent="p3_1" source="p3_dispatcher" target="p3_errors"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 4: VT-100 Rendering Pipeline (Retro Green) -->
+  <diagram id="p4_diagram" name="VT-100 Rendering Pipeline">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#CCFFCC">
+      <root>
+        <mxCell id="p4_0"/>
+        <mxCell id="p4_1" parent="p4_0"/>
+
+        <!-- CAPABILITY DETECTOR -->
+        <mxCell id="p4_capdet" value="Capability Detector&#xa;---&#xa;Terminal Probe&#xa;Feature Flags&#xa;Color Support&#xa;Cursor Ops&#xa;Keymap"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="80" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- INPUT STREAM -->
+        <mxCell id="p4_input" value="Input Stream&#xa;---&#xa;Keystrokes&#xa;Escape Sequences&#xa;Control Codes&#xa;Event Queue"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="500" y="40" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <!-- ESCAPE SEQUENCE PARSER -->
+        <mxCell id="p4_escparser" value="Escape Sequence Parser&#xa;---&#xa;CSI Parser&#xa;OSC Parser&#xa;SS3&#xa;VT Extensions&#xa;Mode Switching"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="900" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- RENDERING ENGINE -->
+        <mxCell id="p4_render" value="Rendering Engine&#xa;---&#xa;Cell Grid&#xa;Attributes&#xa;Color Map&#xa;Cursor State&#xa;Dirty Regions"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="80" y="360" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- LINE WRAP + SCROLL -->
+        <mxCell id="p4_wrapscroll" value="Line Wrap + Scroll&#xa;---&#xa;Soft Wrap&#xa;Hard Wrap&#xa;Scroll Up/Down&#xa;Region Limits&#xa;History Buffer"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="500" y="360" width="340" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- OUTPUT DRIVER -->
+        <mxCell id="p4_output" value="Output Driver&#xa;---&#xa;Frame Builder&#xa;Diff Engine&#xa;Flush Ops&#xa;Terminal Sync&#xa;Performance Metrics"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p4_1">
+          <mxGeometry x="900" y="360" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p4_edge1" edge="1" parent="p4_1" source="p4_capdet" target="p4_input"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge2" edge="1" parent="p4_1" source="p4_input" target="p4_escparser"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge3" edge="1" parent="p4_1" source="p4_escparser" target="p4_render"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge4" edge="1" parent="p4_1" source="p4_render" target="p4_wrapscroll"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p4_edge5" edge="1" parent="p4_1" source="p4_wrapscroll" target="p4_output"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 5: Physical Storage / DBF / Index (Retro Yellowed Paper) -->
+  <diagram id="p5_diagram" name="Physical Storage / DBF / Index">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFF2CC">
+      <root>
+        <mxCell id="p5_0"/>
+        <mxCell id="p5_1" parent="p5_0"/>
+
+        <!-- DBF FILE STRUCTURE -->
+        <mxCell id="p5_dbf" value="DBF File Structure&#xa;---&#xa;Header&#xa;Field Descriptors&#xa;Record Area&#xa;Deleted Flags&#xa;EOF Marker"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="80" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- MEMO FILES -->
+        <mxCell id="p5_memo" value="Memo Files (DBT/FPT)&#xa;---&#xa;Block Table&#xa;Variable-Length Data&#xa;Pointer Fields&#xa;Garbage Collection"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="500" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- INDEX FILES -->
+        <mxCell id="p5_index" value="Index Files (NTX/CDX)&#xa;---&#xa;B-Tree Nodes&#xa;Key Expressions&#xa;Collation&#xa;Tag Headers&#xa;Auto-Update"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="920" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- LOCKING SYSTEM -->
+        <mxCell id="p5_locking" value="Locking System&#xa;---&#xa;Record Locks&#xa;File Locks&#xa;Advisory Lock Files&#xa;Engine-Level Lock Manager&#xa;LMDB Atomicity"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="80" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BUFFER MANAGER -->
+        <mxCell id="p5_buffer" value="Buffer Manager&#xa;---&#xa;Read Cache&#xa;Write Buffer&#xa;Dirty Pages&#xa;Flush Policy&#xa;Consistency Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="500" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- STORAGE API -->
+        <mxCell id="p5_api" value="Storage API&#xa;---&#xa;Open/Close&#xa;Read/Write&#xa;Seek&#xa;Index Ops&#xa;Transaction Hooks"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="920" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p5_edge1" edge="1" parent="p5_1" source="p5_dbf" target="p5_memo"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge2" edge="1" parent="p5_1" source="p5_dbf" target="p5_index"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge3" edge="1" parent="p5_1" source="p5_index" target="p5_locking"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge4" edge="1" parent="p5_1" source="p5_locking" target="p5_buffer"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge5" edge="1" parent="p5_1" source="p5_buffer" target="p5_api"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 6: Expression Engine (Retro Yellowed Paper) -->
+  <diagram id="p6_diagram" name="Expression Engine">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFF2CC">
+      <root>
+        <mxCell id="p6_0"/>
+        <mxCell id="p6_1" parent="p6_0"/>
+
+        <!-- LEXER -->
+        <mxCell id="p6_lexer" value="Lexer&#xa;---&#xa;Token Stream&#xa;Identifiers&#xa;Literals&#xa;Operators&#xa;Whitespace Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p6_1">
+          <mxGeometry x="80" y="40" width="360" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- PARSER -->
+        <mxCell id="p6_parser" value="Parser&#xa;---&#xa;AST Builder&#xa;Operator Precedence&#xa;Grouping&#xa;Function Calls&#xa;Error Detection"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p6_1">
+          <mxGeometry x="500" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- TYPE SYSTEM -->
+        <mxCell id="p6_types" value="Type System&#xa;---&#xa;Numeric&#xa;String&#xa;Logical&#xa;Date/Time&#xa;Coercion Rules&#xa;Validation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p6_1">
+          <mxGeometry x="920" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- EVALUATOR -->
+        <mxCell id="p6_eval" value="Evaluator&#xa;---&#xa;AST Walk&#xa;Runtime Ops&#xa;Short-Circuit Logic&#xa;Function Dispatch&#xa;Index-Aware Evaluation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p6_1">
+          <mxGeometry x="80" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- FUNCTION LIBRARY -->
+        <mxCell id="p6_fnlib" value="Function Library&#xa;---&#xa;Math&#xa;String&#xa;Date&#xa;Logical&#xa;Record/Field Ops&#xa;User-Defined Functions"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p6_1">
+          <mxGeometry x="500" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- OPTIMIZER -->
+        <mxCell id="p6_opt" value="Optimizer&#xa;---&#xa;Constant Folding&#xa;Index Hints&#xa;Predicate Pushdown&#xa;Shortcuts&#xa;Execution Plan Hints"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p6_1">
+          <mxGeometry x="920" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p6_edge1" edge="1" parent="p6_1" source="p6_lexer" target="p6_parser"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p6_edge2" edge="1" parent="p6_1" source="p6_parser" target="p6_types"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p6_edge3" edge="1" parent="p6_1" source="p6_parser" target="p6_eval"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p6_edge4" edge="1" parent="p6_1" source="p6_eval" target="p6_fnlib"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p6_edge5" edge="1" parent="p6_1" source="p6_eval" target="p6_opt"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 7: SQLSEL / SMARTLIST Query Engine (Retro Yellowed Paper) -->
+  <diagram id="p7_diagram" name="SQLSEL / SMARTLIST Query Engine">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFF2CC">
+      <root>
+        <mxCell id="p7_0"/>
+        <mxCell id="p7_1" parent="p7_0"/>
+
+        <!-- SQLSEL PARSER -->
+        <mxCell id="p7_sqlsel" value="SQLSEL Parser&#xa;---&#xa;SELECT&#xa;FROM&#xa;WHERE&#xa;ORDER BY&#xa;GROUP BY&#xa;Projection Builder"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="80" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- SMARTLIST ENGINE -->
+        <mxCell id="p7_smartlist" value="SMARTLIST Engine&#xa;---&#xa;Filter Expressions&#xa;Sort Expressions&#xa;Index Hints&#xa;Auto-Optimization"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="500" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- EXECUTION PLANNER -->
+        <mxCell id="p7_planner" value="Execution Planner&#xa;---&#xa;Index Selection&#xa;Scan Strategy&#xa;Predicate Pushdown&#xa;Join Strategy (future)"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="920" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CURSOR ENGINE -->
+        <mxCell id="p7_cursor" value="Cursor Engine&#xa;---&#xa;Record Navigation&#xa;Seek/Skip&#xa;Top-N&#xa;Range Scans&#xa;Bookmarking"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="80" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- FILTER ENGINE -->
+        <mxCell id="p7_filter" value="Filter Engine&#xa;---&#xa;Expression Evaluation&#xa;Index-Aware Filtering&#xa;Short-Circuit Logic&#xa;Record Tests"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="500" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- SORT ENGINE -->
+        <mxCell id="p7_sort" value="Sort Engine&#xa;---&#xa;In-Memory Sort&#xa;Index Sort&#xa;Multi-Key Sort&#xa;Collation Rules&#xa;Stability Guarantees"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p7_1">
+          <mxGeometry x="920" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p7_edge1" edge="1" parent="p7_1" source="p7_sqlsel" target="p7_smartlist"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge2" edge="1" parent="p7_1" source="p7_smartlist" target="p7_planner"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge3" edge="1" parent="p7_1" source="p7_planner" target="p7_cursor"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge4" edge="1" parent="p7_1" source="p7_cursor" target="p7_filter"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p7_edge5" edge="1" parent="p7_1" source="p7_filter" target="p7_sort"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 8: DIAL / WebSurface / draw.io Integration (Retro Amiga Lilac) -->
+  <diagram id="p8_diagram" name="DIAL / WebSurface / draw.io Integration">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#E0CCFF">
+      <root>
+        <mxCell id="p8_0"/>
+        <mxCell id="p8_1" parent="p8_0"/>
+
+        <!-- DIAL LANGUAGE -->
+        <mxCell id="p8_dial" value="DIAL Language&#xa;---&#xa;Declarative UI&#xa;Layout Rules&#xa;Bindings&#xa;Events&#xa;Components"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="80" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- DIAL RUNTIME -->
+        <mxCell id="p8_dialrt" value="DIAL Runtime&#xa;---&#xa;Parser&#xa;Renderer&#xa;Event Loop&#xa;State Manager&#xa;Hot Reload (future)"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="500" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- WEBSURFACE -->
+        <mxCell id="p8_websurface" value="WebSurface&#xa;---&#xa;HTML Bridge&#xa;CSS Themes&#xa;JS Event Proxy&#xa;DOM Sync&#xa;Viewport Manager"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="920" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- DRAW.IO INTEGRATION -->
+        <mxCell id="p8_drawio" value="draw.io Integration&#xa;---&#xa;Diagram Import&#xa;Diagram Export&#xa;XML Bridge&#xa;Canvas Sync&#xa;Node Mapping"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="80" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- UI WINDOWS -->
+        <mxCell id="p8_ui" value="UI Windows&#xa;---&#xa;Panels&#xa;Dialogs&#xa;Forms&#xa;Toolbars&#xa;Split Views&#xa;Navigation"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="500" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- EVENT ROUTER -->
+        <mxCell id="p8_events" value="Event Router&#xa;---&#xa;Keyboard&#xa;Mouse&#xa;Touch&#xa;Focus&#xa;Custom Events&#xa;Propagation Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p8_1">
+          <mxGeometry x="920" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p8_edge1" edge="1" parent="p8_1" source="p8_dial" target="p8_dialrt"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge2" edge="1" parent="p8_1" source="p8_dialrt" target="p8_websurface"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge3" edge="1" parent="p8_1" source="p8_websurface" target="p8_drawio"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge4" edge="1" parent="p8_1" source="p8_drawio" target="p8_ui"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p8_edge5" edge="1" parent="p8_1" source="p8_ui" target="p8_events"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 9: Curriculum Pipeline (Retro Peach) -->
+  <diagram id="p9_diagram" name="Curriculum Pipeline">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFD9CC">
+      <root>
+        <mxCell id="p9_0"/>
+        <mxCell id="p9_1" parent="p9_0"/>
+
+        <!-- CURRICULUM DESIGN -->
+        <mxCell id="p9_design" value="Curriculum Design&#xa;---&#xa;Learning Objectives&#xa;Competency Mapping&#xa;Module Structure&#xa;Difficulty Curve"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="80" y="40" width="380" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CONTENT AUTHORING -->
+        <mxCell id="p9_author" value="Content Authoring&#xa;---&#xa;Chapters&#xa;Sections&#xa;Examples&#xa;Exercises&#xa;Case Studies"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="520" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- DIAGRAM PIPELINE -->
+        <mxCell id="p9_diagrams" value="Diagram Pipeline&#xa;---&#xa;draw.io Assets&#xa;System–Entity Charts&#xa;Architecture Maps&#xa;Flow Diagrams&#xa;Export/Import Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="940" y="40" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BUILD SYSTEM -->
+        <mxCell id="p9_build" value="Build System&#xa;---&#xa;Markdown&#xa;HTML/PDF Export&#xa;Asset Linking&#xa;Cross-References&#xa;Versioning"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="80" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- REVIEW + QA -->
+        <mxCell id="p9_review" value="Review + QA&#xa;---&#xa;Technical Review&#xa;Editorial Review&#xa;Accuracy Checks&#xa;Consistency&#xa;Student Testing"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="520" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- PUBLICATION -->
+        <mxCell id="p9_publish" value="Publication&#xa;---&#xa;Website&#xa;PDF Textbook&#xa;College LMS&#xa;Instructor Guides&#xa;Updates + Errata"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p9_1">
+          <mxGeometry x="940" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p9_edge1" edge="1" parent="p9_1" source="p9_design" target="p9_author"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge2" edge="1" parent="p9_1" source="p9_author" target="p9_diagrams"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge3" edge="1" parent="p9_1" source="p9_diagrams" target="p9_build"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge4" edge="1" parent="p9_1" source="p9_build" target="p9_review"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p9_edge5" edge="1" parent="p9_1" source="p9_review" target="p9_publish"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 10: Codex Pipeline (Retro Peach) -->
+  <diagram id="p10_diagram" name="Codex Pipeline">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFD9CC">
+      <root>
+        <mxCell id="p10_0"/>
+        <mxCell id="p10_1" parent="p10_0"/>
+
+        <!-- SOURCE MATERIAL -->
+        <mxCell id="p10_source" value="Source Material&#xa;---&#xa;System Specs&#xa;Engine Specs&#xa;Storage Specs&#xa;UI Specs&#xa;Historical Notes"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="80" y="40" width="380" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- STRUCTURAL OUTLINE -->
+        <mxCell id="p10_outline" value="Structural Outline&#xa;---&#xa;Chapters&#xa;Sections&#xa;Subsections&#xa;Canonical Ordering&#xa;Cross-Era Mapping"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="520" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- CANONICAL FORM -->
+        <mxCell id="p10_canonical" value="Canonical Form&#xa;---&#xa;Terminology&#xa;Naming Rules&#xa;Formatting Rules&#xa;Examples&#xa;Reference Blocks"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="940" y="40" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- DIAGRAM INTEGRATION -->
+        <mxCell id="p10_diagramint" value="Diagram Integration&#xa;---&#xa;draw.io Assets&#xa;System–Entity Charts&#xa;Architecture Maps&#xa;Flow Diagrams&#xa;Export Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="80" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BUILD SYSTEM -->
+        <mxCell id="p10_build" value="Build System&#xa;---&#xa;Markdown&#xa;HTML/PDF Export&#xa;Asset Linking&#xa;Cross-References&#xa;Versioning"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="520" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- PUBLICATION -->
+        <mxCell id="p10_publish" value="Publication&#xa;---&#xa;Codex Website&#xa;PDF Codex&#xa;Developer Docs&#xa;Instructor Guides&#xa;Updates + Errata"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p10_1">
+          <mxGeometry x="940" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p10_edge1" edge="1" parent="p10_1" source="p10_source" target="p10_outline"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge2" edge="1" parent="p10_1" source="p10_outline" target="p10_canonical"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge3" edge="1" parent="p10_1" source="p10_canonical" target="p10_diagramint"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge4" edge="1" parent="p10_1" source="p10_diagramint" target="p10_build"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p10_edge5" edge="1" parent="p10_1" source="p10_build" target="p10_publish"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>  <!-- PAGE 11: Branding / Visual Identity System (Retro Classic Gray) -->
+  <diagram id="p11_diagram" name="Branding / Visual Identity System">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#D9D9D9">
+      <root>
+        <mxCell id="p11_0"/>
+        <mxCell id="p11_1" parent="p11_0"/>
+
+        <!-- TRADEMARK SYSTEM -->
+        <mxCell id="p11_tm" value="Trademark System&#xa;---&#xa;Wordmark&#xa;Registration Classes&#xa;Usage Rights&#xa;Protection Zones&#xa;Legal Notes"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="80" y="40" width="380" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- LOGO SYSTEM -->
+        <mxCell id="p11_logo" value="Logo System&#xa;---&#xa;Primary Logo&#xa;Secondary Marks&#xa;Monochrome Rules&#xa;Minimum Size&#xa;Clear Space"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="520" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- COLOR SYSTEM -->
+        <mxCell id="p11_color" value="Color System&#xa;---&#xa;Retro Palette&#xa;System Blue (#CCE0FF)&#xa;Terminal Green (#CCFFCC)&#xa;Paper Yellow (#FFF2CC)&#xa;Amiga Lilac (#E0CCFF)&#xa;Peach (#FFD9CC)&#xa;Classic Gray (#D9D9D9)"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="940" y="40" width="380" height="300" as="geometry"/>
+        </mxCell>
+
+        <!-- TYPOGRAPHY -->
+        <mxCell id="p11_type" value="Typography&#xa;---&#xa;Primary Typeface&#xa;Monospace Variant&#xa;Weights&#xa;Line Spacing&#xa;Accessibility Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="80" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- LAYOUT SYSTEM -->
+        <mxCell id="p11_layout" value="Layout System&#xa;---&#xa;Grid Rules&#xa;Margins&#xa;Alignment&#xa;Component Spacing&#xa;Responsive Variants"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="520" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BRAND USAGE -->
+        <mxCell id="p11_usage" value="Brand Usage&#xa;---&#xa;Do/Don't Rules&#xa;Examples&#xa;Templates&#xa;Instructor Materials&#xa;Developer Materials"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p11_1">
+          <mxGeometry x="940" y="360" width="380" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p11_edge1" edge="1" parent="p11_1" source="p11_tm" target="p11_logo"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge2" edge="1" parent="p11_1" source="p11_logo" target="p11_color"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge3" edge="1" parent="p11_1" source="p11_color" target="p11_type"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge4" edge="1" parent="p11_1" source="p11_type" target="p11_layout"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p11_edge5" edge="1" parent="p11_1" source="p11_layout" target="p11_usage"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+  </mxfile>

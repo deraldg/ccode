@@ -1,4 +1,4 @@
-// src/cli/cmd_formula.cpp — FORMULA / "?" <expr>
+// src/cli/cmd_formula.cpp ? FORMULA / "?" <expr>
 #include "xbase.hpp"
 #include "cli_comment.hpp"
 
@@ -12,9 +12,9 @@
 #include <cstring>
 
 // --- DotTalk++ expression engine ---
-#include "dottalk/expr/api.hpp"
-#include "dottalk/expr/ast.hpp"
-#include "dottalk/expr/eval.hpp"
+#include "cli/expr/api.hpp"
+#include "cli/expr/ast.hpp"
+#include "cli/expr/eval.hpp"
 
 using namespace xbase;
 
@@ -160,7 +160,7 @@ void cmd_FORMULA(DbArea& a, std::istringstream& in)
             std::cout << "FORMULA error: " << cr.error << "\n";
             return;
         }
-        // Try numeric first; if original AST isn’t numeric but boolean, show .T./.F.
+        // Try numeric first; if original AST isn?t numeric but boolean, show .T./.F.
         using namespace dottalk::expr;
         bool printed = false;
         if (dynamic_cast<Arith*>(cr.program.get()) ||
@@ -180,3 +180,6 @@ void cmd_FORMULA(DbArea& a, std::istringstream& in)
         std::cout << "FORMULA error: evaluation failed.\n";
     }
 }
+
+
+

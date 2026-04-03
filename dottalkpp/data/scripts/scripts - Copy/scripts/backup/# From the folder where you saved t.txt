@@ -1,0 +1,14 @@
+# From the folder where you saved the .ps1
+.\run-pydottalk-smoke.ps1
+
+# Or with full path
+& "D:\code\ccode\run-pydottalk-smoke.ps1"
+
+
+
+$py = "D:\code\ccode\build\vcpkg_installed\x64-windows\tools\python3\python.exe"
+$build = "D:\code\ccode\build\bindings\pydottalk\Release"
+$script = "D:\code\ccode\bindings\pydottalk_smoke.py"
+
+$env:PYTHONPATH = "$build;$env:PYTHONPATH"
+& $py $script

@@ -1,0 +1,3 @@
+DTSHEMA 2
+AREA 0 | dbf=D:\code\ccode\dottalkpp\data\help\commands.dbf | index=commands.inx | indextype=INX | tag=none | alias=COMMANDS
+AREA 1 | dbf=D:\code\ccode\dottalkpp\data\help\cmd_args.dbf | index=cmd_args.inx | indextype=INX | tag=none | alias=CMD_ARGS

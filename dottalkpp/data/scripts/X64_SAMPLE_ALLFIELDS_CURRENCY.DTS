@@ -1,0 +1,96 @@
+* ============================================================
+* X64_SAMPLE_ALLFIELDS_CURRENCY.DTS
+*
+* Purpose:
+*   Create a clean X64 sample DBF with:
+*     C N F D L M I B Y
+*   plus paired currency code field for Y
+*
+* Notes:
+*   - Uses X64 because it is the superset test bed.
+*   - Paired currency convention:
+*       MONEY_Y      Y
+*       MONEY_Y_CUR  C(3)
+* ============================================================
+
+SET ECHO OFF
+
+* ------------------------------------------------------------
+* Acquire / reset target
+* ------------------------------------------------------------
+USE X64_SAMPLE_ALLFIELDS
+SELECT X64_SAMPLE_ALLFIELDS
+CLOSE
+ERASE X64_SAMPLE_ALLFIELDS.DBF CONFIRM
+
+* ------------------------------------------------------------
+* Create table
+* ------------------------------------------------------------
+CREATE X64 X64_SAMPLE_ALLFIELDS ( ;
+    REC_ID        C(16), ;
+    NAME          C(40), ;
+    NOTESHORT     C(60), ;
+    STATUS        C(12), ;
+    COUNT_N       N(10,0), ;
+    AMOUNT_N      N(12,2), ;
+    RATIO_F       F(18,6), ;
+    EVENT_DT      D, ;
+    IS_ACTIVE     L, ;
+    MEMO_REF      M, ;
+    INT32_I       I, ;
+    DOUBLE_B      B, ;
+    MONEY_Y       Y, ;
+    MONEY_Y_CUR   C(3), ;
+    PAD1          C(80), ;
+    PAD2          C(80) ;
+)
+
+* ------------------------------------------------------------
+* Non-destructive acquire
+* ------------------------------------------------------------
+USE X64_SAMPLE_ALLFIELDS
+SELECT X64_SAMPLE_ALLFIELDS
+
+* ------------------------------------------------------------
+* Confirm structure
+* ------------------------------------------------------------
+AREA
+STRUCT
+
+* ------------------------------------------------------------
+* Append one solid test row
+* ------------------------------------------------------------
+APPEND
+
+MULTIREP ;
+    REC_ID WITH "REC000000000001", ;
+    NAME WITH "X64 SAMPLE ROW 1", ;
+    NOTESHORT WITH "X64 all-fields sample with paired currency", ;
+    STATUS WITH "ACTIVE", ;
+    COUNT_N WITH 12345, ;
+    AMOUNT_N WITH 9876.54, ;
+    RATIO_F WITH 0.125, ;
+    EVENT_DT WITH TODAY, ;
+    IS_ACTIVE WITH T, ;
+    INT32_I WITH 9876543, ;
+    DOUBLE_B WITH 7.25, ;
+    MONEY_Y WITH 88.125, ;
+    MONEY_Y_CUR WITH usd
+
+* ------------------------------------------------------------
+* Optional memo token smoke value
+* Leave as-is unless you want true memo-content testing here.
+* ------------------------------------------------------------
+REPLACE MEMO_REF WITH ""
+
+* ------------------------------------------------------------
+* Proof
+* ------------------------------------------------------------
+TUP
+DISPLAY
+LIST
+CLOSE
+USE X64_SAMPLE_ALLFIELDS
+SELECT X64_SAMPLE_ALLFIELDS
+LIST
+DISPLAY

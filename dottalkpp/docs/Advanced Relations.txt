@@ -1,0 +1,118 @@
+echo ============================================================
+echo My Community College — Build CNX indexes (table-name CNX)
+echo Notes:
+echo  - Uses CNX-per-table named exactly like the DBF (default loading)
+echo  - Uses ECHO lines as comments
+echo  - Safe to re-run: CNX CREATE may say "already exists"; ADDTAG may say "already exists"
+echo ============================================================
+
+echo
+echo --- Open schema tables into work areas (0..11) ---
+schemas close
+schemas open dbf
+schemas
+
+echo
+echo --- BUILDING.cnx ---
+select building
+cnx create
+cnx addtag bldg
+rebuild
+
+echo
+echo --- ROOMS.cnx ---
+select rooms
+cnx create
+cnx addtag room
+cnx addtag bldg
+rebuild
+
+echo
+echo --- TERMS.cnx ---
+select terms
+cnx create
+cnx addtag term
+rebuild
+
+echo
+echo --- DEPT.cnx ---
+select dept
+cnx create
+cnx addtag dept_id
+rebuild
+
+echo
+echo --- MAJORS.cnx ---
+select majors
+cnx create
+cnx addtag major
+cnx addtag dept_id
+rebuild
+
+echo
+echo --- TEACHERS.cnx ---
+select teachers
+cnx create
+cnx addtag tid
+cnx addtag dept_id
+cnx addtag lname
+cnx addtag fname
+rebuild
+
+echo
+echo --- COURSES.cnx ---
+select courses
+cnx create
+cnx addtag cid
+cnx addtag dept_id
+rebuild
+
+echo
+echo --- STUDENTS.cnx ---
+select students
+cnx create
+cnx addtag sid
+cnx addtag major
+cnx addtag lname
+cnx addtag fname
+rebuild
+
+echo
+echo --- CLASSES.cnx ---
+select classes
+cnx create
+cnx addtag cls_id
+cnx addtag term
+cnx addtag cid
+cnx addtag room
+cnx addtag tid
+rebuild
+
+echo
+echo --- ENROLL.cnx ---
+select enroll
+cnx create
+cnx addtag sid
+cnx addtag cls_id
+rebuild
+
+echo
+echo --- STUD_MAJ.cnx ---
+select stud_maj
+cnx create
+cnx addtag sid
+cnx addtag major
+rebuild
+
+echo
+echo --- TASSIGN.cnx ---
+select tassign
+cnx create
+cnx addtag cls_id
+cnx addtag tid
+rebuild
+
+echo
+echo ============================================================
+echo DONE — CNX containers created/updated for all MCC tables.
+echo ============================================================

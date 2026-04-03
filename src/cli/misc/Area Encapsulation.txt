@@ -1,0 +1,138 @@
+Yes—treat each **Area** as a sealed capsule: one open DBF + its attached index set (INX/CNX) + the active order. With that framing, here’s the clean, consistent rule-set.
+
+# Finalized semantics
+
+## 1) USE (auto-attach)
+
+When you `USE <name>` (from `data\`):
+
+**DBF resolution (in order):**
+
+1. Exact path if it has `.dbf` or a separator.
+2. `dbf\<name>.dbf`
+3. (optional later) search `SET PATH` if we add it.
+
+**Auto-attach after open:**
+
+* If `indexes\<name>.inx` exists → `SET INDEX TO indexes\<name>.inx` (single-order).
+* Else if `indexes\<name>.cnx` exists → `SETCNX indexes\<name>.cnx` and set order to:
+
+  * `LNAME` if such a tag exists, otherwise the **first** tag in the container.
+* Else → leave `Order: NATURAL`.
+
+**Encapsulation:** the attachment and active order live **inside the area**. Switching areas cleanly switches attachment/order context with no global side-effects.
+
+## 2) SET INDEX (single-order files only)
+
+Accepts paths or bare names.
+
+**Resolution (when bare):**
+
+* `SET INDEX TO students` → prefer `indexes\students.inx` (not CNX).
+* If both `.inx` and `.cnx` exist, **still** choose `.inx`. CNX is handled by `SET ORDER`/`SETCNX`.
+
+**Effect:**
+
+* Attaches that `.inx` to the **current area** and sets `Order: ASCEND` (or as stored).
+
+## 3) SET ORDER (container + tag routing)
+
+* If the container isn’t already attached and you provide a path:
+
+  * `SET ORDER TO indexes\students TAG LNAME`
+  * or `SET ORDER TO indexes\students LNAME`
+    will implicitly attach the CNX, then activate the tag.
+* If the container **is** attached:
+
+  * `SET ORDER TO LNAME` switches the tag.
+
+## 4) REINDEX (defaults + explicit)
+
+With a table open and **no args**:
+
+* If `indexes\<basename>.inx` exists → rebuild that INX.
+* Else if `indexes\<basename>.cnx` exists → rebuild **all tags** in the CNX (announce each).
+* Else → friendly hint: show `INDEX ON <expr> TAG indexes\<basename>` and `SETCNX` examples.
+
+Explicit forms supported:
+
+* `REINDEX <inx-path>` → rebuild that INX.
+* `REINDEX <cnx-path>` → rebuild all tags in that container.
+* (Optional sugar you mentioned)
+  `REINDEX <dbf> <index>` → resolve both; error if `<dbf>` isn’t the **current** area’s DBF (keeps encapsulation sane).
+
+## 5) Path normalization (quality-of-life)
+
+* Strip leading `/` → treat `/indexes\X.inx` as `indexes\X.inx`.
+* Normalize slashes, collapse `.\` and `..\` relative to `data\`.
+
+## 6) AREA banner (clarity)
+
+Show:
+
+* `File: dbf\students.dbf`
+* `Order: NATURAL | ASCEND | DESCEND`
+* If INX: `Index file: indexes\students.inx`
+* If CNX:  `Container : indexes\students.cnx` and `Active tag: LNAME (ASC)`
+
+# Edge cases & precedence
+
+* If both INX and CNX exist for the same base:
+
+  * **USE** prefers INX (fast, single-order) for auto-attach.
+  * **SET INDEX** always means INX.
+  * **SET ORDER/SETCNX** targets CNX + tag.
+* If user attaches INX and later does `SET ORDER TO <tag>` with a CNX present, engine should **switch** to the CNX cleanly (detach INX, attach CNX, activate tag).
+
+# Minimal implementation outline (no code, just flow)
+
+* On `USE`:
+
+  * resolve DBF → open → call `auto_attach(basename)`.
+* `auto_attach(name)`:
+
+  * if `indexes\name.inx` → attach_inx
+  * else if `indexes\name.cnx` → attach_cnx; choose tag (`LNAME` else first).
+* `set_index(nameOrPath)`:
+
+  * if bare → resolve to `indexes\name.inx`; else normalize path; attach_inx.
+* `set_order(container[, tag])`:
+
+  * if container not attached → attach_cnx(container); if tag provided select it; else pick current/first.
+* `reindex()` (no args):
+
+  * if inx exists → rebuild INX
+  * else if cnx exists → rebuild all tags
+  * else hint.
+* `reindex(path)`:
+
+  * detect `.inx` vs `.cnx`; route accordingly.
+
+# Quick test script set (drop in `data\scripts\`)
+
+1. **use_auto_attach.dts**
+   `USE students` → `AREA`
+   Expect INX attached if present; else CNX + `LNAME/first`.
+
+2. **setindex_bare_name.dts**
+   `USE students` → `SET INDEX TO students` → `AREA`
+   Expect `indexes\students.inx`.
+
+3. **setorder_container_tags.dts**
+   `USE students` → `SET ORDER TO indexes\students LNAME` → `LIST 3` → `SET ORDER TO GENDER` → `LIST 3`
+   Expect tag flips.
+
+4. **reindex_defaults.dts**
+   `USE students` → `REINDEX`
+   Expect INX rebuild or CNX all-tags rebuild depending on what exists.
+
+---
+
+If you want me to produce the **tiny patches** for:
+
+* `auto_attach` (USE),
+* bare-name resolution for `SET INDEX`,
+* container+tag routing for `SET ORDER`,
+* and `REINDEX` defaulting,
+
+say the word and I’ll hand you drop-in files for `cmd_use.cpp`, `cmd_set.cpp` (or your router), and `cmd_reindex.cpp` aligned to this spec.

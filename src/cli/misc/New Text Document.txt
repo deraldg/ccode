@@ -1,0 +1,11 @@
+// src/cli/cmd_setcdx.cpp
+#include "xbase.hpp"
+#include <iostream>
+#include <sstream>
+
+void cmd_SETCDX(xbase::DbArea& area, std::istringstream& args)
+{
+    (void)area;
+    (void)args;
+    std::cout << "SET CDX: stub (not wired yet).\n";
+}

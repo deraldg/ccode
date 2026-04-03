@@ -1,0 +1,3 @@
+ECHO [SELF_CALL] entered
+DOTSCRIPT self_call.dts
+ECHO [SELF_CALL] leaving

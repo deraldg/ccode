@@ -1,220 +1,520 @@
-#include "xindex/index_manager.hpp"
-#include "xindex/index_spec.hpp"
-#include "xindex/index_key.hpp"
-#include "xindex/index_tag.hpp"
-#include "xindex/dbarea_adapt.hpp"
-
+// src/xindex/index_manager.cpp
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
-#include <cctype>
-#include <cstdio>
-#include <cstdlib>
-#include <unordered_map>
+#include <string>
 
 #include "xbase.hpp"
-#include "textio.hpp"
+#include "cdx/cdx_meta.hpp"
+#include "cli/path_resolver.hpp"
+#include "xindex/index_manager.hpp"
 
-using std::string;
-using std::vector;
+namespace fs = std::filesystem;
 
 namespace xindex {
 
-static bool ieq(std::string a, std::string b) {
-    if (a.size()!=b.size()) return false;
-    for (size_t i=0;i<a.size();++i)
-        if (std::toupper((unsigned char)a[i]) != std::toupper((unsigned char)b[i])) return false;
-    return true;
+static inline bool ends_with_icase_(std::string s, std::string suf) {
+    if (s.size() < suf.size()) return false;
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+    std::transform(suf.begin(), suf.end(), suf.begin(),
+        [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+    return s.compare(s.size() - suf.size(), suf.size(), suf) == 0;
 }
 
-IndexManager::~IndexManager() = default;
-
-std::string IndexManager::trim(std::string s) {
-    auto issp = [](unsigned char c){ return std::isspace(c)!=0; };
-    while (!s.empty() && issp((unsigned char)s.front())) s.erase(s.begin());
-    while (!s.empty() && issp((unsigned char)s.back())) s.pop_back();
-    return s;
+static inline std::string read_all_text_(const fs::path& p) {
+    std::ifstream in(p, std::ios::binary);
+    if (!in) return {};
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
 }
-std::string IndexManager::up(std::string s) {
-    for (auto& ch : s) ch = static_cast<char>(std::toupper((unsigned char)ch));
+
+static inline std::string json_string_value_(const std::string& doc, const std::string& key) {
+    // Minimal: find "key" : "value"
+    const std::string needle = "\"" + key + "\"";
+    auto pos = doc.find(needle);
+    if (pos == std::string::npos) return {};
+    pos = doc.find(':', pos + needle.size());
+    if (pos == std::string::npos) return {};
+    pos = doc.find('"', pos);
+    if (pos == std::string::npos) return {};
+    auto end = doc.find('"', pos + 1);
+    if (end == std::string::npos) return {};
+    return doc.substr(pos + 1, end - (pos + 1));
+}
+
+std::string IndexManager::to_upper_copy_ascii_(std::string s) {
+    for (auto& ch : s) {
+        ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    }
     return s;
 }
 
 IndexManager::IndexManager(xbase::DbArea& area) : area_(area) {}
 
-bool IndexManager::load_for_table(const std::string& dbfPath) {
-    auto p = inx_path(dbfPath);
-    (void)p; // reader stubbed; rebuild on demand
-    return false;
+IndexManager::~IndexManager() {
+    close();
 }
 
-bool IndexManager::save(const std::string& dbfPath) {
-    if (!dirty_) return true;
-    auto p = inx_path(dbfPath);
-    return save_json(p);
+void IndexManager::close() noexcept {
+    if (backend_) {
+        backend_->close();
+        backend_.reset();
+    }
+    container_path_.clear();
+    tag_upper_.clear();
 }
 
-IndexTag* IndexManager::active() {
-    auto it = tags_.find(active_tag_);
-    if (it == tags_.end()) return nullptr;
-    return it->second.get();
-}
-const IndexTag* IndexManager::active() const {
-    auto it = tags_.find(active_tag_);
-    if (it == tags_.end()) return nullptr;
-    return it->second.get();
-}
-bool IndexManager::has_active() const {
-    return !active_tag_.empty() && tags_.count(active_tag_)>0;
+bool IndexManager::isCdx() const noexcept {
+    return dynamic_cast<const CdxBackend*>(backend_.get()) != nullptr;
 }
 
-bool IndexManager::set_active(const std::string& tag) {
-    auto it = tags_.find(tag);
-    if (it == tags_.end()) return false;
-    active_tag_    = tag;
-    dir_ascending_ = it->second->spec().ascending;
+std::string IndexManager::activeTag() const {
+    if (!backend_) return {};
+    if (auto* tb = dynamic_cast<ITagBackend*>(backend_.get())) return tb->activeTag();
+    return tag_upper_;
+}
+
+bool IndexManager::openCdx(const std::string& cdx_container_path,
+                           const std::string& tag_upper,
+                           std::string* err) {
+    close();
+
+    if (cdx_container_path.empty()) {
+        if (err) *err = "openCdx: empty path";
+        return false;
+    }
+
+    // ---- DBF <-> CDX marriage gate -----------------------------------------
+    const auto identity = cdxmeta::build_identity(area_);
+
+    auto same_core_shape = [&](const cdxmeta::TableIdentity& a,
+                               const cdxmeta::TableIdentity& b) -> bool {
+        return a.kind        == b.kind &&
+               a.version     == b.version &&
+               a.rec_len     == b.rec_len &&
+               a.field_count == b.field_count;
+    };
+
+    std::string meta_err;
+    auto meta = cdxmeta::read_meta(cdx_container_path, &meta_err);
+
+    if (meta.has_value()) {
+        if (!cdxmeta::matches(identity, *meta)) {
+            const bool core_ok = same_core_shape(identity, meta->table);
+
+            if (core_ok) {
+                // Stale or older-style metadata sidecar: refresh it in place.
+                cdxmeta::MetaRecord fresh = *meta;
+                fresh.table = identity;
+
+                if (!cdxmeta::write_meta(cdx_container_path, fresh, &meta_err)) {
+                    if (err) {
+                        std::ostringstream oss;
+                        oss << "openCdx: stale metadata detected but refresh failed"
+                            << " [table kind=" << identity.kind
+                            << ", version=" << static_cast<unsigned>(identity.version)
+                            << ", reclen=" << identity.rec_len
+                            << ", fields=" << identity.field_count
+                            << ", hash=" << identity.schema_hash
+                            << "]"
+                            << " vs"
+                            << " [cdx kind=" << meta->table.kind
+                            << ", version=" << static_cast<unsigned>(meta->table.version)
+                            << ", reclen=" << meta->table.rec_len
+                            << ", fields=" << meta->table.field_count
+                            << ", hash=" << meta->table.schema_hash
+                            << "]"
+                            << " write_meta error=" << meta_err;
+                        *err = oss.str();
+                    }
+                    return false;
+                }
+
+                // Re-read after refresh so later code sees current metadata.
+                meta = cdxmeta::read_meta(cdx_container_path, &meta_err);
+                if (!meta.has_value()) {
+                    if (err) *err = "openCdx: refreshed metadata but could not re-read sidecar";
+                    return false;
+                }
+            } else {
+                if (err) {
+                    std::ostringstream oss;
+                    oss << "openCdx: metadata mismatch"
+                        << " [table kind=" << identity.kind
+                        << ", version=" << static_cast<unsigned>(identity.version)
+                        << ", reclen=" << identity.rec_len
+                        << ", fields=" << identity.field_count
+                        << ", hash=" << identity.schema_hash
+                        << "]"
+                        << " vs"
+                        << " [cdx kind=" << meta->table.kind
+                        << ", version=" << static_cast<unsigned>(meta->table.version)
+                        << ", reclen=" << meta->table.rec_len
+                        << ", fields=" << meta->table.field_count
+                        << ", hash=" << meta->table.schema_hash
+                        << "]";
+                    *err = oss.str();
+                }
+                return false;
+            }
+        }
+    } else {
+        // No metadata yet: first-time bind
+        cdxmeta::MetaRecord fresh{};
+        fresh.table = identity;
+
+        if (!cdxmeta::write_meta(cdx_container_path, fresh, &meta_err)) {
+            if (err) *err = "openCdx: failed to write metadata: " + meta_err;
+            return false;
+        }
+    }
+
+    // ---- New architecture: public container -> LMDB backend env ------------
+    const fs::path container_path(cdx_container_path);
+    const fs::path env_path = dottalk::paths::resolve_lmdb_env_for_cdx(container_path);
+
+    if (!fs::exists(env_path) || !fs::is_directory(env_path)) {
+        if (err) {
+            *err = "openCdx: LMDB env missing: " + env_path.string();
+        }
+        return false;
+    }
+
+    auto b = std::make_unique<CdxBackend>(area_, cdx_container_path);
+
+    // IMPORTANT:
+    // Open the backend against the LMDB env, not the public .cdx container.
+    if (!b->open(env_path.string())) {
+        if (err) {
+            *err = "openCdx: backend open() failed"
+                   " [container=" + container_path.string() +
+                   ", env=" + env_path.string() + "]";
+        }
+        return false;
+    }
+
+    backend_ = std::move(b);
+    container_path_ = cdx_container_path;
+
+    if (!tag_upper.empty()) {
+        if (!setTag(tag_upper, err)) return false;
+    }
     return true;
 }
-void IndexManager::clear_active() { active_tag_.clear(); }
 
-void IndexManager::set_direction(bool ascending) { dir_ascending_ = ascending; }
-
-std::string IndexManager::inx_path(const std::string& dbfPath) const {
-    auto pos = dbfPath.find_last_of('.');
-    if (pos == std::string::npos) return dbfPath + ".inx";
-    return dbfPath.substr(0, pos) + ".inx";
+bool IndexManager::setTag(const std::string& tag_upper, std::string* err) {
+    if (!backend_) {
+        if (err) *err = "setTag: no active backend";
+        return false;
+    }
+    auto* tb = dynamic_cast<ITagBackend*>(backend_.get());
+    if (!tb) {
+        if (err) *err = "setTag: backend not tag-capable";
+        return false;
+    }
+    const auto up = to_upper_copy_ascii_(tag_upper);
+    tb->setTag(up);
+    tag_upper_ = up;
+    return true;
 }
 
-IndexKey IndexManager::make_key_from_tokens(const IndexSpec& spec, const std::vector<std::string>& toks) const {
-    IndexKey k; k.parts.reserve(spec.fields.size());
-    for (size_t i=0; i<spec.fields.size(); ++i) {
-        std::string v = (i < toks.size() ? trim(toks[i]) : std::string());
-        bool isnum = !v.empty() && (std::isdigit((unsigned char)v[0]) || v[0]=='-' || v[0]=='+');
-        if (isnum) {
-            char* endp=nullptr; double d = std::strtod(v.c_str(), &endp);
-            if (endp && *endp=='\0') { k.parts.emplace_back(d); continue; }
+std::unique_ptr<Cursor> IndexManager::seek(const Key& key) const {
+    if (!backend_) return {};
+    return backend_->seek(key);
+}
+
+std::unique_ptr<Cursor> IndexManager::scan(const Key& low, const Key& high) const {
+    if (!backend_) return {};
+    return backend_->scan(low, high);
+}
+
+bool IndexManager::lmdbSeekUserKey(const std::string& user_key,
+                                   std::uint32_t& out_recno,
+                                   std::string& out_err) const {
+    out_recno = 0;
+    out_err.clear();
+    auto* cdx = dynamic_cast<const CdxBackend*>(backend_.get());
+    if (!cdx) {
+        out_err = "no CDX/LMDB backend active";
+        return false;
+    }
+    return cdx->seekRecnoUserKey(user_key, out_recno, out_err);
+}
+
+// ---- Canonical active-tag key helpers -------------------------------------
+
+int IndexManager::activeTagFieldIndex1() const {
+    const auto tag = activeTag();
+    if (tag.empty()) return 0;
+
+    try {
+        const auto defs = area_.fields();
+        const auto want = to_upper_copy_ascii_(tag);
+        for (std::size_t i = 0; i < defs.size(); ++i) {
+            if (to_upper_copy_ascii_(defs[i].name) == want) {
+                return static_cast<int>(i) + 1; // 1-based
+            }
         }
-        k.parts.emplace_back(up(v));
+    } catch (...) {
     }
-    return k;
+    return 0;
 }
 
-IndexKey IndexManager::key_from_record(const IndexSpec& spec, int recno) const {
-    IndexKey k; k.parts.reserve(spec.fields.size());
-    for (auto const& fname : spec.fields) {
-        std::string sv = db_get_string(area_, recno, fname);
-        if (!sv.empty()) { k.parts.emplace_back(up(trim(sv))); }
-        else { double nv = db_get_double(area_, recno, fname); k.parts.emplace_back(nv); }
-    }
-    return k;
+bool IndexManager::activeTagMatchesField(int field1) const {
+    if (field1 <= 0) return false;
+    return activeTagFieldIndex1() == field1;
 }
 
-IndexTag& IndexManager::ensure_tag(const IndexSpec& specIn) {
-    IndexSpec spec = specIn;
-    if (spec.tag.empty()) spec.tag = spec.fields.empty()? std::string("TAG") : spec.fields.front();
-    auto it = tags_.find(spec.tag);
-    if (it != tags_.end()) {
-        // TODO: detect spec drift and rebuild if needed
-        return *it->second;
-    }
-    auto tag = std::make_unique<IndexTag>(spec);
-    std::vector<KeyRec> rows;
-    int n = db_record_count(area_);
-    rows.reserve(n>0?n:0);
-    for (int rec=1; rec<=n; ++rec) {
-        if (db_is_deleted(area_, rec)) continue;
-        IndexKey k = key_from_record(spec, rec);
-        rows.push_back(KeyRec{ std::move(k), rec });
-    }
-    tag->bulk_build(std::move(rows));
-    auto& ref = *tag;
-    tags_[spec.tag] = std::move(tag);
-    dirty_ = true;
-    return ref;
-}
+Key IndexManager::buildActiveTagBaseKeyFromString(const std::string& raw_value) const {
+    Key out;
+    const int fld = activeTagFieldIndex1();
+    if (fld <= 0) return out;
 
-int IndexManager::top() const {
-    auto a = active();
-    return a ? (dir_ascending_? a->top() : a->bottom()) : -1;
-}
-int IndexManager::bottom() const {
-    auto a = active();
-    return a ? (dir_ascending_? a->bottom() : a->top()) : -1;
-}
+    try {
+        const auto defs = area_.fields();
+        const auto& fdef = defs[static_cast<std::size_t>(fld - 1)];
 
-void IndexManager::on_append(int recno) {
-    for (auto& kv : tags_) {
-        auto& tag = *kv.second;
-        IndexKey k = key_from_record(tag.spec(), recno);
-        tag.insert(std::move(k), recno);
-    }
-    dirty_ = true;
-}
-void IndexManager::on_replace(int recno) {
-    for (auto& kv : tags_) {
-        kv.second->erase_recno(recno);
-        IndexKey k = key_from_record(kv.second->spec(), recno);
-        kv.second->insert(std::move(k), recno);
-    }
-    dirty_ = true;
-}
-void IndexManager::on_delete(int recno) {
-    for (auto& kv : tags_) kv.second->erase_recno(recno);
-    dirty_ = true;
-}
-void IndexManager::on_recall(int recno) {
-    for (auto& kv : tags_) {
-        IndexKey k = key_from_record(kv.second->spec(), recno);
-        kv.second->insert(std::move(k), recno);
-    }
-    dirty_ = true;
-}
-void IndexManager::on_pack(std::function<int(int)> recnoRemap) {
-    std::unordered_map<std::string, std::unique_ptr<IndexTag>> rebuilt;
-    for (auto& kv : tags_) {
-        auto spec = kv.second->spec();
-        auto tag = std::make_unique<IndexTag>(spec);
-        std::vector<KeyRec> rows;
-        int n = db_record_count(area_);
-        rows.reserve(n>0?n:0);
-        for (int rec=1; rec<=n; ++rec) {
-            if (db_is_deleted(area_, rec)) continue;
-            IndexKey k = key_from_record(spec, rec);
-            int newRec = recnoRemap ? recnoRemap(rec) : rec;
-            rows.push_back(KeyRec{ std::move(k), newRec });
+        std::string s = raw_value;
+
+        const bool is_char = (fdef.type == 'C' || fdef.type == 'c');
+        const int keylen = static_cast<int>(fdef.length);
+
+        if (is_char) {
+            for (char& c : s) {
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            }
         }
-        tag->bulk_build(std::move(rows));
-        rebuilt[spec.tag] = std::move(tag);
+
+        if (keylen > 0) {
+            if (static_cast<int>(s.size()) > keylen) {
+                s.resize(static_cast<std::size_t>(keylen));
+            } else if (static_cast<int>(s.size()) < keylen) {
+                s.append(static_cast<std::size_t>(keylen - static_cast<int>(s.size())), ' ');
+            }
+        }
+
+        out.reserve(s.size());
+        out.insert(out.end(), s.begin(), s.end());
+    } catch (...) {
+        out.clear();
     }
-    tags_ = std::move(rebuilt);
-    dirty_ = true;
-}
-void IndexManager::on_zap() {
-    tags_.clear();
-    active_tag_.clear();
-    dirty_ = true;
-}
 
-// Persistence stubs — keep simple and robust
-bool IndexManager::save_json(const std::string& path) { (void)path; return true; }
-bool IndexManager::load_json(const std::string& path) { (void)path; return false; }
-
-// ===== Introspection =====
-std::vector<std::string> IndexManager::listTags() const {
-    std::vector<std::string> out; out.reserve(tags_.size());
-    for (auto const& kv : tags_) out.push_back(kv.first);
     return out;
 }
 
-std::string IndexManager::exprFor(const std::string& tag) const {
-    auto it = tags_.find(tag);
-    if (it == tags_.end()) return {};
-    const auto& sp = it->second->spec();
-    std::string expr;
-    for (size_t i=0; i<sp.fields.size(); ++i) {
-        if (i) expr += "+";
-        expr += sp.fields[i];
+Key IndexManager::buildActiveTagBaseKeyFromCurrentRecord() const {
+    const int fld = activeTagFieldIndex1();
+    if (fld <= 0) return {};
+    try {
+        return buildActiveTagBaseKeyFromString(area_.get(fld));
+    } catch (...) {
+        return {};
     }
-    return expr;
+}
+
+// ---- local helpers for field-tag mutation fan-out -------------------------
+
+namespace {
+
+static inline std::string field_name_upper_for_1based_(xbase::DbArea& area, int field1) {
+    if (field1 <= 0) return {};
+    try {
+        const auto defs = area.fields();
+        const std::size_t idx = static_cast<std::size_t>(field1 - 1);
+        if (idx >= defs.size()) return {};
+        std::string s = defs[idx].name;
+        for (char& ch : s) {
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        }
+        return s;
+    } catch (...) {
+        return {};
+    }
+}
+
+template<typename Fn>
+static bool with_tag_switched_(IndexManager& im,
+                               const std::string& want_tag_upper,
+                               Fn&& fn)
+{
+    if (!im.hasBackend()) return false;
+    if (want_tag_upper.empty()) return false;
+
+    std::string err;
+    const std::string saved_tag = im.activeTag();
+
+    if (!im.setTag(want_tag_upper, &err)) {
+        return false;
+    }
+
+    bool ok = false;
+    try {
+        fn();
+        ok = true;
+    } catch (...) {
+        ok = false;
+    }
+
+    if (!saved_tag.empty() && saved_tag != want_tag_upper) {
+        std::string restore_err;
+        (void)im.setTag(saved_tag, &restore_err);
+    }
+
+    return ok;
+}
+
+} // anonymous namespace
+
+// ---- OO mutation wrappers -------------------------------------------------
+
+bool IndexManager::replace_active_field_value(int field1,
+                                              const std::string& old_value,
+                                              const std::string& new_value,
+                                              RecNo rec) {
+    if (!backend_) return false;
+
+    const std::string target_tag = field_name_upper_for_1based_(area_, field1);
+    if (target_tag.empty()) return false;
+
+    return with_tag_switched_(*this, target_tag, [&]() {
+        const Key old_key = buildActiveTagBaseKeyFromString(old_value);
+        const Key new_key = buildActiveTagBaseKeyFromString(new_value);
+        on_replace(old_key, new_key, rec);
+    });
+}
+
+bool IndexManager::append_active_field_value(int field1,
+                                             const std::string& value,
+                                             RecNo rec) {
+    if (!backend_) return false;
+
+    const std::string target_tag = field_name_upper_for_1based_(area_, field1);
+    if (target_tag.empty()) return false;
+
+    return with_tag_switched_(*this, target_tag, [&]() {
+        const Key key = buildActiveTagBaseKeyFromString(value);
+        on_append(key, rec);
+    });
+}
+
+bool IndexManager::delete_active_field_value(int field1,
+                                             const std::string& value,
+                                             RecNo rec) {
+    if (!backend_) return false;
+
+    const std::string target_tag = field_name_upper_for_1based_(area_, field1);
+    if (target_tag.empty()) return false;
+
+    return with_tag_switched_(*this, target_tag, [&]() {
+        const Key key = buildActiveTagBaseKeyFromString(value);
+        on_delete(key, rec);
+    });
+}
+
+// ---- legacy shim ----------------------------------------------------------
+
+std::optional<IndexManager::ActiveState> IndexManager::active() const {
+    if (!backend_) return std::nullopt;
+    ActiveState st;
+    st.spec_.cdx = container_path_;
+    st.spec_.tag = activeTag();
+    return st;
+}
+
+bool IndexManager::set_active(const std::string& tagName) {
+    std::string err;
+    if (!backend_) {
+        if (!load_for_table(area_.filename())) {
+            return false;
+        }
+    }
+    return setTag(tagName, &err);
+}
+
+std::vector<std::string> IndexManager::listTags() const {
+    std::vector<std::string> out;
+    const auto t = activeTag();
+    if (!t.empty()) out.push_back(t);
+    return out;
+}
+
+static inline fs::path candidate_in_dir_(const fs::path& dir,
+                                         const std::string& stem_upper,
+                                         const std::string& ext_lower) {
+    fs::path p = dir / stem_upper;
+    p += ext_lower;
+    return p;
+}
+
+bool IndexManager::load_for_table(const std::string& path_or_dbf) {
+    std::string err;
+
+    if (path_or_dbf.empty()) return false;
+
+    fs::path p(path_or_dbf);
+    const auto ext = to_upper_copy_ascii_(p.extension().string());
+
+    if (ext == ".CDX") {
+        return openCdx(p.string(), {}, &err);
+    }
+
+    // If a DBF was provided, resolve likely .cdx locations.
+    if (ext == ".DBF" || ext.empty()) {
+        fs::path dbf = p;
+        if (ext.empty()) {
+            dbf = fs::path(area_.dbfDir()) / p;
+            dbf += ".dbf";
+        }
+
+        const auto stem_upper = to_upper_copy_ascii_(dbf.stem().string());
+
+        std::vector<fs::path> cand;
+        if (!dbf.parent_path().empty()) {
+            cand.push_back(candidate_in_dir_(dbf.parent_path(), stem_upper, ".cdx"));
+            cand.push_back(candidate_in_dir_(dbf.parent_path() / "indexes", stem_upper, ".cdx"));
+        }
+        cand.push_back(candidate_in_dir_(fs::path("indexes"), stem_upper, ".cdx"));
+        if (!area_.dbfDir().empty()) {
+            cand.push_back(candidate_in_dir_(fs::path(area_.dbfDir()), to_upper_copy_ascii_(area_.dbfBasename()), ".cdx"));
+            cand.push_back(candidate_in_dir_(fs::path(area_.dbfDir()) / "indexes", to_upper_copy_ascii_(area_.dbfBasename()), ".cdx"));
+        }
+
+        for (const auto& c : cand) {
+            if (fs::exists(c)) return openCdx(c.string(), {}, &err);
+        }
+
+        if (!cand.empty()) return openCdx(cand.front().string(), {}, &err);
+        return false;
+    }
+
+    return openCdx(p.string(), {}, &err);
+}
+
+bool IndexManager::load_json(const std::string& inx_path) {
+    std::string err;
+    if (inx_path.empty()) return false;
+
+    fs::path p(inx_path);
+    const auto doc = read_all_text_(p);
+    if (doc.empty()) {
+        return false;
+    }
+
+    std::string cdx = json_string_value_(doc, "cdx");
+    std::string tag = json_string_value_(doc, "tag");
+
+    if (cdx.empty()) {
+        cdx = (p.parent_path() / p.stem()).string() + ".cdx";
+    }
+    if (tag.empty()) {
+        tag = p.stem().string();
+    }
+
+    return openCdx(cdx, to_upper_copy_ascii_(tag), &err);
 }
 
 } // namespace xindex

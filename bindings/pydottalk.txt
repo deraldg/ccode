@@ -1,0 +1,4 @@
+& $py12 D:\code\ccode\bindings\pydottalk_smoke.py `
+  --ext-dir D:\code\ccode\build\bindings\pydottalk\Release `
+  --dbf-dir D:\code\ccode\dottalkpp\data\dbf `
+  --dbf STUDENTS.dbf

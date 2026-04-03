@@ -1,0 +1,137 @@
+* ============================================================
+* PREDICATE_SYNTAX_EXERCISE.DTS
+* Exercises COUNT/LOCATE predicate syntax per help snippet:
+* - COUNT [ALL|DELETED] [FOR <field> <op> <value>]
+* - LOCATE [FOR <field> <op> <value>]
+* - Ops: strings (= != $), numbers (= != > >= < <=), dates (YYYYMMDD), booleans (= != with T/F variants)
+* - SETCASE OFF/ON
+* - UPPER(field)/LOWER(field) on left side
+* - Inline comments with &&
+* ============================================================
+
+SET ECHO ON
+ECHO ===== PREDICATE SYNTAX EXERCISE START =====
+
+* ------------------------------------------------------------
+* 0) Strings / Numbers / Dates (STUDENTS)
+* ------------------------------------------------------------
+USE STUDENTS
+TOP
+
+ECHO ---- COUNT: no FOR (baseline) ----
+COUNT                          && baseline count (default rules)
+COUNT ALL                      && include deleted + non-deleted (should match COUNT if no deleted)
+COUNT DELETED                  && deleted only
+
+ECHO ---- COUNT: strings with SETCASE OFF (default) ----
+SETCASE OFF                    && case-insensitive string compares
+COUNT FOR LNAME = "White"      && string =
+COUNT FOR LNAME = "white"      && same match if SETCASE OFF
+COUNT FOR LNAME != "White"     && string !=
+COUNT FOR EMAIL $ "MCC.EDU"    && substring ($), case-insensitive
+
+ECHO ---- COUNT: functions on left side (strings) ----
+COUNT FOR UPPER(LNAME) = "WHITE"   && UPPER(field) =
+COUNT FOR UPPER(LNAME) $ "WHI"     && UPPER(field) substring
+COUNT FOR LOWER(LNAME) = "white"   && LOWER(field) =
+
+ECHO ---- COUNT: strings with SETCASE ON ----
+SETCASE ON                     && case-sensitive string compares
+COUNT FOR LNAME = "white"      && likely 0 if stored as "White"
+COUNT FOR LNAME = "White"      && case-sensitive match
+COUNT FOR LOWER(LNAME) = "white"   && should match regardless (function output is lower)
+COUNT FOR EMAIL $ "student.mcc.edu"    && likely matches if email is lower-case
+COUNT FOR EMAIL $ "STUDENT.MCC.EDU"    && likely 0 with SETCASE ON
+
+* Restore default
+SETCASE OFF
+
+ECHO ---- COUNT: numeric operators (= != > >= < <=) ----
+COUNT FOR GPA = 3              && number =
+COUNT FOR GPA != 3             && number !=
+COUNT FOR GPA > 3              && number >
+COUNT FOR GPA >= 3             && number >=
+COUNT FOR GPA < 3              && number <
+COUNT FOR GPA <= 3             && number <=
+
+ECHO ---- COUNT: date compares (YYYYMMDD) ----
+COUNT FOR DOB >= 20000101          && date >=
+COUNT FOR DOB < 19900101           && date <
+COUNT FOR ENROLL_D <= 20240101     && date <=
+
+ECHO ---- COUNT: ALL/DELETED combined with FOR ----
+COUNT ALL FOR LNAME $ "a"      && includes deleted + non-deleted
+COUNT DELETED FOR LNAME $ "a"  && deleted only (may be 0)
+
+ECHO ---- LOCATE: strings/numbers/dates/functions (TOP before each) ----
+TOP
+LOCATE FOR LNAME = "White"     && string =
+TUP
+CONTINUE                       && next match of the same predicate (if any)
+TUP
+
+TOP
+LOCATE FOR LNAME $ "whi"       && substring ($)
+TUP
+CONTINUE
+TUP
+
+TOP
+LOCATE FOR GPA >= 3            && number >=
+TUP
+
+TOP
+LOCATE FOR DOB >= 20000101     && date >=
+TUP
+
+TOP
+LOCATE FOR UPPER(LNAME) = "WHITE"   && function on left side
+TUP
+
+TOP
+LOCATE FOR LOWER(LNAME) = "white"   && function on left side
+TUP
+
+* ------------------------------------------------------------
+* 1) Booleans (TEACHERS)
+* ------------------------------------------------------------
+USE TEACHERS
+TOP
+
+ECHO ---- COUNT: boolean literals (T/F, .T./.F., TRUE/FALSE, 1/0) ----
+COUNT FOR TENURED = .T.        && boolean = .T.
+COUNT FOR TENURED = T          && boolean = T
+COUNT FOR TENURED = TRUE       && boolean = TRUE
+COUNT FOR TENURED = 1          && boolean = 1
+
+COUNT FOR TENURED = .F.        && boolean = .F.
+COUNT FOR TENURED = F          && boolean = F
+COUNT FOR TENURED = FALSE      && boolean = FALSE
+COUNT FOR TENURED = 0          && boolean = 0
+
+ECHO ---- COUNT: boolean not-equals ----
+COUNT FOR TENURED != .T.       && boolean !=
+COUNT FOR TENURED != 1         && boolean != (numeric form)
+
+ECHO ---- LOCATE: boolean (TOP before each) ----
+TOP
+LOCATE FOR TENURED = .T.       && locate first TRUE
+TUP
+CONTINUE
+TUP
+
+TOP
+LOCATE FOR TENURED = F       && locate first FALSE
+TUP
+CONTINUE
+TUP
+
+TOP
+LOCATE FOR TENURED =  " "     && locate first FALSE
+TUP
+CONTINUE
+TUP
+
+
+ECHO ===== PREDICATE SYNTAX EXERCISE END =====
+SET ECHO OFF

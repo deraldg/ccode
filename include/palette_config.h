@@ -8,3 +8,6 @@
 bool paletteSave(const TPalette &pal, const std::string &path = "dottalkpp.palette");
 bool paletteLoad(TPalette &out, const std::string &path = "dottalkpp.palette");
 
+
+
+

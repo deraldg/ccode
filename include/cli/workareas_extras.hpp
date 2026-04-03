@@ -7,7 +7,7 @@ namespace workareas_extras {
 // Count of available work areas (0..count-1 are valid).
 int max_areas();
 
-// Is an area currently “open” (i.e., has a DBF assigned)?
+// Is an area currently ?open? (i.e., has a DBF assigned)?
 bool is_open(int area);
 
 // Full path (or filename) for area; empty if unknown/closed.
@@ -24,3 +24,6 @@ bool select(int area);
 bool select_by_token(const std::string& token);
 
 } // namespace workareas_extras
+
+
+

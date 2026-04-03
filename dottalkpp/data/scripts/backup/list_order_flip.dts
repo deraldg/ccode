@@ -1,0 +1,18 @@
+* List order flips are stable across CNX tags
+COLOR DEFAULT
+USE students noindex
+SETCNX students.cnx
+SETORDER students.cnx TAG SID --asc
+LIST
+DESCEND
+LIST
+ASCEND
+LIST
+* Switch tag and repeat
+SETORDER students.cnx TAG MAJOR --asc
+LIST
+DESCEND
+LIST
+ASCEND
+LIST
+* end

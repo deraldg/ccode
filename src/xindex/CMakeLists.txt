@@ -24,3 +24,14 @@ if (MSVC)
 else()
   target_compile_options(xindex PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# ---- LMDB (vcpkg) -----------------------------------------------------------
+# vcpkg prints:
+#   find_package(unofficial-lmdb CONFIG REQUIRED)
+#   target_link_libraries(main PRIVATE unofficial::lmdb::lmdb)
+#
+# We link it to xindex so lmdb.h is on the include path when compiling lmdb_backend.cpp.
+if (DOTTALK_WITH_INDEX)
+  find_package(unofficial-lmdb CONFIG REQUIRED)
+  target_link_libraries(xindex PRIVATE unofficial::lmdb::lmdb)
+endif()

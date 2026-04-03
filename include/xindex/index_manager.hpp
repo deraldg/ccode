@@ -1,74 +1,143 @@
+// include/xindex/index_manager.hpp
 #pragma once
+/**
+ * @file index_manager.hpp
+ * @brief Per-DbArea index ownership + legacy shim used by src/xindex/cli_wrappers.cpp.
+ *
+ * Current direction:
+ *   - Keep the OO API primary.
+ *   - Let callers mutate indexes through IndexManager lifecycle hooks.
+ *   - Preserve legacy xbase call sites that still pass only recno.
+ *   - For now, keyed lifecycle hooks operate only on the currently active backend/tag.
+ *   - Multi-tag container maintenance can be added later without changing callers.
+ */
+#include "xindex/index_backend.hpp"
+#include "xindex/cdx_backend.hpp"
 
+#include <cstdint>
 #include <memory>
-#include <unordered_map>
-#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
-
-#include "xindex/index_tag.hpp"  // ensure complete type for unique_ptr
 
 namespace xbase { class DbArea; }
 
 namespace xindex {
 
-struct IndexSpec;
-struct IndexKey;
-struct KeyRec;
-
-class IndexManager {
+class IndexManager final {
 public:
+    struct Spec final {
+        std::string cdx;
+        std::string tag;
+    };
+
+    struct ActiveState final {
+        Spec spec_;
+        const Spec& spec() const noexcept { return spec_; }
+    };
+
     explicit IndexManager(xbase::DbArea& area);
     ~IndexManager();
 
-    // Lifecycle
-    bool load_for_table(const std::string& dbfPath);
-    bool save(const std::string& dbfPath);
+    IndexManager(const IndexManager&)            = delete;
+    IndexManager& operator=(const IndexManager&) = delete;
 
-    // Index ops
-    IndexTag& ensure_tag(const IndexSpec& spec);
-    bool      set_active(const std::string& tag);
-    void      clear_active();
-    bool      has_active() const;
-    IndexTag*       active();
-    const IndexTag* active() const;
-    void      set_direction(bool ascending);
-    int       top()    const;
-    int       bottom() const;
+    // ---- OO core API -------------------------------------------------------
+    void close() noexcept;
 
-    // Mutations
-    void on_append(int recno);
-    void on_replace(int recno);
-    void on_delete(int recno);
-    void on_recall(int recno);
-    void on_pack(std::function<int(int)> recnoRemap);
-    void on_zap();
+    bool openCdx(const std::string& cdx_container_path,
+                 const std::string& tag_upper = {},
+                 std::string* err = nullptr);
 
-    // Persistence (stubs for now)
-    bool        save_json(const std::string& path);
-    bool        load_json(const std::string& path);
-    std::string inx_path(const std::string& dbfPath) const;
+    bool setTag(const std::string& tag_upper, std::string* err = nullptr);
 
-    // Introspection
-    std::vector<std::string> listTags() const;            // tag names
-    std::string              exprFor(const std::string& tag) const; // human-readable expr from fields
+    bool isCdx() const noexcept;
+    bool hasBackend() const noexcept { return static_cast<bool>(backend_); }
+    const std::string& containerPath() const noexcept { return container_path_; }
+    std::string activeTag() const;
 
-    // Back-compat shims (so existing CLI calls compile)
-    std::vector<std::string> list_tags() const { return listTags(); }
-    std::string              tag_expr(const std::string& t) const { return exprFor(t); }
+    std::unique_ptr<Cursor> seek(const Key& key) const;
+    std::unique_ptr<Cursor> scan(const Key& low, const Key& high) const;
 
-    // Helpers
-    static std::string trim(std::string s);
-    static std::string up(std::string s);
-    IndexKey           make_key_from_tokens(const IndexSpec& spec, const std::vector<std::string>& toks) const;
-    IndexKey           key_from_record(const IndexSpec& spec, int recno) const;
+    bool lmdbSeekUserKey(const std::string& user_key,
+                         std::uint32_t& out_recno,
+                         std::string& out_err) const;
+
+    // ---- Canonical active-tag key helpers ---------------------------------
+    int  activeTagFieldIndex1() const;
+    bool activeTagMatchesField(int field1) const;
+
+    Key buildActiveTagBaseKeyFromString(const std::string& raw_value) const;
+    Key buildActiveTagBaseKeyFromCurrentRecord() const;
+
+    // ---- OO mutation wrappers ---------------------------------------------
+    bool replace_active_field_value(int field1,
+                                    const std::string& old_value,
+                                    const std::string& new_value,
+                                    RecNo rec);
+
+    bool append_active_field_value(int field1,
+                                   const std::string& value,
+                                   RecNo rec);
+
+    bool delete_active_field_value(int field1,
+                                   const std::string& value,
+                                   RecNo rec);
+
+    // ---- Legacy shim API ---------------------------------------------------
+    bool set_active(const std::string& tagName);
+    std::optional<ActiveState> active() const;
+    bool has_active() const { return hasBackend(); }
+    void clear_active() { close(); }
+    std::vector<std::string> listTags() const;
+    bool load_for_table(const std::string& path_or_dbf);
+    bool load_json(const std::string& inx_path);
+    void set_direction(bool /*descending*/) noexcept {}
+
+    // ---- Record lifecycle hooks -------------------------------------------
+    void on_append(const Key& key, RecNo rec) {
+        if (!backend_) return;
+        backend_->upsert(key, rec);
+    }
+
+    void on_delete(const Key& key, RecNo rec) {
+        if (!backend_) return;
+        backend_->erase(key, rec);
+    }
+
+    void on_replace(const Key& old_key,
+                    const Key& new_key,
+                    RecNo rec) {
+        if (!backend_) return;
+        if (old_key == new_key) return;
+
+        // Safer sequence with current backend contract:
+        // insert new key first, then remove old key.
+        // If erase fails, attempt to roll back the new key.
+        backend_->upsert(new_key, rec);
+        try {
+            backend_->erase(old_key, rec);
+        } catch (...) {
+            try {
+                backend_->erase(new_key, rec);
+            } catch (...) {
+            }
+            throw;
+        }
+    }
+
+    // ---- Legacy compatibility overloads -----------------------------------
+    void on_append(RecNo /*rec*/) {}
+    void on_delete(RecNo /*rec*/) {}
+    void on_replace(RecNo /*rec*/) {}
 
 private:
     xbase::DbArea& area_;
-    std::unordered_map<std::string, std::unique_ptr<IndexTag>> tags_;
-    std::string active_tag_;
-    bool dir_ascending_{true};
-    bool dirty_{false};
+    std::unique_ptr<IIndexBackend> backend_{};
+    std::string container_path_{};
+    std::string tag_upper_{};
+
+    static std::string to_upper_copy_ascii_(std::string s);
 };
 
 } // namespace xindex

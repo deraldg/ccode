@@ -21,3 +21,6 @@ IndexManager& ensure_manager(xbase::DbArea& area) {
 }
 
 } // namespace xindex
+
+
+

@@ -1,0 +1,203 @@
+#include "path_resolve_util.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <string>
+#include <vector>
+#include <system_error>
+
+#if __has_include("cli/path_resolver.hpp") && __has_include("cli/cmd_setpath.hpp")
+  #include "cli/path_resolver.hpp"
+  #include "cli/cmd_setpath.hpp"
+  #define DOTTALK_HAVE_PATH_SLOTS 1
+#else
+  #define DOTTALK_HAVE_PATH_SLOTS 0
+#endif
+
+namespace fs = std::filesystem;
+
+namespace dottalk::cliutil {
+namespace {
+
+static std::string upcopy(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return s;
+}
+
+static std::string slot_name(PathSlot s)
+{
+    switch (s) {
+        case PathSlot::DATA:    return "DATA";
+        case PathSlot::DBF:     return "DBF";
+        case PathSlot::INDEXES: return "INDEXES";
+        case PathSlot::SCHEMAS: return "SCHEMAS";
+        case PathSlot::SCRIPTS: return "SCRIPTS";
+        case PathSlot::TESTS:   return "TESTS";
+        case PathSlot::HELP:    return "HELP";
+        case PathSlot::LOGS:    return "LOGS";
+        case PathSlot::TMP:     return "TMP";
+        case PathSlot::None:
+        default:                return "";
+    }
+}
+
+static fs::path normalize_best_effort(const fs::path& p)
+{
+    std::error_code ec;
+    fs::path abs = p;
+
+    if (!abs.is_absolute()) {
+        abs = fs::absolute(abs, ec);
+        if (ec) {
+            return p;
+        }
+    }
+
+    fs::path weak = fs::weakly_canonical(abs, ec);
+    if (!ec) return weak;
+
+    return abs;
+}
+
+static bool exists_kind(const fs::path& p, ResolveKind kind)
+{
+    std::error_code ec;
+    switch (kind) {
+        case ResolveKind::ExistingFile:
+            return fs::exists(p, ec) && fs::is_regular_file(p, ec);
+        case ResolveKind::ExistingPath:
+            return fs::exists(p, ec);
+        case ResolveKind::ForOutputFile:
+            return true;
+    }
+    return false;
+}
+
+#if DOTTALK_HAVE_PATH_SLOTS
+static bool get_slot_root(PathSlot s, fs::path& out)
+{
+    namespace paths = dottalk::paths;
+
+    try {
+        switch (s) {
+            case PathSlot::DATA:    out = paths::get_slot(paths::Slot::DATA);    return true;
+            case PathSlot::DBF:     out = paths::get_slot(paths::Slot::DBF);     return true;
+            case PathSlot::INDEXES: out = paths::get_slot(paths::Slot::INDEXES); return true;
+            case PathSlot::SCHEMAS: out = paths::get_slot(paths::Slot::SCHEMAS); return true;
+            case PathSlot::SCRIPTS: out = paths::get_slot(paths::Slot::SCRIPTS); return true;
+            case PathSlot::TESTS:   out = paths::get_slot(paths::Slot::TESTS);   return true;
+            case PathSlot::HELP:    out = paths::get_slot(paths::Slot::HELP);    return true;
+            case PathSlot::LOGS:    out = paths::get_slot(paths::Slot::LOGS);    return true;
+            case PathSlot::TMP:     out = paths::get_slot(paths::Slot::TMP);     return true;
+            case PathSlot::None:
+            default:
+                return false;
+        }
+    } catch (...) {
+        return false;
+    }
+}
+#endif
+
+static std::optional<fs::path> strip_leading_slot_component(const fs::path& raw, PathSlot slot)
+{
+    const std::string want = slot_name(slot);
+    if (want.empty()) return std::nullopt;
+
+    auto it = raw.begin();
+    if (it == raw.end()) return std::nullopt;
+
+    const std::string first = upcopy(it->string());
+    if (first != want && first != upcopy(std::string(want).substr(0, 3))) {
+        return std::nullopt;
+    }
+
+    fs::path rest;
+    ++it;
+    for (; it != raw.end(); ++it) {
+        rest /= *it;
+    }
+    return rest;
+}
+
+} // namespace
+
+bool is_regular_file_path(const fs::path& p)
+{
+    std::error_code ec;
+    return fs::exists(p, ec) && fs::is_regular_file(p, ec);
+}
+
+bool path_exists(const fs::path& p)
+{
+    std::error_code ec;
+    return fs::exists(p, ec);
+}
+
+fs::path resolve_cli_path(const std::string& raw,
+                          PathSlot preferred_slot,
+                          ResolveKind kind)
+{
+    fs::path in(raw);
+    if (raw.empty()) return in;
+
+    // Absolute path: normalize and return directly.
+    if (in.is_absolute()) {
+        fs::path abs = normalize_best_effort(in);
+        if (kind == ResolveKind::ForOutputFile || exists_kind(abs, kind)) {
+            return abs;
+        }
+        return abs;
+    }
+
+    std::vector<fs::path> candidates;
+
+    // 1) Current working directory interpretation.
+    candidates.push_back(normalize_best_effort(in));
+
+#if DOTTALK_HAVE_PATH_SLOTS
+    // 2) Preferred slot, if available.
+    if (preferred_slot != PathSlot::None) {
+        fs::path slot_root;
+        if (get_slot_root(preferred_slot, slot_root)) {
+            // raw directly under slot
+            candidates.push_back(normalize_best_effort(slot_root / in));
+
+            // if user typed e.g. "tmp/test.jpg" and preferred slot is TMP,
+            // also try stripping the leading slot component.
+            if (auto stripped = strip_leading_slot_component(in, preferred_slot)) {
+                candidates.push_back(normalize_best_effort(slot_root / *stripped));
+            }
+        }
+    }
+
+    // 3) As a fallback, try DATA/raw when not already DATA.
+    if (preferred_slot != PathSlot::DATA) {
+        fs::path data_root;
+        if (get_slot_root(PathSlot::DATA, data_root)) {
+            candidates.push_back(normalize_best_effort(data_root / in));
+        }
+    }
+#endif
+
+    if (kind == ResolveKind::ForOutputFile) {
+        // Prefer the first candidate. If a preferred slot was supplied and produced
+        // a candidate, it will appear after CWD. That is acceptable for now.
+        // Callers that want slot-first output behavior can pass a slot-qualified path
+        // like "tmp/file.jpg", which will resolve correctly through the helper.
+        return candidates.front();
+    }
+
+    for (const auto& c : candidates) {
+        if (exists_kind(c, kind)) {
+            return c;
+        }
+    }
+
+    // Nothing matched; return normalized first guess for diagnostics.
+    return candidates.front();
+}
+
+} // namespace dottalk::cliutil

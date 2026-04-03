@@ -1,0 +1,59 @@
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+
+#include "xbase.hpp"
+#include "index_summary.hpp"
+
+using std::cout;
+using std::endl;
+
+namespace {
+
+static std::string join_tag_names(const std::vector<dottalk::IndexTagSummary>& tags) {
+    if (tags.empty()) return "(none)";
+    std::string out;
+    for (size_t i = 0; i < tags.size(); ++i) {
+        if (i) out += ", ";
+        out += tags[i].tagName;
+    }
+    return out;
+}
+
+static std::string pad_label(const char* label) {
+    // Match the alignment used elsewhere (two spaces + label left aligned to width 12)
+    std::ostringstream os;
+    os << "  " << std::left << std::setw(12) << label;
+    return os.str();
+}
+
+} // anonymous namespace
+
+// STATUS: print the state for the provided area. The shell prints the "Area X: <path> (name)" header.
+void cmd_STATUS(xbase::DbArea& area, std::istringstream& /*iss*/) {
+    using dottalk::IndexSummary;
+
+    // Normalized order/index summary (same algorithm used by wsreport)
+    IndexSummary s = dottalk::summarize_index_for(area);
+
+    // Order
+    cout << pad_label("Order") << ": "
+         << (s.hasOrder ? (s.ascending ? "ASCEND" : "DESCEND") : "PHYSICAL") << endl;
+
+    // Index file (prefer index_path if set, otherwise container; none if no order)
+    cout << pad_label("Index file") << ": "
+         << (s.hasOrder ? (s.index_path.empty() ? s.container : s.index_path) : std::string("(none)")) << endl;
+
+    // Active tag
+    cout << pad_label("Active tag") << ": "
+         << (s.active_tag.empty() ? std::string("(none)") : s.active_tag) << endl;
+
+    // Tags (discovered in the attached container, if any)
+    cout << pad_label("Tags") << ": " << join_tag_names(s.tags) << endl;
+
+    // Records (use DbArea for authoritative count)
+    cout << pad_label("Records") << ": " << area.recCount() << endl;
+}

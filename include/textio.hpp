@@ -16,7 +16,6 @@ inline void cls(){
 #endif
 }
 
-
 // ---------------- basic trimming & case helpers ----------------
 
 inline std::string ltrim(std::string s) {
@@ -33,9 +32,39 @@ inline std::string rtrim(std::string s) {
 
 inline std::string trim(std::string s) { return rtrim(ltrim(std::move(s))); }
 
+// legacy alias (kept for compatibility)
 inline std::string up(std::string s) {
     for (auto& ch : s)
         ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+// requested helpers
+inline std::string upper(std::string s) {
+    for (auto& ch : s)
+        ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+inline std::string lower(std::string s) {
+    for (auto& ch : s)
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+// Title/Proper case: first letter of each word uppercased, others lowercased.
+// Word boundaries are any non-alphanumeric character.
+inline std::string proper(std::string s) {
+    bool new_word = true;
+    for (auto& ch : s) {
+        unsigned char u = static_cast<unsigned char>(ch);
+        if (std::isalnum(u)) {
+            ch = static_cast<char>(new_word ? std::toupper(u) : std::tolower(u));
+            new_word = false;
+        } else {
+            new_word = true;
+        }
+    }
     return s;
 }
 
@@ -177,3 +206,6 @@ inline std::vector<std::string> tokenize(std::istringstream& iss) {
 }
 
 } // namespace textio
+
+
+

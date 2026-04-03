@@ -1,0 +1,72 @@
+* ========================================================
+* Test SQL comparison across PHYSICAL, INX, and CNX
+* Pure DotTalk++ commands only
+* ========================================================
+
+ECHO ON
+SET TALK ON
+
+* --------------------------------------------------------
+* TEACHERS — INX baseline
+* --------------------------------------------------------
+
+USE teachers
+AREA
+SQL lname = Grimwood
+SQL lname = grimwood AND fname = derald
+
+TOP
+BOTTOM
+
+* --------------------------------------------------------
+* TEACHERS — PHYSICAL ORDER (NOINDEX)
+* --------------------------------------------------------
+
+USE teachers NOINDEX
+TOP
+BOTTOM
+SQL FOR lname = grimwood
+SQL FOR lname = grimwood AND fname = derald
+
+* --------------------------------------------------------
+* TEACHERS — CNX ORDER (LNAME)
+* --------------------------------------------------------
+
+SETORDER teachers.cnx lname
+AREA
+SQL fname = derald
+SQL lname = grimwood AND fname = derald
+
+* GPA tests (always empty in teachers)
+SQL FOR gpa > 2
+SQL FOR lname = Grimwood AND gpa > 4
+SQL FOR lname = Grimwood AND gpa < 4
+
+* --------------------------------------------------------
+* STUDENTS — RUN SAME SET OF TESTS
+* --------------------------------------------------------
+
+USE students
+AREA
+LIST 10
+
+* --- INX ORDER ---
+SQL FOR lname = grimwood AND gpa > 2
+
+* --- PHYSICAL ORDER ---
+USE students NOINDEX
+SQL FOR lname = grimwood AND gpa > 2
+
+* --- CNX ORDER (LNAME) ---
+SETORDER students.cnx lname
+AREA
+SQL FOR lname = grimwood AND gpa > 2
+SQL FOR gpa >= 3.5
+
+* --------------------------------------------------------
+* END OF SCRIPT
+* --------------------------------------------------------
+
+? " "
+? "SQL MATRIX TEST COMPLETE."
+RETURN

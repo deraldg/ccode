@@ -1,0 +1,167 @@
+ECHO OFF
+SET TALK ON
+
+* =========================================================
+* MEMO MAINTENANCE TEST
+* =========================================================
+* PURPOSE
+*   1) Build an x64 table with memo history/orphans
+*   2) Run MEMO STATUS
+*   3) Run MEMO VERIFY
+*   4) Run MEMO GC dry-run
+*   5) Run MEMO GC CONFIRM
+*   6) Verify again after cleanup
+* =========================================================
+
+CLOSE ALL
+SCHEMAS CLOSE
+
+ERASE MEMO_MAINT CONFIRM
+
+* =========================================================
+* 0) CREATE X64 MEMO TABLE
+* =========================================================
+ECHO [0] CREATE MEMO_MAINT
+CREATE X64 MEMO_MAINT (ID N(8,0), TITLE C(20), NOTES M)
+STRUCT
+FIELDS
+
+* =========================================================
+* 1) RECORD 1 WITH UPDATE CHAIN
+* =========================================================
+ECHO [1] RECORD 1 UPDATE CHAIN
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH REC1
+REPLACE NOTES WITH "rec1 version 1"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "rec1 version 2"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "rec1 version 3"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "rec1 version 4"
+TUP
+DISPLAY
+
+* =========================================================
+* 2) RECORD 2 WITH CLEAR / REINSERT
+* =========================================================
+ECHO [2] RECORD 2 CLEAR / REINSERT
+APPEND
+REPLACE ID WITH 2
+REPLACE TITLE WITH REC2
+REPLACE NOTES WITH "rec2 initial"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH ""
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "rec2 after clear"
+TUP
+DISPLAY
+
+* =========================================================
+* 3) RECORD 3 SIMPLE INSERT
+* =========================================================
+ECHO [3] RECORD 3 SIMPLE INSERT
+APPEND
+REPLACE ID WITH 3
+REPLACE TITLE WITH REC3
+REPLACE NOTES WITH "rec3 stable"
+TUP
+DISPLAY
+
+CLOSE
+
+* =========================================================
+* 4) REOPEN AND CHECK PERSISTENCE
+* =========================================================
+ECHO [4] REOPEN / PERSISTENCE
+USE MEMO_MAINT
+GO TOP
+DISPLAY
+SKIP 1
+DISPLAY
+SKIP 1
+DISPLAY
+
+* =========================================================
+* 5) MEMO STATUS BEFORE GC
+* =========================================================
+ECHO [5] STATUS BEFORE GC
+MEMO STATUS
+
+* =========================================================
+* 6) MEMO VERIFY BEFORE GC
+* =========================================================
+ECHO [6] VERIFY BEFORE GC
+MEMO VERIFY
+
+* =========================================================
+* 7) MEMO GC DRY RUN
+* =========================================================
+ECHO [7] GC DRY RUN
+MEMO GC
+
+* =========================================================
+* 8) MEMO GC CONFIRM
+* =========================================================
+ECHO [8] GC CONFIRM
+MEMO GC CONFIRM
+
+* =========================================================
+* 9) MEMO STATUS AFTER GC
+* =========================================================
+ECHO [9] STATUS AFTER GC
+MEMO STATUS
+
+* =========================================================
+* 10) MEMO VERIFY AFTER GC
+* =========================================================
+ECHO [10] VERIFY AFTER GC
+MEMO VERIFY
+
+* =========================================================
+* 11) FINAL DATA CHECK
+* =========================================================
+ECHO [11] FINAL DATA CHECK
+GO TOP
+DISPLAY
+SKIP 1
+DISPLAY
+SKIP 1
+DISPLAY
+
+TUP
+GO TOP
+TUP
+SKIP 1
+TUP
+SKIP 1
+TUP
+
+CLOSE
+
+* =========================================================
+* 12) EXPECTED HIGH-LEVEL RESULTS
+* =========================================================
+ECHO [12] EXPECTATIONS
+ECHO Before GC, VERIFY should report orphan objects.
+ECHO Before GC, STATUS should show nonzero orphan count.
+ECHO GC dry-run should report reclaimable bytes but do nothing.
+ECHO GC CONFIRM should remove orphan objects.
+ECHO Final VERIFY should come back clean or with fewer warnings.
+ECHO Final DISPLAY/TUP should still show:
+ECHO   REC1 -> rec1 version 4
+ECHO   REC2 -> rec2 after clear
+ECHO   REC3 -> rec3 stable
+
+ECHO DONE

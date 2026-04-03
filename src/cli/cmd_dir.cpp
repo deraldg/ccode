@@ -104,3 +104,6 @@ void cmd_DIR(xbase::DbArea&, std::istringstream& iss) {
     std::cout << "             " << dirs  << " Dir(s)\n";
     std::cout << "             " << files << " File(s)  " << format_commas(bytes) << " bytes\n";
 }
+
+
+

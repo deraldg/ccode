@@ -1,0 +1,109 @@
+
+ECHO -- Phase 1: SET VAR! typed/evaluated values --
+SCHEMAS CLOSE
+SET VAR! n = 1
+SET VAR! step = 1
+SET VAR! cutoff = CTOD("2026-01-01")
+SET VAR! who = "Grimwood"
+SET VAR! s = "20260101"
+
+SHOW VAR
+SHOW VAR n
+SHOW VAR cutoff
+SHOW VAR who
+SHOW VAR s
+
+ECHO -- Phase 2: build three x64 memo tables --
+CREATE X64 X64_A (ID N(8,0), TITLE C(20), NOTES M)
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH "A1"
+REPLACE NOTES WITH "alpha one"
+CLOSE
+
+CREATE X64 X64_B (ID N(8,0), TITLE C(20), NOTES M)
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH "B1"
+REPLACE NOTES WITH "bravo one"
+CLOSE
+
+CREATE X64 X64_C (ID N(8,0), TITLE C(20), NOTES M)
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH "C1"
+REPLACE NOTES WITH "charlie one"
+CLOSE
+
+ECHO -- Phase 3: open tables into known slots --
+SELECT 0
+USE X64_A
+SELECT 1
+USE X64_B
+SELECT 2
+USE X64_C
+
+SCHEMAS
+WSREPORT ALL
+
+ECHO -- Phase 4: true counter loop (n should step up) --
+LOOP 5
+  ECHO n=&n
+  SET VAR! n = (&n + &step)
+
+  ECHO -- slot 0 / X64_A --
+  SELECT 0
+  REPLACE NOTES WITH ("alpha loop " + STR(&n))
+  DISPLAY
+  TUP
+
+  ECHO -- slot 1 / X64_B --
+  SELECT 1
+  REPLACE NOTES WITH ("bravo loop " + STR(&n))
+  DISPLAY
+  TUP
+
+  ECHO -- slot 2 / X64_C --
+  SELECT 2
+  REPLACE NOTES WITH ("charlie loop " + STR(&n))
+  DISPLAY
+  TUP
+ENDLOOP
+
+SHOW VAR n
+
+ECHO -- Phase 5: save workspace --
+SCHEMAS SAVE mem64_vars_test.dtschemas
+
+ECHO -- Phase 6: reload workspace cleanly --
+SCHEMAS CLOSE
+SCHEMAS LOAD mem64_vars_test.dtschemas
+
+SCHEMAS
+WSREPORT ALL
+
+ECHO -- Phase 7: verify final values after reload --
+SELECT 0
+DISPLAY
+TUP
+MEMO STATUS
+MEMO VERIFY
+
+SELECT 1
+DISPLAY
+TUP
+MEMO STATUS
+MEMO VERIFY
+
+SELECT 2
+DISPLAY
+TUP
+MEMO STATUS
+MEMO VERIFY
+
+ECHO -- Phase 8: expected final loop values --
+ECHO EXPECT X64_A -> alpha loop 6
+ECHO EXPECT X64_B -> bravo loop 6
+ECHO EXPECT X64_C -> charlie loop 6
+ECHO EXPECT n = 6
+```

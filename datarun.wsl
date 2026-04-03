@@ -1,0 +1,3 @@
+# from anywhere in WSL:
+chmod +x ~/code/ccode/datarun_wsl.sh
+~/code/ccode/datarun_wsl.sh

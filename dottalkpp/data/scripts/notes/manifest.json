@@ -1,0 +1,442 @@
+[
+  {
+    "old": "DT VAR_DATE_CONCAT_CALC SMOKETEST (FULL) START.dts",
+    "category": "canaries",
+    "new": "canaries/dt_var_date_concat_calc_smoketest_full_start.dts"
+  },
+  {
+    "old": "SET_VAR_SHAKEDOWN.dts",
+    "category": "canaries",
+    "new": "canaries/set_var_shakedown.dts"
+  },
+  {
+    "old": "workaroun.DTS",
+    "category": "cases",
+    "new": "cases/workaroun.dts"
+  },
+  {
+    "old": "X64_MEMO_GROWTH_STAGE2.DTS",
+    "category": "legacy",
+    "new": "legacy/x64_memo_growth_stage2.dts"
+  },
+  {
+    "old": "FINAL BLOWOUT TEST.dts",
+    "category": "canaries",
+    "new": "canaries/final_blowout_test.dts"
+  },
+  {
+    "old": "Awsome_Combo_Test.dts",
+    "category": "canaries",
+    "new": "canaries/awsome_combo_test.dts"
+  },
+  {
+    "old": "MEMO MORE TESTING.dts",
+    "category": "legacy",
+    "new": "legacy/memo_more_testing.dts"
+  },
+  {
+    "old": "MULTI-AREA X64 MEMO HARMONY TEST.dts",
+    "category": "legacy",
+    "new": "legacy/multi_area_x64_memo_harmony_test.dts"
+  },
+  {
+    "old": "MEMO_shakedown.dts",
+    "category": "canaries",
+    "new": "canaries/memo_shakedown.dts"
+  },
+  {
+    "old": "create_sample_dbf_matrix.dts",
+    "category": "canaries",
+    "new": "canaries/create_sample_dbf_matrix.dts"
+  },
+  {
+    "old": "ersatz_mini_test.dts",
+    "category": "cases",
+    "new": "cases/ersatz_mini_test.dts"
+  },
+  {
+    "old": "beta0_readiness_test.dts",
+    "category": "main",
+    "new": "main/beta0_readiness_test.dts"
+  },
+  {
+    "old": "pydottalk.dts",
+    "category": "suites",
+    "new": "suites/pydottalk.dts"
+  },
+  {
+    "old": "DOTTALK_BETA0_SMOKE_BASELINE_0_1.DTS",
+    "category": "canaries",
+    "new": "canaries/dottalk_beta0_smoke_baseline_0_1.dts"
+  },
+  {
+    "old": "nest_test.dts",
+    "category": "legacy",
+    "new": "legacy/nest_test.dts"
+  },
+  {
+    "old": "dotnest_test.dts",
+    "category": "legacy",
+    "new": "legacy/dotnest_test.dts"
+  },
+  {
+    "old": "three.dts",
+    "category": "cases",
+    "new": "cases/three.dts"
+  },
+  {
+    "old": "two.dts",
+    "category": "cases",
+    "new": "cases/two.dts"
+  },
+  {
+    "old": "one.dts",
+    "category": "cases",
+    "new": "cases/one.dts"
+  },
+  {
+    "old": "DOTTALK_BETA0_SMOKE_BASELINE_0_1.DTS.dts",
+    "category": "canaries",
+    "new": "canaries/dottalk_beta0_smoke_baseline_0_1_dts.dts"
+  },
+  {
+    "old": "fox_relations_test.dts",
+    "category": "suites",
+    "new": "suites/fox_relations_test.dts"
+  },
+  {
+    "old": "MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_B0.0.DTS",
+    "category": "canaries",
+    "new": "canaries/mcc_exhaustive_full_regression_canaries_setmodern_b0_0.dts"
+  },
+  {
+    "old": "MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_V5.DTS",
+    "category": "canaries",
+    "new": "canaries/mcc_exhaustive_full_regression_canaries_setmodern_v5.dts"
+  },
+  {
+    "old": "MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN.DTS",
+    "category": "canaries",
+    "new": "canaries/mcc_exhaustive_full_regression_canaries_setmodern.dts"
+  },
+  {
+    "old": "LMDB OPEN shakedown.dts",
+    "category": "canaries",
+    "new": "canaries/lmdb_open_shakedown.dts"
+  },
+  {
+    "old": "MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES.DTS",
+    "category": "canaries",
+    "new": "canaries/mcc_exhaustive_full_regression_canaries.dts"
+  },
+  {
+    "old": "LMDB_NAV_APPEND_SHAKEDOWN_01.DTS",
+    "category": "canaries",
+    "new": "canaries/lmdb_nav_append_shakedown_01.dts"
+  },
+  {
+    "old": "MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_LMDB.DTS",
+    "category": "canaries",
+    "new": "canaries/mcc_exhaustive_full_regression_canaries_lmdb.dts"
+  },
+  {
+    "old": "LMDB_ROUTING_GAP_REPRO.DTS",
+    "category": "canaries",
+    "new": "canaries/lmdb_routing_gap_repro.dts"
+  },
+  {
+    "old": "My_Community_College_CDX_Indexing.dts",
+    "category": "suites",
+    "new": "suites/my_community_college_cdx_indexing.dts"
+  },
+  {
+    "old": "lmdb_persist_check.dts",
+    "category": "canaries",
+    "new": "canaries/lmdb_persist_check.dts"
+  },
+  {
+    "old": "lmdb.dts",
+    "category": "legacy",
+    "new": "legacy/lmdb.dts"
+  },
+  {
+    "old": "date_implementation_dev.dts",
+    "category": "cases",
+    "new": "cases/date_implementation_dev.dts"
+  },
+  {
+    "old": "commit_rollback_test.dts",
+    "category": "suites",
+    "new": "suites/commit_rollback_test.dts"
+  },
+  {
+    "old": "schema_create_empty_dbf.dts",
+    "category": "suites",
+    "new": "suites/schema_create_empty_dbf.dts"
+  },
+  {
+    "old": "Major Shakedown.dts",
+    "category": "canaries",
+    "new": "canaries/major_shakedown.dts"
+  },
+  {
+    "old": "tuptalk.dts",
+    "category": "suites",
+    "new": "suites/tuptalk.dts"
+  },
+  {
+    "old": "SQLITE_SMOKE.DTS",
+    "category": "canaries",
+    "new": "canaries/sqlite_smoke.dts"
+  },
+  {
+    "old": "Advanced_Relations_CNX_Build.dts",
+    "category": "suites",
+    "new": "suites/advanced_relations_cnx_build.dts"
+  },
+  {
+    "old": "banner_consistency.dts",
+    "category": "legacy",
+    "new": "legacy/banner_consistency.dts"
+  },
+  {
+    "old": "Build_Full_Rel.dts",
+    "category": "legacy",
+    "new": "legacy/build_full_rel.dts"
+  },
+  {
+    "old": "calc_date.dts",
+    "category": "cases",
+    "new": "cases/calc_date.dts"
+  },
+  {
+    "old": "calc_regression_test.dts",
+    "category": "cases",
+    "new": "cases/calc_regression_test.dts"
+  },
+  {
+    "old": "canaries.dts",
+    "category": "canaries",
+    "new": "canaries/canaries.dts"
+  },
+  {
+    "old": "cnx_tag_keyword_form.dts",
+    "category": "legacy",
+    "new": "legacy/cnx_tag_keyword_form.dts"
+  },
+  {
+    "old": "cnx_tag_smoke.dts",
+    "category": "canaries",
+    "new": "canaries/cnx_tag_smoke.dts"
+  },
+  {
+    "old": "command_help_test_script.dts",
+    "category": "suites",
+    "new": "suites/command_help_test_script.dts"
+  },
+  {
+    "old": "command_sweep.dts",
+    "category": "legacy",
+    "new": "legacy/command_sweep.dts"
+  },
+  {
+    "old": "command_test_script.dts",
+    "category": "cases",
+    "new": "cases/command_test_script.dts"
+  },
+  {
+    "old": "create_sample_dbf.dts",
+    "category": "cases",
+    "new": "cases/create_sample_dbf.dts"
+  },
+  {
+    "old": "data_types_calc_test.dts",
+    "category": "cases",
+    "new": "cases/data_types_calc_test.dts"
+  },
+  {
+    "old": "DateStringBool.dts",
+    "category": "cases",
+    "new": "cases/datestringbool.dts"
+  },
+  {
+    "old": "dottalk commands on the command line.dts",
+    "category": "legacy",
+    "new": "legacy/dottalk_commands_on_the_command_line.dts"
+  },
+  {
+    "old": "dtoc_concat_var.dts",
+    "category": "cases",
+    "new": "cases/dtoc_concat_var.dts"
+  },
+  {
+    "old": "echo enum shakedown refresh.dts",
+    "category": "canaries",
+    "new": "canaries/echo_enum_shakedown_refresh.dts"
+  },
+  {
+    "old": "enum_shakedown.v0.dts",
+    "category": "canaries",
+    "new": "canaries/enum_shakedown_v0.dts"
+  },
+  {
+    "old": "enum_shakedown.v1.dts",
+    "category": "canaries",
+    "new": "canaries/enum_shakedown_v1.dts"
+  },
+  {
+    "old": "ersatz_rel_enum_browser.dts",
+    "category": "manual",
+    "new": "manual/ersatz_rel_enum_browser.dts"
+  },
+  {
+    "old": "full_baseline.dts",
+    "category": "canaries",
+    "new": "canaries/full_baseline.dts"
+  },
+  {
+    "old": "full_resolver_suite.dts",
+    "category": "main",
+    "new": "main/full_resolver_suite.dts"
+  },
+  {
+    "old": "inxi_attach_switching.dts",
+    "category": "legacy",
+    "new": "legacy/inxi_attach_switching.dts"
+  },
+  {
+    "old": "list_order_flip.dts",
+    "category": "canaries",
+    "new": "canaries/list_order_flip.dts"
+  },
+  {
+    "old": "MCC_SUPER_REGRESSIVE_SHAKEDOWN_CANARIES.DTS",
+    "category": "canaries",
+    "new": "canaries/mcc_super_regressive_shakedown_canaries.dts"
+  },
+  {
+    "old": "MCCBuild_full_relations_graph (CNX-backed).dts",
+    "category": "suites",
+    "new": "suites/mccbuild_full_relations_graph_cnx_backed.dts"
+  },
+  {
+    "old": "My_Community_College_Indexing.dts",
+    "category": "suites",
+    "new": "suites/my_community_college_indexing.dts"
+  },
+  {
+    "old": "order_engine_shakedown.dts",
+    "category": "canaries",
+    "new": "canaries/order_engine_shakedown.dts"
+  },
+  {
+    "old": "pack_test_shakedown.dts",
+    "category": "canaries",
+    "new": "canaries/pack_test_shakedown.dts"
+  },
+  {
+    "old": "predicates_help_test_verification.dts",
+    "category": "suites",
+    "new": "suites/predicates_help_test_verification.dts"
+  },
+  {
+    "old": "regression.dts",
+    "category": "main",
+    "new": "main/regression.dts"
+  },
+  {
+    "old": "REL_JOIN_ENUM regression.dts",
+    "category": "main",
+    "new": "main/rel_join_enum_regression.dts"
+  },
+  {
+    "old": "replace_dates.dts",
+    "category": "suites",
+    "new": "suites/replace_dates.dts"
+  },
+  {
+    "old": "reporting_snapshot.dts",
+    "category": "suites",
+    "new": "suites/reporting_snapshot.dts"
+  },
+  {
+    "old": "schema_validate_all.dts",
+    "category": "suites",
+    "new": "suites/schema_validate_all.dts"
+  },
+  {
+    "old": "schemas.dts",
+    "category": "suites",
+    "new": "suites/schemas.dts"
+  },
+  {
+    "old": "script.dts",
+    "category": "cases",
+    "new": "cases/script.dts"
+  },
+  {
+    "old": "seek_permutations.dts",
+    "category": "canaries",
+    "new": "canaries/seek_permutations.dts"
+  },
+  {
+    "old": "set_relations_test.dts",
+    "category": "suites",
+    "new": "suites/set_relations_test.dts"
+  },
+  {
+    "old": "ShakeDown_DotTalkpp.dts",
+    "category": "canaries",
+    "new": "canaries/shakedown_dottalkpp.dts"
+  },
+  {
+    "old": "Single_Dottalk.dts",
+    "category": "cases",
+    "new": "cases/single_dottalk.dts"
+  },
+  {
+    "old": "smartlist_order_matrix.dts",
+    "category": "canaries",
+    "new": "canaries/smartlist_order_matrix.dts"
+  },
+  {
+    "old": "struct_cnx_tags.dts",
+    "category": "legacy",
+    "new": "legacy/struct_cnx_tags.dts"
+  },
+  {
+    "old": "struct_inx_active.dts",
+    "category": "legacy",
+    "new": "legacy/struct_inx_active.dts"
+  },
+  {
+    "old": "table_buffer.dts",
+    "category": "suites",
+    "new": "suites/table_buffer.dts"
+  },
+  {
+    "old": "test2.dts",
+    "category": "cases",
+    "new": "cases/test2.dts"
+  },
+  {
+    "old": "test3.dts",
+    "category": "cases",
+    "new": "cases/test3.dts"
+  },
+  {
+    "old": "test4.dts",
+    "category": "cases",
+    "new": "cases/test4.dts"
+  },
+  {
+    "old": "tuple_buffer_test.dts",
+    "category": "suites",
+    "new": "suites/tuple_buffer_test.dts"
+  },
+  {
+    "old": "version.dts",
+    "category": "suites",
+    "new": "suites/version.dts"
+  }
+]

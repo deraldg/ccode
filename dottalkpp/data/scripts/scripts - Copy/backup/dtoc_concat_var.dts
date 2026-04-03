@@ -1,0 +1,92 @@
+SET ECHO ON
+ECHO ===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) START =====
+
+ECHO -- Phase 0: clean slate --
+CLEAR VAR ALL
+SHOW VAR
+
+ECHO -- Phase 1: SET VAR (store-text) + hard error on undefined --
+SET VAR temp = fred
+ECHO Expect undefined-var hard error next line
+ECHO &fred
+ECHO Expect to print: fred (as plain text expansion)
+ECHO &temp
+
+ECHO -- Phase 2: SET VAR! typed/evaluated values --
+SET VAR! n = 1
+SET VAR! step = 1
+SET VAR! cutoff = CTOD("2026-01-01")
+SET VAR! who = "Grimwood"
+SET VAR! s = "20260101"
+
+SHOW VAR
+SHOW VAR n
+SHOW VAR cutoff
+SHOW VAR who
+SHOW VAR s
+
+ECHO -- Phase 3: true counter loop (n should step up) --
+LOOP 5
+  ECHO n=&n
+  SET VAR! n = (&n + &step)
+ENDLOOP
+SHOW VAR n
+
+ECHO -- Phase 4: DTOC styles (default/1/2) --
+ECHO Expect: 20260101
+CALC DTOC(CTOD("2026-01-01"))
+ECHO Expect: 2026-01-01
+CALC DTOC(CTOD("2026-01-01"), 1)
+ECHO Expect: 2026/01/01
+CALC DTOC(CTOD("2026-01-01"), 2)
+
+ECHO -- Phase 5: CTOD input variants (digits-only normalization) --
+ECHO Expect: 20260101
+CALC CTOD("2026-01-01")
+ECHO Expect: 20260101
+CALC CTOD("2026/01/01")
+ECHO Expect: 20260101
+CALC CTOD("20260101")
+
+ECHO -- Phase 6: CONCAT as COMMAND (CLI-level) --
+ECHO Expect: helpme
+CONCAT help, me
+ECHO Expect: one (single-arg allowed)
+CONCAT one
+
+ECHO -- Phase 7: CONCAT as FUNCTION inside CALC (expression-level) --
+ECHO Expect: helpme
+CALC CONCAT("help", "me")
+ECHO Expect: Cutoff=2026-01-01  (this also proves '=' inside quotes DOES NOT trigger CALCWRITE)
+CALC CONCAT("Cutoff=", DTOC(CTOD("2026-01-01"), 1))
+ECHO Expect: who="Grimwood"
+CALC CONCAT("who=", &who)
+
+ECHO -- Phase 8: open STUDENTS and exercise field + STR() + CONCAT() --
+USE STUDENTS
+
+ECHO Expect: Student: <LNAME>, <FNAME>  (non-empty line)
+CALC CONCAT("Student: ", LNAME, ", ", FNAME)
+
+ECHO Expect: GPA=<nn.nn>  (non-empty line)
+CALC CONCAT("GPA=", STR(GPA, 6, 2))
+
+ECHO Expect: Enroll=<yyyy-mm-dd>  (non-empty line; ENROLL_D is a D field)
+CALC CONCAT("Enroll=", DTOC(ENROLL_D, 1))
+
+ECHO -- Phase 9: CALCWRITE still works only on explicit assignment --
+ECHO (This should NOT print usage; it should update GPA in current record, then show it.)
+CALCWRITE GPA = (GPA + 0.01)
+CALC CONCAT("GPA(now)=", STR(GPA, 6, 2))
+
+ECHO -- Phase 10: CLEAR single var, then ALL --
+CLEAR VAR who
+ECHO Expect undefined-var hard error next line
+ECHO &who
+
+CLEAR VAR ALL
+SHOW VAR
+ECHO Expect undefined-var hard error next line
+ECHO &temp
+
+ECHO ===== DT VAR/DATE/CONCAT/CALC SMOKETEST (FULL) END =====

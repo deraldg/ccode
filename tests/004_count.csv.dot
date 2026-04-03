@@ -1,5 +1,0 @@
-# export basic csv and count
-USE students
-COUNT
-EXPORT students_out.csv
-QUIT

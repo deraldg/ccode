@@ -1,0 +1,233 @@
+* ============================================================
+* CURSOR_FAMILY_REGRESSION_001.DTS
+*
+* Purpose:
+*   Regression for core cursor/navigation commands after
+*   nav-layer/order-iterator repairs.
+*
+* Scope:
+*   - Physical (natural) order
+*   - CNX ordered traversal
+*   - TOP / BOTTOM
+*   - GO / GOTO
+*   - SKIP
+*   - SEEK
+*
+* Notes:
+*   - Uses AREA and SMARTLIST to verify position/order.
+*   - Does not use LIST to prove TOP/BOTTOM or ordered movement.
+*   - Assumes STUDENTS.dbf exists.
+*   - Assumes STUDENTS.cnx exists with at least tags:
+*         LNAME
+*         FNAME
+* ============================================================
+
+SET ECHO OFF
+
+ECHO ============================================================
+ECHO CURSOR FAMILY REGRESSION 001
+ECHO ============================================================
+
+SCHEMAS CLOSE
+USE STUDENTS
+
+ECHO --- SECTION 1: Physical baseline ---
+SET ORDER TO 0
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 2: Physical TOP ---
+TOP
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 3: Physical BOTTOM ---
+BOTTOM
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 4: Physical GOTO absolute ---
+GOTO 10
+AREA
+SMARTLIST 3
+
+ECHO --- SECTION 5: Physical GO absolute ---
+GO 25
+AREA
+SMARTLIST 3
+
+ECHO --- SECTION 6: Physical GO TOP / GO BOTTOM ---
+GO TOP
+AREA
+SMARTLIST 3
+GO BOTTOM
+AREA
+SMARTLIST 3
+
+ECHO --- SECTION 7: Physical SKIP forward/backward ---
+GO TOP
+SKIP 5
+AREA
+SMARTLIST 3
+SKIP -2
+AREA
+SMARTLIST 3
+
+ECHO --- SECTION 8: Physical GO relative (+/-n) ---
+GO TOP
+GO +7
+AREA
+SMARTLIST 3
+GO -3
+AREA
+SMARTLIST 3
+
+ECHO --- SECTION 9: Physical boundary checks ---
+GO TOP
+SKIP -1
+AREA
+GO BOTTOM
+SKIP 1
+AREA
+
+ECHO --- SECTION 10: Physical SEEK fallback behavior ---
+SET ORDER TO 0
+SEEK ANDERSON
+AREA
+SMARTLIST 5
+
+ECHO ============================================================
+ECHO --- CNX ORDERED TESTS ---
+ECHO ============================================================
+
+ECHO --- SECTION 11: Attach CNX / activate LNAME ---
+SET INDEX TO STUDENTS.cnx
+SET ORDER TO TAG LNAME
+ASCEND
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 12: CNX TOP ascending ---
+TOP
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 13: CNX BOTTOM ascending ---
+BOTTOM
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 14: CNX GO TOP / GO BOTTOM ---
+GO TOP
+AREA
+SMARTLIST 5
+GO BOTTOM
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 15: CNX SKIP under ordered traversal ---
+GO TOP
+SKIP 5
+AREA
+SMARTLIST 5
+SKIP -2
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 16: CNX GO relative under ordered traversal ---
+GO TOP
+GO +8
+AREA
+SMARTLIST 5
+GO -3
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 17: CNX boundary checks ascending ---
+GO TOP
+SKIP -1
+AREA
+GO BOTTOM
+SKIP 1
+AREA
+
+ECHO --- SECTION 18: CNX GOTO absolute while ordered ---
+GOTO 10
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 19: CNX SEEK on active tag LNAME ---
+GO TOP
+SEEK ANDERSON
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 20: CNX descending endpoints ---
+DESCEND
+TOP
+AREA
+SMARTLIST 5
+BOTTOM
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 21: CNX descending relative movement ---
+TOP
+AREA
+SMARTLIST 5
+SKIP 3
+AREA
+SMARTLIST 5
+SKIP -1
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 22: CNX boundary checks descending ---
+TOP
+SKIP -1
+AREA
+BOTTOM
+SKIP 1
+AREA
+
+ECHO --- SECTION 23: CNX switch to FNAME tag ---
+ASCEND
+SET ORDER TO TAG FNAME
+TOP
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 24: SEEK on active FNAME tag ---
+SEEK ADRIEN
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 25: GO / SKIP on FNAME order ---
+GO TOP
+GO +6
+AREA
+SMARTLIST 5
+SKIP -2
+AREA
+SMARTLIST 5
+GO BOTTOM
+AREA
+SMARTLIST 5
+
+ECHO --- SECTION 26: FNAME boundary checks ---
+GO TOP
+SKIP -1
+AREA
+GO BOTTOM
+SKIP 1
+AREA
+
+ECHO ============================================================
+ECHO --- CLEANUP / RETURN TO NATURAL ---
+ECHO ============================================================
+
+SET ORDER TO 0
+AREA
+SMARTLIST 5
+
+ECHO CURSOR FAMILY REGRESSION COMPLETE

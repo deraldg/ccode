@@ -33,8 +33,8 @@
 
 #include "xbase.hpp"
 #include "cli/console.hpp"
-#include "cli/browsetui.hpp"     // FieldView, Console, Size, etc.
-#include "cli/memo_display.hpp"
+#include "dli/browsetui.hpp"     // FieldView, Console, Size, etc.
+#include "memo/memo_display.hpp"
 #include "cli/replace_multi.hpp"
 
 // externs for other command handlers
@@ -66,6 +66,9 @@ static inline int get_current_recno_safe(xbase::DbArea& area) {
 }
 
 // Snapshot current record values (index-aligned to fields())
+// NOTE: formerly used during early browse/TUI bring-up.
+// Kept here (disabled) as a handy debugging snippet without carrying a Release warning.
+#if 0
 static std::vector<std::string> snapshot_record(xbase::DbArea& area) {
     std::vector<std::string> snap;
     const auto& F = area.fields();
@@ -78,6 +81,7 @@ static std::vector<std::string> snapshot_record(xbase::DbArea& area) {
     }
     return snap;
 }
+#endif
 
 // -----------------------------
 // Key decoding (Windows + POSIX)
@@ -255,7 +259,7 @@ static bool prompt_for_create_string(Console& con, int footer_y, int term_cols, 
 // -----------------------------
 // Type-aware editing helpers
 // -----------------------------
-static std::string escape_double_quotes(std::string s) {
+[[maybe_unused]] static std::string escape_double_quotes(std::string s) {
     for (size_t i = 0; i < s.size(); ++i) if (s[i] == '"') s.insert(i++, "\\");
     return s;
 }
@@ -327,6 +331,10 @@ static std::string normalize_logical_from_key(int ch, const std::string& current
     if (ch == '\r' || ch == '\n') return "";
     return toTF(static_cast<char>(ch));
 }
+// NOTE: earlier helper for emitting a REPLACE payload string.
+// Not currently used (REPLACE is issued directly by calling cmd_replace_api()),
+// so disable to avoid /W4 C4505 noise in Release.
+#if 0
 static std::string make_replace_payload(char type, const std::string& valueNormalized) {
     switch (type) {
         case 'N': case 'n': return valueNormalized; // unquoted
@@ -338,6 +346,7 @@ static std::string make_replace_payload(char type, const std::string& valueNorma
             return std::string("\"") + escape_double_quotes(valueNormalized) + "\"";
     }
 }
+#endif
 
 // Prompt for a value; return normalized text (type-aware)
 static bool prompt_value_for_field(Console& con, int footer_y, int term_cols,
@@ -860,7 +869,7 @@ void cmd_BROWSETUI(xbase::DbArea& area, std::istringstream& iss) {
             } break;
 
             case Key::Help:
-                status = "↑/↓ prev/next | PgUp/PgDn | Home/End | G goto | L list | E edit | Ctrl+S save | F6 fullscreen | Esc quit";
+                status = "?/? prev/next | PgUp/PgDn | Home/End | G goto | L list | E edit | Ctrl+S save | F6 fullscreen | Esc quit";
                 break;
 
             default: break;
@@ -868,3 +877,6 @@ void cmd_BROWSETUI(xbase::DbArea& area, std::istringstream& iss) {
         render(status);
     }
 }
+
+
+

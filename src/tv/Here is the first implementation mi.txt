@@ -1,0 +1,204 @@
+Here is the **first implementation milestone plan**, written exactly the way a senior systems architect would lay it out for a new subsystem: crisp, sequential, and achievable. This is the next natural step in your sequence, and it sets you up for clean execution without scope creep.
+
+---
+
+# ⭐ **DotTalk++ / Microsoft 365 Integration — Milestone 1 Implementation Plan**  
+### *Primitive Interchange Layer — Phase 1 (Foundational Build)*
+
+This milestone focuses on **infrastructure**, **path resolution**, **file classification**, and **basic export/import scaffolding**.  
+No business logic. No schema enforcement. No heavy parsing.  
+Just the skeleton that everything else will hang on.
+
+---
+
+# **🎯 Milestone 1 Goals**
+By the end of Milestone 1, DotTalk++ will be able to:
+
+- Detect OneDrive  
+- Create the `DotTalk_Exchange` folder structure  
+- Build correct paths  
+- Generate timestamps  
+- Classify inbound/outbound files  
+- Export placeholder CSV/JSON/TXT files  
+- Scan inbound folder and list files  
+- Archive files into `archive/YYYY/MM/`  
+
+This gives you a **working pipeline** even before real data flows through it.
+
+---
+
+# **📌 Milestone 1 Deliverables**
+
+## **1. OneDrive Root Detection**
+Implement the detection logic:
+
+- Check environment variables  
+- Check known Windows paths  
+- Support override via `DOTTALK_ONEDRIVE_ROOT`  
+- Cache result  
+
+**Output:**  
+`oneDriveRoot` string stored in global context.
+
+---
+
+## **2. Folder Initialization**
+Create the full directory tree:
+
+```
+DotTalk_Exchange/
+   inbound/
+   outbound/
+   archive/
+```
+
+Rules:
+
+- Create if missing  
+- Validate read/write permissions  
+- Fail with `ERR_PATH_CREATE` if not possible  
+
+---
+
+## **3. Timestamp Utilities**
+Implement:
+
+- `make_current_timestamp_utc()`  
+- ISO‑8601 generator  
+- Filename‑safe timestamp generator  
+
+This is used by all exports.
+
+---
+
+## **4. Path Builders**
+Implement:
+
+- `build_path(subfolder, filename)`  
+- `classify_file(full_path, file_name)`  
+
+Classification must detect:
+
+- table CSV  
+- record JSON  
+- notes TXT  
+- inbound vs outbound  
+
+This is the backbone of the entire interchange layer.
+
+---
+
+## **5. Outbound Export Stubs**
+Implement **minimal** versions of:
+
+- `export_table_to_csv`  
+- `export_record_to_json`  
+- `export_notes_to_txt`  
+
+For Milestone 1:
+
+- Write placeholder content  
+- Confirm file creation  
+- Confirm naming conventions  
+- Confirm correct folder placement  
+
+Real data comes in Milestone 2.
+
+---
+
+## **6. Inbound Scan**
+Implement:
+
+- `scan_inbound_folder()`  
+
+This should:
+
+- list files  
+- classify them  
+- return `InboundScanResult`  
+
+No parsing yet — just detection.
+
+---
+
+## **7. Archive Mechanism**
+Implement:
+
+- `archive_file(descriptor, out_path)`  
+
+Rules:
+
+- Create `archive/YYYY/MM/`  
+- Move file  
+- Return archived path  
+
+This completes the round‑trip skeleton.
+
+---
+
+# **📅 Milestone 1 Timeline (Recommended)**
+
+| Week | Task |
+|------|------|
+| 1 | OneDrive detection + caching |
+| 1 | Folder initialization |
+| 2 | Timestamp utilities |
+| 2 | Path builders + classification |
+| 3 | Export stubs (CSV/JSON/TXT) |
+| 3 | Inbound scan |
+| 4 | Archive mechanism |
+| 4 | Integration test of full skeleton |
+
+Total: **4 weeks** at a relaxed, sustainable pace.
+
+---
+
+# **🧪 Milestone 1 Acceptance Tests**
+
+### **A. OneDrive Detection**
+- Running `dottalk scan inbound` with no OneDrive → `ERR_NO_ONEDRIVE`  
+- Running with OneDrive → success  
+
+### **B. Folder Creation**
+- All subfolders created automatically  
+- Permissions validated  
+
+### **C. Export Stubs**
+- `dottalk export table customers` → creates CSV  
+- `dottalk export record orders 101` → creates JSON  
+- `dottalk export notes daily` → creates TXT  
+
+### **D. Inbound Scan**
+- Place files manually → scan detects them  
+
+### **E. Archive**
+- Archive moves file to correct year/month folder  
+
+---
+
+# ⭐ **What Comes Next in Your Sequence**
+
+After Milestone 1, the natural next step is:
+
+# **➡️ Milestone 2: Real Data Integration**
+This includes:
+
+- Real CSV serialization  
+- Real JSON serialization  
+- Schema validation  
+- Upsert logic  
+- Error handling  
+- CLI polish  
+
+But we don’t touch that until Milestone 1 is rock‑solid.
+
+---
+
+If you want, I can now draft:
+
+- **Milestone 2 plan**  
+- **CLI help/man page**  
+- **Developer onboarding notes**  
+- **Integration test scripts**  
+
+Just tell me which direction you want to take next.

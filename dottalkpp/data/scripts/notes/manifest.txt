@@ -1,0 +1,99 @@
+DotScript processing batch v2
+
+Counts:
+- main: 4
+- suites: 19
+- cases: 18
+- canaries: 32
+- manual: 1
+- legacy: 14
+
+Mappings:
+DT VAR_DATE_CONCAT_CALC SMOKETEST (FULL) START.dts -> canaries/dt_var_date_concat_calc_smoketest_full_start.dts
+SET_VAR_SHAKEDOWN.dts -> canaries/set_var_shakedown.dts
+workaroun.DTS -> cases/workaroun.dts
+X64_MEMO_GROWTH_STAGE2.DTS -> legacy/x64_memo_growth_stage2.dts
+FINAL BLOWOUT TEST.dts -> canaries/final_blowout_test.dts
+Awsome_Combo_Test.dts -> canaries/awsome_combo_test.dts
+MEMO MORE TESTING.dts -> legacy/memo_more_testing.dts
+MULTI-AREA X64 MEMO HARMONY TEST.dts -> legacy/multi_area_x64_memo_harmony_test.dts
+MEMO_shakedown.dts -> canaries/memo_shakedown.dts
+create_sample_dbf_matrix.dts -> canaries/create_sample_dbf_matrix.dts
+ersatz_mini_test.dts -> cases/ersatz_mini_test.dts
+beta0_readiness_test.dts -> main/beta0_readiness_test.dts
+pydottalk.dts -> suites/pydottalk.dts
+DOTTALK_BETA0_SMOKE_BASELINE_0_1.DTS -> canaries/dottalk_beta0_smoke_baseline_0_1.dts
+nest_test.dts -> legacy/nest_test.dts
+dotnest_test.dts -> legacy/dotnest_test.dts
+three.dts -> cases/three.dts
+two.dts -> cases/two.dts
+one.dts -> cases/one.dts
+DOTTALK_BETA0_SMOKE_BASELINE_0_1.DTS.dts -> canaries/dottalk_beta0_smoke_baseline_0_1_dts.dts
+fox_relations_test.dts -> suites/fox_relations_test.dts
+MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_B0.0.DTS -> canaries/mcc_exhaustive_full_regression_canaries_setmodern_b0_0.dts
+MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN_V5.DTS -> canaries/mcc_exhaustive_full_regression_canaries_setmodern_v5.dts
+MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_SETMODERN.DTS -> canaries/mcc_exhaustive_full_regression_canaries_setmodern.dts
+LMDB OPEN shakedown.dts -> canaries/lmdb_open_shakedown.dts
+MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES.DTS -> canaries/mcc_exhaustive_full_regression_canaries.dts
+LMDB_NAV_APPEND_SHAKEDOWN_01.DTS -> canaries/lmdb_nav_append_shakedown_01.dts
+MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES_LMDB.DTS -> canaries/mcc_exhaustive_full_regression_canaries_lmdb.dts
+LMDB_ROUTING_GAP_REPRO.DTS -> canaries/lmdb_routing_gap_repro.dts
+My_Community_College_CDX_Indexing.dts -> suites/my_community_college_cdx_indexing.dts
+lmdb_persist_check.dts -> canaries/lmdb_persist_check.dts
+lmdb.dts -> legacy/lmdb.dts
+date_implementation_dev.dts -> cases/date_implementation_dev.dts
+commit_rollback_test.dts -> suites/commit_rollback_test.dts
+schema_create_empty_dbf.dts -> suites/schema_create_empty_dbf.dts
+Major Shakedown.dts -> canaries/major_shakedown.dts
+tuptalk.dts -> suites/tuptalk.dts
+SQLITE_SMOKE.DTS -> canaries/sqlite_smoke.dts
+Advanced_Relations_CNX_Build.dts -> suites/advanced_relations_cnx_build.dts
+banner_consistency.dts -> legacy/banner_consistency.dts
+Build_Full_Rel.dts -> legacy/build_full_rel.dts
+calc_date.dts -> cases/calc_date.dts
+calc_regression_test.dts -> cases/calc_regression_test.dts
+canaries.dts -> canaries/canaries.dts
+cnx_tag_keyword_form.dts -> legacy/cnx_tag_keyword_form.dts
+cnx_tag_smoke.dts -> canaries/cnx_tag_smoke.dts
+command_help_test_script.dts -> suites/command_help_test_script.dts
+command_sweep.dts -> legacy/command_sweep.dts
+command_test_script.dts -> cases/command_test_script.dts
+create_sample_dbf.dts -> cases/create_sample_dbf.dts
+data_types_calc_test.dts -> cases/data_types_calc_test.dts
+DateStringBool.dts -> cases/datestringbool.dts
+dottalk commands on the command line.dts -> legacy/dottalk_commands_on_the_command_line.dts
+dtoc_concat_var.dts -> cases/dtoc_concat_var.dts
+echo enum shakedown refresh.dts -> canaries/echo_enum_shakedown_refresh.dts
+enum_shakedown.v0.dts -> canaries/enum_shakedown_v0.dts
+enum_shakedown.v1.dts -> canaries/enum_shakedown_v1.dts
+ersatz_rel_enum_browser.dts -> manual/ersatz_rel_enum_browser.dts
+full_baseline.dts -> canaries/full_baseline.dts
+full_resolver_suite.dts -> main/full_resolver_suite.dts
+inxi_attach_switching.dts -> legacy/inxi_attach_switching.dts
+list_order_flip.dts -> canaries/list_order_flip.dts
+MCC_SUPER_REGRESSIVE_SHAKEDOWN_CANARIES.DTS -> canaries/mcc_super_regressive_shakedown_canaries.dts
+MCCBuild_full_relations_graph (CNX-backed).dts -> suites/mccbuild_full_relations_graph_cnx_backed.dts
+My_Community_College_Indexing.dts -> suites/my_community_college_indexing.dts
+order_engine_shakedown.dts -> canaries/order_engine_shakedown.dts
+pack_test_shakedown.dts -> canaries/pack_test_shakedown.dts
+predicates_help_test_verification.dts -> suites/predicates_help_test_verification.dts
+regression.dts -> main/regression.dts
+REL_JOIN_ENUM regression.dts -> main/rel_join_enum_regression.dts
+replace_dates.dts -> suites/replace_dates.dts
+reporting_snapshot.dts -> suites/reporting_snapshot.dts
+schema_validate_all.dts -> suites/schema_validate_all.dts
+schemas.dts -> suites/schemas.dts
+script.dts -> cases/script.dts
+seek_permutations.dts -> canaries/seek_permutations.dts
+set_relations_test.dts -> suites/set_relations_test.dts
+ShakeDown_DotTalkpp.dts -> canaries/shakedown_dottalkpp.dts
+Single_Dottalk.dts -> cases/single_dottalk.dts
+smartlist_order_matrix.dts -> canaries/smartlist_order_matrix.dts
+struct_cnx_tags.dts -> legacy/struct_cnx_tags.dts
+struct_inx_active.dts -> legacy/struct_inx_active.dts
+table_buffer.dts -> suites/table_buffer.dts
+test2.dts -> cases/test2.dts
+test3.dts -> cases/test3.dts
+test4.dts -> cases/test4.dts
+tuple_buffer_test.dts -> suites/tuple_buffer_test.dts
+version.dts -> suites/version.dts

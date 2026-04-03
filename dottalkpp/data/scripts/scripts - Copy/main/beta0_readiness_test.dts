@@ -1,0 +1,129 @@
+* ============================================================================
+* DotTalk++ Beta-0 Readiness Test
+* File: beta0_readiness_test.dts
+* Purpose:
+*   Minimal integrated proof that DotTalk++ is a coherent Beta-0 system.
+*
+* Proves:
+*   1) workspace bring-up
+*   2) schema/metadata inspection
+*   3) navigation
+*   4) indexed order
+*   5) key search
+*   6) predicate filtering
+*   7) relation wiring
+*   8) relation traversal
+*   9) tuple projection
+*  10) table buffering + commit
+*  11) help system integrity
+*
+* Notes:
+*   - This is intended as a practical readiness script, not an exhaustive regression.
+*   - It assumes the MCC-style dataset is present under the configured DBF root.
+*   - It performs one reversible GPA edit and commits it.
+* ============================================================================
+
+SET ECHO ON
+
+ECHO ===== BETA-0 READINESS TEST START =====
+
+* ---------------------------------------------------------------------------
+* Step 1 -- bring up dataset
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 1: SCHEMAS =====
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+
+* ---------------------------------------------------------------------------
+* Step 2 -- select a table
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 2: SELECT / STATUS =====
+SELECT STUDENTS
+STATUS
+
+* ---------------------------------------------------------------------------
+* Step 3 -- inspect schema
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 3: STRUCT / FIELDS =====
+STRUCT
+FIELDS
+
+* ---------------------------------------------------------------------------
+* Step 4 -- navigation baseline
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 4: NAVIGATION =====
+TOP
+LIST 3
+BOTTOM
+LIST 1
+TOP
+
+* ---------------------------------------------------------------------------
+* Step 5 -- activate indexed order
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 5: INDEXED ORDER =====
+SET INDEX TO students.cdx
+SET ORDER TO TAG LNAME
+TOP
+LIST 5
+
+* ---------------------------------------------------------------------------
+* Step 6 -- key search
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 6: SEEK / DISPLAY =====
+SEEK TAYLOR
+DISPLAY
+
+* ---------------------------------------------------------------------------
+* Step 7 -- predicate filtering
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 7: SMARTLIST / PREDICATE =====
+SMARTLIST 5 FOR GPA >= 3.5
+
+* ---------------------------------------------------------------------------
+* Step 8 -- build relation graph
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 8: SET RELATION / REL LIST =====
+SET RELATION OFF ALL
+SET RELATION TO SID INTO ENROLL
+REL LIST
+
+* ---------------------------------------------------------------------------
+* Step 9 -- extend relation chain
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 9: RELATION CHAIN =====
+REL ADD ENROLL CLASSES ON CLS_ID
+REL ADD CLASSES TASSIGN ON CLS_ID
+REL ADD TASSIGN TEACHERS ON TID
+REL LIST ALL
+
+* ---------------------------------------------------------------------------
+* Step 10 -- relation traversal
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 10: REL ENUM =====
+LOCATE LNAME = TAYLOR
+REL ENUM LIMIT 5 ENROLL CLASSES TASSIGN TEACHERS TUPLE STUDENTS.SID,STUDENTS.LNAME,TEACHERS.LNAME
+
+* ---------------------------------------------------------------------------
+* Step 11 -- buffering demonstration
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 11: TABLE BUFFER / COMMIT =====
+LOCATE LNAME = TAYLOR
+TABLE ON
+REPLACE GPA WITH GPA + 0.01
+TABLE STALE
+COMMIT
+REPLACE GPA WITH GPA - 0.01
+COMMIT
+TABLE OFF
+
+* ---------------------------------------------------------------------------
+* Step 12 -- help system integrity
+* ---------------------------------------------------------------------------
+ECHO ===== STEP 12: HELP SYSTEM =====
+HELP REL
+HELP TUPLE
+HELP /FOX SEEK
+HELP GIANT
+
+ECHO ===== BETA-0 READINESS TEST END =====

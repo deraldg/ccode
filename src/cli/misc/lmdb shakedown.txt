@@ -1,0 +1,210 @@
+Here’s what your transcript shows at a systems‑behavior level: **your LMDB layer is now behaving exactly like a FoxPro CDX tag**, but with one important difference — **LMDB has no global “current environment”**, so every LMDB command in DotTalk++ must re‑establish context unless your shell keeps it alive. Your final line:
+
+```
+. lmdb scan A Z
+* LMDB: no env open. Try: LMDB OPEN <env_dir>
+```
+
+means: **your LMDB context was dropped between commands**. Everything else you did (USE, GOTO, TUP, TOP, BOTTOM) was against the DBF engine, not LMDB, so the LMDB session wasn’t kept alive.
+
+But the more interesting part is what your dump shows: **your composite-key LMDB index is faithfully reproducing FoxPro CDX behavior**, including:
+
+- sorted key order  
+- duplicate key clustering  
+- stable recno tie‑break  
+- prefix‑based range scanning  
+
+Below is a structured comparison of what your DotTalk++ LMDB layer is doing vs. FoxPro 2.6 SEEK semantics, grounded in your actual transcript.
+
+---
+
+## 🧩 What Your Transcript Demonstrates About LMDB Behavior
+
+### 1. **Composite-key mode (key||recno)**
+Your LMDB USE output:
+
+```
+* LMDB USE: mode: composite-key (key||recno)
+```
+
+This is the correct FoxPro‑style emulation:
+
+- Primary sort: `LNAME`
+- Secondary sort: `RECNO()` (or SID if you choose)
+
+This exactly matches FoxPro CDX tag behavior: **duplicate keys remain stable and ordered by recno**.
+
+Your dump confirms:
+
+```
+ANDERSON -> 21
+ANDERSON -> 47
+ANDERSON -> 79
+...
+```
+
+This is identical to:
+
+```
+SET ORDER TO LNAME
+SEEK "ANDERSON"
+LIST NEXT ...
+```
+
+---
+
+### 2. **LMDB depth=2, entries=204**
+Your LMDB INFO:
+
+```
+entries: 204
+depth: 2
+```
+
+This means:
+
+- Your B‑tree is shallow (excellent performance)
+- All 204 index entries fit in a 2‑level tree (root + leaf)
+
+FoxPro CDX trees for this size would also be depth 2 or 3 depending on block size.
+
+---
+
+### 3. **Your LMDB dump matches FoxPro’s CDX ordering**
+The dump:
+
+```
+ANDERSON -> 21
+ANDERSON -> 47
+...
+BROWN -> 17
+BROWN -> 77
+...
+CLARK -> 11
+CLARK -> 45
+...
+```
+
+This is exactly what FoxPro would produce with:
+
+```
+SET ORDER TO LNAME
+LIST LNAME, RECNO
+```
+
+The LMDB index is behaving as a **pure ordered keyspace**, which is the correct foundation for FoxPro‑style SEEK.
+
+---
+
+## 🧭 Why “LMDB: no env open” Happened
+
+Your sequence:
+
+```
+. lmdb open indexes/students.cdx.d
+. lmdb use lname
+. lmdb info
+. lmdb dump 20
+```
+
+Then you switched back to DBF operations:
+
+```
+. use students
+. goto 21
+. tup
+. top
+. bottom
+. goto 47
+. tup
+```
+
+During this time, your LMDB context was not referenced. Your shell likely resets LMDB context when switching “areas” or when a DBF USE occurs.
+
+So when you later typed:
+
+```
+. lmdb scan A Z
+```
+
+the LMDB subsystem had no active environment.
+
+This is not an LMDB problem — it’s a **DotTalk++ session‑state rule**.
+
+---
+
+## 🧬 How Your LMDB SEEK Equivalent Works (Based on Your Build)
+
+Your LMDB layer is implementing FoxPro SEEK semantics like this:
+
+### FoxPro
+```
+SET ORDER TO LNAME
+SEEK "ANDERSON"
+```
+
+### Your LMDB layer
+- `LNAME` tag → LMDB sub-database named `LNAME`
+- Keys encoded as: `LNAME + "|" + RECNO`
+- Cursor positioned with `MDB_SET_RANGE("ANDERSON")`
+- Iterate until key prefix changes
+
+This is the correct mapping.
+
+---
+
+## 🆚 Direct Comparison: FoxPro SEEK vs. Your LMDB SEEK
+
+### FoxPro SEEK
+- Uses CDX tag
+- Automatically maintains index
+- Moves record pointer
+- Supports SET NEAR
+- Supports partial-key SEEK
+
+### Your LMDB SEEK (DotTalk++ implementation)
+- Uses LMDB sub-database per tag
+- Composite key ensures stable duplicates
+- Cursor positions exactly like FoxPro SET RANGE
+- Range scan = FoxPro partial-key SEEK
+- No automatic maintenance (your BUILDLMDB handles this)
+
+Your BUILDLMDB output:
+
+```
+OK=5 tags rebuilt.
+```
+
+confirms you are regenerating all CDX-equivalent LMDB indexes.
+
+---
+
+## 🧭 What You Should Do Next (One Step)
+
+To continue scanning:
+
+```
+. lmdb open indexes/students.cdx.d
+. lmdb use lname
+. lmdb scan A Z
+```
+
+This will give you the FoxPro‑style:
+
+```
+SET ORDER TO LNAME
+SEEK "A"
+LIST WHILE LNAME <= "Z"
+```
+
+---
+
+If you want, I can produce a **DotTalk++ codex overlay** showing:
+
+- FoxPro SEEK → LMDB cursor mapping  
+- CDX tag → LMDB sub-database mapping  
+- Composite key encoding rules  
+- Range scan semantics  
+- How to implement SET NEAR behavior  
+
+Would you like that overlay?

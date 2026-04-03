@@ -1,0 +1,37 @@
+To revoke Grok's access to your X account (or more precisely, to manage and limit what Grok/xAI can do with your account data after you authorized login/access), you have a couple of main options depending on what exactly bothers you. Grok is built by xAI and integrated directly with X (formerly Twitter), so it's not always treated as a traditional "third-party app." However, you can control permissions, data sharing, and personalization.
+
+### 1. Revoke App/Session Access (If Grok Appears as a Connected App)
+Grok login often uses X's OAuth system, so it may show up in your connected apps/sessions.
+
+- Log in to X (on web/desktop or app) at x.com.
+- Go to **Settings and privacy** (usually under "More" in the left sidebar or your profile menu).
+- Select **Security and account access** > **Apps and sessions** (or directly visit https://x.com/settings/applications or https://twitter.com/settings/applications).
+- You'll see a list of connected apps and active sessions.
+- Look for anything related to "Grok," "xAI," or "Grok AI" (it might be listed under xAI or similar).
+- Click on it to view details, then select **Revoke access** (or "Revoke" button next to it).
+
+This will disconnect that specific authorization. Note: If Grok doesn't appear here (common for native integrations), proceed to the next steps for data controls.
+
+### 2. Disable Grok Data Sharing, Personalization, and Training (Most Common Fix)
+When you log in to Grok via X, it often enables data sharing by default (e.g., using your posts/interactions for training Grok or personalizing responses). You can turn this off:
+
+- Log in to X on a **web browser/desktop** (some settings are limited or unavailable on mobile apps).
+- Click **More** (three dots/lines) in the left menu > **Settings and privacy**.
+- Go to **Privacy and safety**.
+- Scroll to and select **Grok** (or **Grok & Third-party Collaborators** / **Data sharing and personalization** > **Grok**).
+- You'll see options like:
+  - "Allow your posts as well as your interactions, inputs, and results with Grok to be used for training and fine-tuning"
+  - "Allow X to personalize your experience with Grok"
+  - "Allow Grok to remember your conversation history"
+- **Uncheck/disable** the ones you don't want (especially the training/data use box).
+- If you've chatted with Grok before, look for a **Delete conversation history** button and confirm deletion.
+
+This prevents Grok from using your data moving forward and limits personalization. Some users report this is under https://x.com/settings/grok_settings directly.
+
+### Additional Tips
+- If you want stronger privacy, make your X account private (**Settings and privacy** > **Privacy and safety** > **Audience and tagging** > Enable "Protect your posts"). Private accounts often restrict data use for AI training.
+- Logging out of Grok sessions or clearing browser data/cookies can help reset some access, but the above settings are the proper way.
+- If nothing shows up or it doesn't resolve your concern, check X's help center directly at https://help.x.com/en/managing-your-account/connect-or-revoke-access-to-third-party-apps for the latest official steps (they update periodically).
+- As a last resort, you could log out everywhere (**Settings and privacy** > **Security and account access** > **Apps and sessions** > Log out of all sessions) and re-authorize only what you need, but that affects all logins.
+
+These steps should stop unwanted access or data usage without deleting your X account. If the interface looks different (X changes things often), search within your X settings for "Grok" or "apps." Let me know if you run into issues!

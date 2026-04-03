@@ -1,0 +1,552 @@
+Proceeding.
+
+# **WorkArea — Feature Specification (Codex Section)**
+
+*(Place in Volume I after SCHEMAS Manager section)*
+
+---
+
+# **1. Purpose**
+
+The **WorkArea** is the core runtime execution unit in x64base.
+
+It is responsible for:
+
+* record navigation
+* ordering
+* filtering
+* deleted-state handling
+* buffering (staged edits)
+
+---
+
+# **2. Core Concept**
+
+> WorkArea represents a **live, active table instance within the workspace**.
+
+Each WorkArea:
+
+* is bound to one table (DBF)
+* maintains its own runtime state
+* operates independently of other areas
+
+---
+
+# **3. Position in Architecture**
+
+```text
+SCHEMAS (workspace manager)
+        ↓
+WorkArea (runtime table instance)
+        ↓
+Tuple Builder (logical row construction)
+        ↓
+TupleStream / RelationTupleStream
+        ↓
+Browser / REL ENUM / SMARTLIST
+```
+
+---
+
+# **4. WorkArea State Components**
+
+---
+
+## **4.1 Table Binding**
+
+* DBF file association
+* alias name
+* area number
+
+---
+
+## **4.2 Cursor State**
+
+* current record number (RECNO)
+* physical position
+* logical position (via index)
+
+---
+
+## **4.3 Order State**
+
+* active index file
+* active tag
+* ascending/descending
+
+---
+
+## **4.4 Filter State**
+
+* FILTER expression
+* DELETED ON/OFF
+
+---
+
+## **4.5 Buffer State**
+
+* staged field edits
+* dirty flag
+* commit/cancel capability
+
+---
+
+## **4.6 Relation Awareness**
+
+* participates in relation graph
+* may be parent or child
+
+---
+
+# **5. Command Surface (Core)**
+
+---
+
+## **5.1 Table Control**
+
+```text
+USE <table>
+SELECT <area>
+```
+
+* bind table to WorkArea
+* switch active WorkArea
+
+---
+
+## **5.2 Navigation**
+
+```text
+TOP
+BOTTOM
+SKIP <n>
+GO <recno>
+```
+
+---
+
+## **5.3 Order Control**
+
+```text
+SET INDEX TO <file>
+SET ORDER TO TAG <tag>
+SET ORDER TO 0
+ASCEND
+DESCEND
+```
+
+---
+
+## **5.4 Filtering**
+
+```text
+SET FILTER TO <expr>
+SET FILTER TO
+SET DELETED ON
+SET DELETED OFF
+```
+
+---
+
+## **5.5 Record State**
+
+```text
+DELETE
+RECALL
+PACK
+ZAP
+```
+
+---
+
+## **5.6 Buffer / Edit (via Simple Browser or commands)**
+
+```text
+REPLACE <field> WITH <value>
+COMMIT
+CANCEL
+```
+
+---
+
+# **6. Navigation Semantics**
+
+---
+
+## **6.1 Logical Navigation**
+
+```text
+TOP / BOTTOM / SKIP
+```
+
+* respects:
+
+  * order
+  * filter
+  * deleted state
+
+---
+
+## **6.2 Physical Navigation**
+
+```text
+GO <recno>
+```
+
+* bypasses logical order
+* accesses raw record
+
+---
+
+## **Rule**
+
+> Logical navigation operates on visible rows; physical navigation operates on stored rows.
+
+---
+
+# **7. Order Semantics**
+
+---
+
+## **7.1 Index-Based Ordering**
+
+* driven by active tag
+* defines logical row sequence
+
+---
+
+## **7.2 No Order**
+
+```text
+SET ORDER TO 0
+```
+
+* falls back to physical order
+
+---
+
+## **7.3 Direction**
+
+```text
+ASCEND / DESCEND
+```
+
+* reverses logical traversal
+
+---
+
+## **Rule**
+
+> WorkArea order defines the base sequence for all logical operations.
+
+---
+
+# **8. Filter Semantics**
+
+---
+
+## **8.1 FILTER**
+
+```text
+SET FILTER TO <expr>
+```
+
+* restricts visible rows
+
+---
+
+## **8.2 DELETED**
+
+```text
+SET DELETED ON/OFF
+```
+
+* hides/shows deleted rows
+
+---
+
+## **Rule**
+
+```text
+Visibility = Order → Filter → Deleted
+```
+
+---
+
+# **9. Buffer Semantics**
+
+---
+
+## **9.1 Staging**
+
+* edits are staged in buffer
+* not immediately written
+
+---
+
+## **9.2 Dirty State**
+
+* WorkArea tracks modified state
+* blocks unsafe operations
+
+---
+
+## **9.3 Commit**
+
+```text
+COMMIT
+```
+
+* writes buffer to DBF
+
+---
+
+## **9.4 Cancel**
+
+```text
+CANCEL
+```
+
+* discards buffer
+
+---
+
+## **Rule**
+
+> Buffer overrides physical values until committed.
+
+---
+
+# **10. Interaction with Tuple Builder**
+
+---
+
+## **Flow**
+
+```text
+DBF value
+   ↓
+Buffer override
+   ↓
+Tuple Builder
+   ↓
+Logical row
+```
+
+---
+
+## **Rule**
+
+> Tuple Builder must always read through WorkArea to obtain effective values.
+
+---
+
+# **11. Interaction with SCHEMAS**
+
+---
+
+## **Rule**
+
+> SCHEMAS creates WorkAreas; WorkArea executes within them.
+
+---
+
+## **Implication**
+
+* SCHEMAS decides:
+
+  * which tables exist
+* WorkArea decides:
+
+  * how each table behaves
+
+---
+
+# **12. Interaction with SMARTLIST**
+
+---
+
+SMARTLIST:
+
+* consumes WorkArea
+* but does not use cursor directly
+
+---
+
+## **Rule**
+
+> SMARTLIST reads WorkArea state but operates as a stream.
+
+---
+
+# **13. Interaction with REL / Relation System**
+
+---
+
+WorkArea participates as:
+
+* parent node
+* child node
+
+---
+
+## **Rule**
+
+> WorkArea provides row access; relation system defines traversal.
+
+---
+
+# **14. Interaction with Simple Browser**
+
+---
+
+Simple Browser:
+
+* directly manipulates WorkArea
+* uses:
+
+  * cursor
+  * buffer
+  * order
+
+---
+
+## **Rule**
+
+> Simple Browser is a WorkArea UI surface.
+
+---
+
+# **15. Interaction with Smart Browser**
+
+---
+
+Smart Browser:
+
+* does not move WorkArea cursor
+* reads WorkArea state
+* uses TupleStream
+
+---
+
+## **Rule**
+
+> Smart Browser is WorkArea-aware but not WorkArea-driven.
+
+---
+
+# **16. Determinism Rule**
+
+Given identical:
+
+* table
+* index
+* filter
+* buffer state
+
+WorkArea must produce identical navigation and row results.
+
+---
+
+# **17. Error Handling**
+
+---
+
+## **Invalid navigation**
+
+* skip beyond range → clamp
+
+## **Invalid order**
+
+* missing index/tag → error
+
+## **Buffer conflict**
+
+* dirty state blocks unsafe actions
+
+---
+
+## **Rule**
+
+> WorkArea must maintain consistent state and prevent corruption.
+
+---
+
+# **18. Anti-Patterns**
+
+Do not allow:
+
+* bypassing WorkArea for DBF reads
+* mixing logical and physical navigation implicitly
+* ignoring buffer state
+* mutating data without commit control
+
+---
+
+# **19. Codex-Level Rules**
+
+### **Rule 1**
+
+WorkArea is the runtime execution unit for a table.
+
+### **Rule 2**
+
+WorkArea manages cursor, order, filter, and buffer.
+
+### **Rule 3**
+
+Logical navigation respects order/filter/deleted state.
+
+### **Rule 4**
+
+Physical navigation bypasses logical constraints.
+
+### **Rule 5**
+
+Buffer state overrides physical values until committed.
+
+### **Rule 6**
+
+All higher layers must access data through WorkArea.
+
+---
+
+# **20. Short Codex Statement**
+
+> The WorkArea represents a live table instance within the x64base workspace, managing cursor position, ordering, filtering, and buffering. It is the core execution layer through which all data access must pass before entering the tuple and stream systems.
+
+---
+
+# **Status**
+
+You now have:
+
+✔ SCHEMAS (workspace layer)
+✔ WorkArea (execution layer)
+✔ Tuple system
+✔ Stream system
+✔ Browser system
+✔ Schema overlay system
+
+---
+
+# **Next (in order)**
+
+We now move to:
+
+👉 **Tuple Builder — Feature Specification (formal)**
+
+This will lock:
+
+* how rows are constructed
+* buffer precedence
+* memo resolution
+* provenance
+
+---
+
+Say:
+
+**continue tuple builder features**
+
+and we proceed.

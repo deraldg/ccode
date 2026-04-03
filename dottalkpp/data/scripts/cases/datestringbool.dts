@@ -1,0 +1,100 @@
+* ============================================================
+* MCC_SHAKEDOWN.DTS - My Community College DBFs
+* CALC Function/Operator Test Suite (full matrix)
+*
+* RULES / NOTES
+* - Any CALC expression containing "=", ">=", "<=" (and similar) MUST start with "("
+*   or CALC may interpret it as CALCWRITE syntax.
+*     GOOD:  CALC (UPPER("a") = "A")
+*     BAD :  CALC UPPER("a") = "A"     * triggers CALCWRITE usage
+*
+* - BOOLEAN/COUNT/LOCATE use the predicate grammar (not CALC expr grammar).
+* - CONCAT() accepts comma-separated string args; "+" is numeric only.
+* - Inline comments: use * to comment the rest of the line.
+*
+* IMPORTANT:
+* - Keep this file ASCII/ANSI only (no smart quotes / em dashes).
+* ============================================================
+
+SET ECHO OFF
+ECHO ===== DotTalk++ MCC SHAKE-DOWN START =====
+COLOR DEFAULT
+
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+SCHEMAS
+
+* ------------------------------------------------------------
+* CALC: CLOCK / DATE-TIME (NO DBF REQUIRED)
+* ------------------------------------------------------------
+
+CALC DATE()
+CALC TODAY()
+CALC TIME()
+CALC NOW()
+CALC DATETIME()
+
+DATE
+TODAY
+TIME
+NOW
+DATETIME
+
+CALC (DATE() = TODAY())
+CALC (NOW() = DATETIME())
+
+CALC DATE() + 2
+CALC DATE() - 2
+CALC ((DATE() + 2) > DATE())
+CALC ((DATE() - 2) < DATE())
+
+* CTOD parsing - ALWAYS QUOTE hyphenated dates
+CALC CTOD("2000-01-01")
+CALC CTOD("2000/01/01")
+CALC CTOD(20000101)
+
+* Compare date-to-date, not date-to-number
+CALC (CTOD("2000-01-01") = CTOD("2000/01/01"))
+CALC (CTOD("2000-01-01") = CTOD(20000101))
+CALC (CTOD("2000-01-01") + 1 = CTOD("2000-01-02"))
+CALC (CTOD("2000-01-01") - 1 = CTOD("1999-12-31"))
+
+* DTOC round-trip canary (string compare)
+CALC DTOC(CTOD("2000-01-01"))
+CALC (DTOC(CTOD("2000-01-01")) = "20000101")
+
+* ------------------------------------------------------------
+* LOCATE / FIND / SEEK SMOKE (STUDENTS)
+* ------------------------------------------------------------
+
+SELECT STUDENTS
+TOP
+
+LOCATE FOR LNAME = DAVIS
+TUP
+
+LOCATE FOR LNAME = TAYLOR
+TUP
+
+TOP
+FIND LNAME = TAYLOR
+
+TOP
+FIND LNAME = "WHITE"
+
+TOP
+SEEK LNAME = DAVIS
+TUP
+
+TOP
+SEEK FNAME = ALEX
+TUP
+
+* ------------------------------------------------------------
+* CLEAN SHUTDOWN
+* ------------------------------------------------------------
+
+SCHEMAS
+SCHEMAS CLOSE
+ECHO ===== DotTalk++ MCC SHAKE-DOWN END =====
+QUIT

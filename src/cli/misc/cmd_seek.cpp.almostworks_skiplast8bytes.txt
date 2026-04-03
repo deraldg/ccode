@@ -1,0 +1,356 @@
+// src/cli/cmd_seek.cpp
+//
+// SEEK command
+//
+// Current behavior:
+//   - If LMDB is active via SETLMDB (orderstate: CDX container + TAG), SEEK uses LMDB <cdx>.d.
+//   - Otherwise, SEEK performs a simple physical scan of the DBF.
+//
+// Syntax:
+//   SEEK <value> IN <field> [TRACE ON|OFF]
+//   SEEK <field> = <value> [TRACE ON|OFF]
+//   SEEK <field> <value>   [TRACE ON|OFF]
+//   SEEK TRACE ON|OFF
+//
+// Notes:
+//   - When LMDB is used and TRACE is ON, prints the needle and each LMDB key examined.
+//   - This is intentionally noisy for debugging.
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/order_state.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <filesystem>
+
+#if __has_include(<lmdb.h>)
+  #include <lmdb.h>
+  #define CMD_SEEK_HAVE_LMDB 1
+#else
+  #define CMD_SEEK_HAVE_LMDB 0
+#endif
+
+namespace {
+
+static bool g_seek_trace = false;
+
+static inline std::string upper_copy(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
+}
+
+static inline bool ends_with_ci(const std::string& s, const char* suffix) {
+    auto lower = [](unsigned char c) { return static_cast<char>(std::tolower(c)); };
+    const std::string suf(suffix);
+    if (s.size() < suf.size()) return false;
+    for (size_t i = 0; i < suf.size(); ++i) {
+        const char a = lower(static_cast<unsigned char>(s[s.size() - suf.size() + i]));
+        const char b = lower(static_cast<unsigned char>(suf[i]));
+        if (a != b) return false;
+    }
+    return true;
+}
+
+static inline bool strip_trace_suffix(std::string& line, bool& out_trace) {
+    // If line ends with "TRACE ON" or "TRACE OFF", strip it and set out_trace.
+    // Returns true if a TRACE suffix was present.
+    std::string s = textio::trim(line);
+    if (s.empty()) { line.clear(); return false; }
+
+    std::vector<std::string> toks;
+    {
+        std::istringstream is(s);
+        std::string t;
+        while (is >> t) toks.push_back(t);
+    }
+    if (toks.size() < 2) { line = s; return false; }
+
+    const std::string t2 = upper_copy(toks[toks.size() - 2]);
+    const std::string t1 = upper_copy(toks[toks.size() - 1]);
+    if (t2 != "TRACE") { line = s; return false; }
+    if (t1 != "ON" && t1 != "OFF") { line = s; return false; }
+
+    out_trace = (t1 == "ON");
+
+    std::ostringstream os;
+    for (size_t i = 0; i + 2 < toks.size(); ++i) {
+        if (i) os << ' ';
+        os << toks[i];
+    }
+    line = textio::trim(os.str());
+    return true;
+}
+
+static void print_usage() {
+    std::cout << "Usage:\n"
+              << "  SEEK <value> IN <field> [TRACE ON|OFF]\n"
+              << "  SEEK <field> = <value> [TRACE ON|OFF]\n"
+              << "  SEEK <field> <value>   [TRACE ON|OFF]\n"
+              << "  SEEK TRACE ON|OFF\n";
+}
+
+static int find_field_idx(const xbase::DbArea& a, const std::string& name) {
+    const auto& Fs = a.fields();
+    for (int i = 0; i < static_cast<int>(Fs.size()); ++i) {
+        if (textio::ieq(Fs[static_cast<size_t>(i)].name, name)) return i + 1; // 1-based
+    }
+    return -1;
+}
+
+#if CMD_SEEK_HAVE_LMDB
+static inline bool parse_recno_from_val(const MDB_val& vv, uint32_t& rn_out) {
+    rn_out = 0;
+
+    if (vv.mv_size == 4) {
+        const unsigned char* b = static_cast<const unsigned char*>(vv.mv_data);
+        rn_out = static_cast<uint32_t>(b[0]
+            | (static_cast<uint32_t>(b[1]) << 8)
+            | (static_cast<uint32_t>(b[2]) << 16)
+            | (static_cast<uint32_t>(b[3]) << 24));
+        return true;
+    }
+
+    if (vv.mv_size == 8) {
+        const unsigned char* b = static_cast<const unsigned char*>(vv.mv_data);
+        std::uint64_t u = static_cast<std::uint64_t>(b[0])
+            | (static_cast<std::uint64_t>(b[1]) << 8)
+            | (static_cast<std::uint64_t>(b[2]) << 16)
+            | (static_cast<std::uint64_t>(b[3]) << 24)
+            | (static_cast<std::uint64_t>(b[4]) << 32)
+            | (static_cast<std::uint64_t>(b[5]) << 40)
+            | (static_cast<std::uint64_t>(b[6]) << 48)
+            | (static_cast<std::uint64_t>(b[7]) << 56);
+        rn_out = static_cast<uint32_t>(u);
+        return true;
+    }
+
+    const char* p = static_cast<const char*>(vv.mv_data);
+    const char* e = p + vv.mv_size;
+    std::uint64_t u = 0;
+    bool any = false;
+    for (; p < e; ++p) {
+        const unsigned char c = static_cast<unsigned char>(*p);
+        if (c < '0' || c > '9') break;
+        any = true;
+        u = (u * 10ULL) + static_cast<std::uint64_t>(c - '0');
+        if (u > 0xFFFFFFFFULL) break;
+    }
+    if (!any) return false;
+    rn_out = static_cast<uint32_t>(u);
+    return true;
+}
+
+static bool lmdb_seek_eq_first(const std::filesystem::path& env_dir,
+                              const std::string& tag_upper,
+                              const std::string& needle_upper,
+                              int32_t maxRecno,
+                              bool trace,
+                              int32_t& out_recno)
+{
+    out_recno = 0;
+
+    MDB_env* env = nullptr;
+    MDB_txn* txn = nullptr;
+    MDB_dbi dbi = 0;
+    MDB_cursor* cur = nullptr;
+
+    auto cleanup = [&]() {
+        if (cur) { mdb_cursor_close(cur); cur = nullptr; }
+        if (txn) { mdb_txn_abort(txn); txn = nullptr; }
+        if (env) { mdb_env_close(env); env = nullptr; }
+    };
+
+    int rc = mdb_env_create(&env);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_env_set_maxdbs(env, 1024);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_env_open(env, env_dir.string().c_str(), MDB_RDONLY, 0664);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_txn_begin(env, nullptr, MDB_RDONLY, &txn);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_dbi_open(txn, tag_upper.c_str(), 0, &dbi);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    rc = mdb_cursor_open(txn, dbi, &cur);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    MDB_val k{}, v{};
+    rc = mdb_cursor_get(cur, &k, &v, MDB_FIRST);
+    if (rc != MDB_SUCCESS) { cleanup(); return false; }
+
+    while (true) {
+        // Key bytes -> string (assume ASCII-ish) for debug / compare.
+        std::string key;
+        key.assign(static_cast<const char*>(k.mv_data),
+                   static_cast<const char*>(k.mv_data) + k.mv_size);
+        const std::string key_upper = upper_copy(textio::trim(key));
+
+        if (trace) {
+            std::cout << "; SEEK TRACE: needle='" << needle_upper
+                      << "'  key='" << key_upper << "'\n";
+        }
+
+        if (key_upper == needle_upper) {
+            uint32_t rn_u = 0;
+            if (parse_recno_from_val(v, rn_u)) {
+                const int32_t rn = static_cast<int32_t>(rn_u);
+                if (rn >= 1 && rn <= maxRecno) {
+                    out_recno = rn;
+                    cleanup();
+                    return true;
+                }
+            }
+        }
+
+        rc = mdb_cursor_get(cur, &k, &v, MDB_NEXT);
+        if (rc == MDB_NOTFOUND) break;
+        if (rc != MDB_SUCCESS) { cleanup(); return false; }
+    }
+
+    cleanup();
+    return false;
+}
+#endif // CMD_SEEK_HAVE_LMDB
+
+} // namespace
+
+void cmd_SEEK(xbase::DbArea& a, std::istringstream& iss) {
+    if (!a.isOpen()) { std::cout << "No table open.\n"; return; }
+
+    std::string rest;
+    std::getline(iss, rest);
+    rest = textio::trim(rest);
+    if (rest.empty()) { print_usage(); return; }
+
+    // Parse TRACE suffix (per-invocation).
+    bool trace = g_seek_trace;
+    bool had_trace_suffix = strip_trace_suffix(rest, trace);
+    (void)had_trace_suffix;
+
+    // Special: SEEK TRACE ON|OFF
+    {
+        std::istringstream is(rest);
+        std::string t1, t2;
+        if ((is >> t1 >> t2) && textio::ieq(t1, "TRACE")) {
+            if (textio::ieq(t2, "ON"))  { g_seek_trace = true;  std::cout << "SEEK TRACE is ON\n";  return; }
+            if (textio::ieq(t2, "OFF")) { g_seek_trace = false; std::cout << "SEEK TRACE is OFF\n"; return; }
+            print_usage();
+            return;
+        }
+    }
+
+    // Parse the 3 accepted forms.
+    std::string field;
+    std::string value;
+    {
+        std::istringstream is(rest);
+        std::string a1, a2, a3;
+
+        if (!(is >> a1)) { print_usage(); return; }
+
+        // Form: <value> IN <field>
+        {
+            std::streampos save = is.tellg();
+            if ((is >> a2 >> a3) && textio::ieq(a2, "IN")) {
+                value = a1;
+                field = a3;
+            } else {
+                is.clear();
+                if (save != std::streampos(-1)) is.seekg(save);
+            }
+        }
+
+        if (field.empty()) {
+            // Form: <field> = <value>
+            std::streampos save = is.tellg();
+            if ((is >> a2) && a2 == "=") {
+                std::string tail;
+                std::getline(is, tail);
+                field = a1;
+                value = textio::trim(tail);
+            } else {
+                is.clear();
+                if (save != std::streampos(-1)) is.seekg(save);
+            }
+        }
+
+        if (field.empty()) {
+            // Form: <field> <value>
+            std::string tail;
+            std::getline(is, tail);
+            field = a1;
+            value = textio::trim(tail);
+        }
+    }
+
+    field = textio::trim(field);
+    value = textio::trim(value);
+
+    if (field.empty() || value.empty()) { print_usage(); return; }
+
+    const int fldIdx = find_field_idx(a, field);
+    if (fldIdx <= 0) { std::cout << "Unknown field: " << field << "\n"; return; }
+
+    const int32_t total = a.recCount();
+
+    // Prefer LMDB if SETLMDB is active.
+#if CMD_SEEK_HAVE_LMDB
+    if (orderstate::hasOrder(a)) {
+        const std::string container = orderstate::orderName(a);
+        const std::string tag = orderstate::activeTag(a);
+
+        if (ends_with_ci(container, ".cdx") && !tag.empty()) {
+            // If user specified a different field than active tag, warn but proceed.
+            if (!textio::ieq(field, tag)) {
+                std::cout << "; SEEK note: field '" << field << "' differs from active tag '" << tag << "' ? using tag\n";
+            }
+
+            const std::filesystem::path envdir = std::filesystem::path(container + ".d");
+            std::error_code ec{};
+            if (std::filesystem::exists(envdir, ec) && std::filesystem::is_directory(envdir, ec)) {
+                const std::string needle = upper_copy(value);
+                const std::string tag_upper = upper_copy(tag);
+
+                int32_t hit = 0;
+                if (lmdb_seek_eq_first(envdir, tag_upper, needle, total, trace, hit)) {
+                    if (a.gotoRec(hit) && a.readCurrent()) {
+                        std::cout << "Found at " << hit << ".\n";
+                        return;
+                    }
+                }
+                std::cout << "Not found.\n";
+                return;
+            }
+        }
+    }
+#endif
+
+    // Physical scan fallback.
+    const std::string needle = upper_copy(value);
+    for (int32_t rn = 1; rn <= total; ++rn) {
+        if (!a.gotoRec(rn) || !a.readCurrent()) continue;
+        std::string cur = a.get(fldIdx);
+        cur = upper_copy(textio::trim(cur));
+        if (trace) {
+            std::cout << "; SEEK TRACE: needle='" << needle << "'  field='" << field
+                      << "'  recno=" << rn << "  val='" << cur << "'\n";
+        }
+        if (cur == needle) {
+            std::cout << "Found at " << rn << ".\n";
+            return;
+        }
+    }
+
+    std::cout << "Not found.\n";
+}

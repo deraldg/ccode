@@ -15,3 +15,6 @@ void dispatch_command(const std::string& line) {
     // If no current area is set, we silently do nothing. This preserves
     // compatibility with older reader paths without risking a null deref.
 }
+
+
+

@@ -1,0 +1,13 @@
+select students
+top
+table on 
+datetime
+now
+loop 50 times
+replace lname with "Buffered Data"
+skip
+endloop
+datetime
+now
+rollback
+* commit

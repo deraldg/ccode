@@ -1,0 +1,18 @@
+CREATE X64 X64SAMP2 ( ;
+    REC_ID      C(16), ;
+    NAME        C(40), ;
+    NOTE_S      C(60), ;
+    STATUS      C(12), ;
+    COUNT_N     N(10,0), ;
+    AMOUNT_N    N(12,2), ;
+    RATIO_F     F(18,6), ;
+    EVENT_DT    D, ;
+    IS_ACTIVE   L, ;
+    MEMO_REF    M, ;
+    INT32_I     I, ;
+    DOUBLE_B    B, ;
+    AMOUNT      Y, ;
+    AMOUNT_CU   C(3), ;
+    PAD1        C(80), ;
+    PAD2        C(80) ;
+)

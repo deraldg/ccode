@@ -1,0 +1,329 @@
+// src/cli/cmd_scan.cpp
+// SCAN / ENDSCAN with per-record command execution (prints to console).
+//
+// Supports:
+//   SCAN [FOR <expr>]
+//   ENDSCAN
+//
+// Notes:
+//   • Lines between SCAN..ENDSCAN are buffered via the internal __SCAN_BUFFER command.
+//   • Default gate: skips deleted records.
+//   • FOR <expr> is compiled by the AST engine (dottalk::expr).
+//     SQL-ish input is normalized via sql_to_dottalk_where before compile.
+//   • If compile fails, FOR matches no records (safe default).
+//
+// Order-aware traversal:
+//   • If an order is active (LMDB-backed ordering via SETLMDB), ENDSCAN iterates
+//     recnos using cli::order_iterate_recnos(), rather than 1..recCount.
+//   • This keeps LOOP simple; SCAN becomes the reusable “ordered loop harness”.
+
+#include "cmd_scan.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "command_registry.hpp"
+#include "scan_state.hpp"
+#include "set_relations.hpp"            // relations_api::refresh_if_enabled()
+
+// Expr engine + helpers (same stack as SMARTLIST)
+#include "cli/expr/api.hpp"
+#include "cli/expr/glue_xbase.hpp"
+#include "cli/expr/line_parse_utils.hpp"  // strip_line_comments
+#include "expr/sql_normalize.hpp"          // sqlnorm::sql_to_dottalk_where
+
+// Order iteration (LMDB / order backend)
+#include "cli/order_iterator.hpp"
+#include "cli/order_state.hpp"
+
+using xbase::DbArea;
+
+namespace {
+
+static inline std::string up(std::string s) {
+    for (auto& ch : s) ch = (char)std::toupper((unsigned char)ch);
+    return s;
+}
+
+static inline std::string trim_copy(std::string s) {
+    return textio::trim(std::move(s));
+}
+
+static inline bool is_comment_or_blank(const std::string& raw) {
+    std::string s = textio::trim(raw);
+    if (s.empty()) return true;
+    if (s[0] == '#') return true;
+    if (s.size() >= 2 && s[0] == '/' && s[1] == '/') return true;
+    return false;
+}
+
+enum class DelGate {
+    OnlyAlive,     // default
+    OnlyDeleted,   // FOR DELETED
+    Any            // not currently exposed (reserved)
+};
+
+struct EvalProg {
+    bool enabled{false};
+    std::unique_ptr<dottalk::expr::Expr> prog;
+
+    bool eval(xbase::DbArea& A) const {
+        if (!enabled) return true;
+        auto rv = dottalk::expr::glue::make_record_view(A);
+        return prog->eval(rv);
+    }
+};
+
+// Build evaluator from user expression, via SQL→DotTalk normalization then compile.
+// On failure, produce an evaluator that never matches.
+static EvalProg build_evaluator_from(const std::string& userExpr) {
+    EvalProg E{};
+
+    const std::string normalized = sqlnorm::sql_to_dottalk_where(userExpr);
+    const std::string cleaned    = strip_line_comments(normalized);
+
+    auto cr = dottalk::expr::compile_where(cleaned);
+    if (!cr) {
+        // Retry on raw cleaned user text
+        const std::string raw_clean = strip_line_comments(userExpr);
+        cr = dottalk::expr::compile_where(raw_clean);
+    }
+
+    if (!cr) {
+        struct AlwaysFalse final : dottalk::expr::Expr {
+            bool eval(const dottalk::expr::RecordView&) const override { return false; }
+        };
+        E.enabled = true;
+        E.prog = std::unique_ptr<dottalk::expr::Expr>(new AlwaysFalse{});
+        return E;
+    }
+
+    E.enabled = true;
+    E.prog = std::move(cr.program);
+    return E;
+}
+
+struct ScanFilter {
+    DelGate del{DelGate::OnlyAlive};
+    bool haveExpr{false};
+    EvalProg E{};
+
+    bool pass_deleted_gate(const xbase::DbArea& a) const {
+        bool isDel = false;
+        try { isDel = a.isDeleted(); } catch (...) { isDel = false; }
+
+        switch (del) {
+            case DelGate::OnlyDeleted: return isDel;
+            case DelGate::Any:         return true;
+            case DelGate::OnlyAlive:
+            default:                   return !isDel;
+        }
+    }
+
+    bool matches(xbase::DbArea& a) const {
+        if (!pass_deleted_gate(a)) return false;
+        if (!haveExpr) return true;
+        return E.eval(a);
+    }
+};
+
+// File-local filter state for the active SCAN.
+static ScanFilter g_scan_filter;
+
+// Parse/compile SCAN options:
+//   SCAN [FOR <expr...>]
+static ScanFilter compile_filter(std::istringstream& iss, bool& hadFor) {
+    ScanFilter f{};
+    hadFor = false;
+
+    // Look for FOR keyword next.
+    std::streampos save = iss.tellg();
+    std::string tok;
+    if (!(iss >> tok)) {
+        // No filter. Default: only alive.
+        return f;
+    }
+
+    if (!textio::ieq(tok, "FOR")) {
+        // Unrecognized trailing text; rewind and treat as no filter.
+        iss.clear();
+        iss.seekg(save);
+        return f;
+    }
+
+    hadFor = true;
+
+    std::string rest;
+    std::getline(iss, rest);
+    rest = trim_copy(rest);
+
+    if (rest.empty()) {
+        // "SCAN FOR" with no expression: match all (alive) records.
+        return f;
+    }
+
+    // Match SMARTLIST shorthands.
+    {
+        const std::string U = up(rest);
+        if (U == "DELETED") {
+            f.del = DelGate::OnlyDeleted;
+            f.haveExpr = false;
+            return f;
+        }
+        if (U == "!DELETED" || U == "~DELETED") {
+            f.del = DelGate::OnlyAlive;
+            f.haveExpr = false;
+            return f;
+        }
+    }
+
+    // Default: alive gate + AST filter
+    f.haveExpr = true;
+    f.E = build_evaluator_from(rest);
+    return f;
+}
+
+static cli::OrderSpec current_order_spec(DbArea& A) {
+    cli::OrderSpec spec{};
+    spec.order_name = cli::orderstate::orderName(A);      // e.g. students.cdx (for envdir derivation)
+    spec.tag_name   = cli::orderstate::activeTag(A);      // e.g. LNAME
+    spec.ascending  = cli::orderstate::isAscending(A);    // ASC/DESC
+    return spec;
+}
+
+} // namespace
+
+// ----------------- commands -----------------
+
+void cmd_SCAN(DbArea& A, std::istringstream& S)
+{
+    auto& st = scanblock::state();
+
+    // Guard: require a table open
+    if (!A.isOpen()) {
+        st.active = false;
+        st.lines.clear();
+        std::cout << "SCAN: no table open in current area.\n";
+        return;
+    }
+
+    st.active = true;
+    st.lines.clear();
+
+    bool hadFor = false;
+    g_scan_filter = compile_filter(S, hadFor);
+
+    std::cout << "SCAN: buffering lines. Type ENDSCAN to execute"
+              << (hadFor ? " (FOR present)." : ".") << "\n";
+}
+
+void cmd_SCAN_BUFFER(DbArea& /*A*/, std::istringstream& S)
+{
+    auto& st = scanblock::state();
+    if (!st.active) return; // ignore if not scanning
+
+    std::string raw;
+    std::getline(S >> std::ws, raw);
+    if (raw.empty()) return;
+    if (is_comment_or_blank(raw)) return;
+
+    st.lines.push_back(raw);
+}
+
+void cmd_ENDSCAN(DbArea& A, std::istringstream& /*S*/)
+{
+    auto& st = scanblock::state();
+    if (!st.active) {
+        std::cout << "No active SCAN.\n";
+        return;
+    }
+
+    // Snapshot and reset state before executing to tolerate nested effects
+    std::vector<std::string> lines = st.lines;
+    ScanFilter filter = std::move(g_scan_filter);
+
+    st.active = false;
+    st.lines.clear();
+    g_scan_filter = ScanFilter{};
+
+    int nrecs = 0;
+    try { nrecs = A.recCount(); } catch (...) { nrecs = 0; }
+
+    int matched = 0;
+    int iterations = 0;
+
+    auto exec_body = [&](DbArea& area) {
+        // Execute each buffered command line against current record
+        for (const auto& raw : lines) {
+            std::string trimmed = textio::trim(raw);
+            if (trimmed.empty()) continue;
+
+            std::istringstream li(trimmed);
+            std::string cmd;
+            li >> cmd;
+            if (cmd.empty()) continue;
+
+            const std::string U = up(cmd);
+            if (!dli::registry().run(area, U, li)) {
+                std::cout << "Unknown command in SCAN: " << cmd << "\n";
+            }
+        }
+        std::cout.flush();
+    };
+
+    auto visit_recno = [&](int recno) -> bool {
+        try {
+            if (!A.gotoRec(recno)) return true;
+            if (!A.readCurrent())  return true;
+        } catch (...) {
+            return true;
+        }
+
+        // Keep related children in sync if auto-refresh is enabled.
+        relations_api::refresh_if_enabled();
+
+        bool ok = false;
+        try { ok = filter.matches(A); } catch (...) { ok = false; }
+        if (!ok) return true;
+
+        ++matched;
+        ++iterations;
+        exec_body(A);
+        return true;
+    };
+
+    const bool has_order = cli::orderstate::hasOrder(A);
+
+    if (has_order) {
+        const cli::OrderSpec spec = current_order_spec(A);
+
+        bool iter_ok = true;
+        try {
+            iter_ok = cli::order_iterate_recnos(A, spec, visit_recno);
+        } catch (...) {
+            iter_ok = false;
+        }
+
+        if (!iter_ok) {
+            // Safe fallback: natural scan if order traversal fails.
+            for (int r = 1; r <= nrecs; ++r) {
+                visit_recno(r);
+            }
+        }
+    } else {
+        for (int r = 1; r <= nrecs; ++r) {
+            visit_recno(r);
+        }
+    }
+
+    std::cout << "ENDSCAN: " << matched << " match(es), " << iterations << " iteration(s).\n";
+}

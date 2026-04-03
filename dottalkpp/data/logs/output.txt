@@ -1,0 +1,3683 @@
+. * ============================================================
+. * MCC_EXHAUSTIVE_FULL_REGRESSION_CANARIES.DTS  (REVISED)
+. *
+. * Key fixes vs prior:
+. * - CTOD/DTOC/DATEADD/DATEDIFF: command forms use constants; nested ops use CALC.
+. * - Hyphenated CTOD unquoted is a NEGATIVE canary (expect clean error).
+. * - Destructive ops moved to MANUAL / gated off.
+. * - DOTSCRIPT now runs a generated tmp script (not bare usage).
+. *
+. * RULES:
+. * - CALC comparisons (= <> <= >= < >) must be wrapped in parentheses.
+. * - Quotes required for values with spaces; optional otherwise.
+. * - Only TUPLE is table-buffer aware for display; LIST/SMARTLIST/browsers show DBF data.
+. * - TOP/BOTTOM/SKIP are order-aware (PHYSICAL, CNX, INX). Use SETORDER/SETINDEX as the clue.
+. * - Record/area probes matter: some commands restore cursor; LIST executes its own action.
+. *
+. * ASCII ONLY. Inline comments use '*'.
+. * ============================================================
+.
+. SET ECHO ON
+Echo is ON
+. ECHO ===== EXHAUSTIVE FULL REGRESSION START =====
+===== EXHAUSTIVE FULL REGRESSION START =====
+. COLOR DEFAULT
+COLOR set to DEFAULT (LightGray/Black)
+. VERSION
+dottalk++ alpha-v9.1  (Feb 15 2026 10:59:54)
+DotTalk++ build Feb 15 2026 10:59:54
+.
+. ECHO ===== HELP / CATALOG SANITY =====
+===== HELP / CATALOG SANITY =====
+. HELP
+HELP - Unified Help Router
+
+USAGE
+  HELP [<term>]
+  HELP /FOX <term>
+  HELP /PRED
+  HELP BUILD
+  HELP GIANT
+  HELP BETA [<id>]
+
+BEHAVIOR
+  ? HELP <term>     Shows Fox help for <term> only (no giant local table).
+  ? HELP /FOX <t>   Same as above, explicit Fox path.
+  ? HELP /PRED      Predicate operators & examples.
+  ? HELP BUILD      Rebuild local help tables (CMDHELP BUILD).
+  ? HELP GIANT      Full local command catalog (legacy view).
+  ? HELP BETA       Road-to-Beta checklist (compile-time).
+
+TIPS
+  Examples:  HELP LIST   |  HELP /FOX INDEX   |  HELP BETA   |  HELP BETA BETA-3.1
+. PREDHELP
+Predicate help (COUNT/LOCATE)
+
+Syntax:
+  COUNT [ALL|DELETED] [FOR <field> <op> <value>]
+  LOCATE [FOR <field> <op> <value>]
+
+Operators:
+  Strings:   =  !=  $ (substring)
+  Numbers:   =  !=  >  >=  <  <=
+  Dates:     use YYYYMMDD (e.g., DOB >= 20000101)
+  Booleans:  =  !=  (T/F, .T./.F., TRUE/FALSE, 1/0)
+
+Case:
+  SETCASE OFF  (default) => string compares are case-insensitive
+  SETCASE ON             => string compares are case-sensitive
+
+Functions (left side):
+  UPPER(field) / LOWER(field)
+    e.g., COUNT FOR UPPER(LAST_NAME) $ "MIT"
+          COUNT FOR LOWER(LAST_NAME) = "smith"
+
+Inline comments:
+  Use && to comment the rest of the line.
+
+Examples:
+  COUNT FOR LAST_NAME = "Smith"
+  COUNT FOR LAST_NAME $ "MIT"
+  COUNT FOR GPA >= 3
+  COUNT FOR DOB >= 20000101
+  COUNT FOR IS_ACTIVE = .T.
+  LOCATE FOR UPPER(LAST_NAME) = "SMITH"
+. PREDICATES
+Predicate help (COUNT/LOCATE)
+
+Syntax:
+  COUNT [ALL|DELETED] [FOR <field> <op> <value>]
+  LOCATE [FOR <field> <op> <value>]
+
+Operators:
+  Strings:   =  !=  $ (substring)
+  Numbers:   =  !=  >  >=  <  <=
+  Dates:     use YYYYMMDD (e.g., DOB >= 20000101)
+  Booleans:  =  !=  (T/F, .T./.F., TRUE/FALSE, 1/0)
+
+Case:
+  SETCASE OFF  (default) => string compares are case-insensitive
+  SETCASE ON             => string compares are case-sensitive
+
+Functions (left side):
+  UPPER(field) / LOWER(field)
+    e.g., COUNT FOR UPPER(LAST_NAME) $ "MIT"
+          COUNT FOR LOWER(LAST_NAME) = "smith"
+
+Inline comments:
+  Use && to comment the rest of the line.
+
+Examples:
+  COUNT FOR LAST_NAME = "Smith"
+  COUNT FOR LAST_NAME $ "MIT"
+  COUNT FOR GPA >= 3
+  COUNT FOR DOB >= 20000101
+  COUNT FOR IS_ACTIVE = .T.
+  LOCATE FOR UPPER(LAST_NAME) = "SMITH"
+. FOXHELP
+FoxPro-style commands (subset):
+  USE          - Open a DBF in a work area.
+  CLOSE        - Close the current work area or close all open tables (FoxPro: CLOSE TABLES/DATABASES/ALL).
+  SELECT       - Select the active work area by number or alias.
+  AREA         - Report or set the current work area slot.
+  DBAREA       - Report or inspect the current DbArea/workspace (diagnostics).
+  STATUS       - Display area status.
+  STRUCT       - Display table structure.
+  FIELDS       - Show structure (field list).
+  TOP          - Go to first record.
+  BOTTOM       - Go to last record.
+  GOTO         - Go to record number.
+  SKIP         - Move the record pointer forward/backward by <nRecords> (default 1).
+  RECNO        - Return the current record number.
+  INDEX        - Create an index on an expression (FoxPro syntax; CDX via TAG/OF, IDX via TO).
+  SET ORDER    - Set controlling index tag (compatibility form; see SETORDER).
+  SETORDER     - Set controlling order/tag for the current area (or PHYSICAL for natural order).
+  SET INDEX    - Attach/activate a single-tag INX index (base name).
+  SETINDEX     - Activate an index for the area (DotTalk++ convenience wiring).
+  REINDEX      - Rebuild index files for the current table (or all open tables).
+  CNX          - Index container command (CNX multi-tag support).
+  SETCNX       - Attach/activate a CNX container for the current area.
+  FIND         - Find a value in the current order/index (FoxPro: FIND).
+  SEEK         - Seek an exact match using the current index/order.
+  INDEXSEEK    - Seek using the active index/order (DotTalk++ seek wiring).
+  LIST         - List records with optional field selection and filtering (default skips DELETED unless DELETED/ALL is specified).
+  DISPLAY      - Display the current record (optionally selected fields).
+  COUNT        - Count matching records; optionally store the result to a variable.
+  LOCATE       - Locate the first record matching a predicate/filter.
+  WHERE        - Apply an SQL-like filter to the current context.
+  SETFILTER    - Set a filter expression (DotTalk++ variant).
+  CLEAR        - Clear current state (filters/orders/relations) depending on context.
+  SETCASE      - Control case-sensitivity / collation mode for comparisons.
+  PREDHELP     - Help for predicates/expressions and filtering.
+  PREDICATES   - List supported predicates/operators for filtering.
+  SMARTLIST    - LIST-style output with SQL-grade filtering (order-aware).
+
+Examples:
+    SMARTLIST 20 FOR gpa >= 3.5
+    SMARTLIST ALL FOR lname LIKE "SMI%"
+
+Notes:
+    Evaluates filters using the expression/predicate pipeline.
+  APPEND       - Append a new record (interactive in future).
+  APPEND_BLANK - Append a blank record to the current table/work area. (FoxPro equivalent: APPEND BLANK)
+  APPEND BLANK - Append blank record (compatibility alias). [unsupported]
+  REPLACE      - Replace a field value with an expression (optionally across records).
+  EDIT         - Edit a field/value interactively (where supported).
+  DELETE       - Mark record(s) deleted.
+  RECALL       - Un-delete record(s).
+  UNDELETE     - Un-delete (recall) the current record or selection.
+  PACK         - Permanently remove deleted rows (see notes).
+  ZAP          - Remove all records.
+  TABLE        - Table buffering / stale tracking.
+
+Subcommands:
+    TABLE ON
+        Enable table buffering for the current area. REPLACE writes into a per-field buffer and
+        marks fields STALE instead of immediately writing to disk.
+
+    TABLE OFF
+        Disable buffering. REPLACE writes directly to disk (no buffering).
+
+    TABLE STALE
+        Show which fields are currently stale (buffered) for the current area.
+
+    TABLE FRESH [ALL|<n>|<n>,<m>]
+        Apply buffered updates to disk and clear stale flags on success.
+        (Scope forms depend on build; ALL / area lists were previously supported.)
+
+Notes:
+    - In current shakedown observations, LIST output reflects the physical record, not buffered overlays.
+    - Some builds may not recognize TABLE REFRESH; prefer TABLE FRESH.
+  COMMIT       - Commit buffered TABLE updates to disk.
+
+Notes (current shakedown observations):
+    - Clears TABLE stale state on success.
+    - May currently trigger full INX rebuild work as part of the commit path (performance issue).
+  ROLLBACK     - Discard buffered TABLE updates (planned; not confirmed in current shakedown runs). [unsupported]
+  EXPORT       - Export to CSV.
+  IMPORT       - Import from CSV.
+  COPY         - Copy a file to a new location (FoxPro: COPY FILE ... TO ...).
+  DIR          - List directory contents.
+  ERASE        - Delete file(s) matching <filespec> (FoxPro: ERASE).
+  SETPATH      - Manage runtime root directories.
+
+Usage:
+    SETPATH
+        Show current roots.
+
+    SETPATH RESET
+        Restore defaults (based on DATA root).
+
+    SETPATH <SLOT> <path>
+        Set a root slot to absolute(path). If <path> is relative, it is resolved under DATA.
+
+Slots:
+    DATA, DBF, INDEXES, SCHEMAS, SCRIPTS, TESTS, HELP, LOGS, TMP
+
+Notes:
+    Used so HELP/TESTS/etc. can be moved without requiring full paths.
+  SCHEMAS      - Bulk-open DBFs into consecutive work areas.
+
+Usage:
+    SCHEMAS
+        Report current workspace contents (where implemented).
+
+    SCHEMAS CLOSE
+        Close all work areas and clear relations state.
+
+    SCHEMAS OPEN DBF
+        Scan the configured DBF root and open tables into areas 0..N.
+
+    SCHEMAS OPEN <dir>
+        Scan a specific directory and open DBFs into areas 0..N.
+
+Notes:
+    Intended for dataset bring-up and browser sessions.
+  REL          - Relations engine commands.
+
+Subcommands:
+    REL LIST
+    REL REFRESH
+    REL ENUM               (traverse relationships; see engine notes)
+    REL SAVE [path] | REL SAVE AS <dataset>
+    REL LOAD [path] | REL LOAD AS <dataset>
+    REL ADD <parent> <child> ON <field>
+    REL CLEAR <parent>|ALL
+
+Examples:
+    REL LIST
+    REL ADD STUDENTS ENROLL ON SID
+    REL REFRESH
+
+Notes:
+    This is the modern relations layer used by tuple browsing.
+    Shakedown notes reference REL ENUM/JOIN traversal; update as those subcommands stabilize.
+  TUPLE        - Build one tuple row from fields across work areas.
+
+Examples:
+    TUPLE *                    (all fields from current area)
+    TUPLE LNAME,FNAME          (selected fields from current area)
+    TUPLE #11.*                (all fields from area 11)
+    TUPLE #9.*,#11.LNAME       (mix of areas)
+
+Notes:
+    #n prefixes a work area slot; "*" means all fields for that area.
+    Output fields are separated by ASCII Unit Separator (0x1F).
+  TUPTALK      - DotTalk++ tuple/logical-row command.
+  FOXTALK      - Launch the Turbo Vision (FoxPro-style) TUI shell.
+
+Example:
+    FOXTALK
+
+Notes:
+    Intended for keyboard-driven browsing and diagnostics.
+    Exits back to the DotTalk++ CLI.
+  BROWSE       - Table browser (FoxPro). [unsupported]
+  BROWSETUI    - Text-mode browser UI (developer tool).
+  BROWSETV     - Turbo Vision browser UI (developer tool).
+  BROWSER      - Developer browser command (experimental).
+  RECORDVIEW   - Vertical record viewer.
+  SIMPLEBROWSER - SIMPLEBROWSER  (SB)
+NAME
+    SIMPLEBROWSER
+
+ALIASES
+    SB
+
+PURPOSE
+    Workspace/DbArea-centric interactive browser for table relationships and logical rows.
+
+SYNTAX
+    SIMPLEBROWSER [FOR <expr>] [ORDER <tag>|PHYSICAL] [LIMIT <n>]
+
+OPTIONS / SUBCOMMANDS
+    FOR <expr>           Apply a filter expression (tuple/expr aware).
+    CLEAR FOR            Clear active filter.
+    ORDER PHYSICAL|INX|CNX|<tag>   Change controlling order/tag.
+    SHOW CHILDREN [LIMIT n]        Browse related child rows from current record.
+    SHOW|HIDE SCHEMA|JSON          Toggle schema/JSON debug overlays.
+    STATUS VERBOSE|COMPACT         Toggle status verbosity.
+
+EXAMPLES
+    SIMPLEBROWSER
+    SB FOR lname = "GRIMWOOD"
+    SB ORDER LNAME
+    SB SHOW CHILDREN LIMIT 20
+
+NOTES
+    Simple Browser is designed for browsing within the current workspace DbArea.
+    It is order-aware and expression/predicate aware.
+
+SEE ALSO
+    SMARTBROWSER, SMARTLIST, REL, TUPLE, SCHEMAS
+
+STATUS
+    stable
+
+  SB           - Alias for SIMPLEBROWSER.
+  SMARTBROWSER - SMARTBROWSER  (SM, SMART)
+NAME
+    SMARTBROWSER
+
+ALIASES
+    SM, SMART
+
+PURPOSE
+    Advanced browser/workhorse for relational + expression-aware browsing across backends.
+
+SYNTAX
+    SMARTBROWSER [<source>] [FOR <expr>] [ORDER <tag>|PHYSICAL]
+
+OPTIONS / SUBCOMMANDS
+    <source>             Optional source (DbArea/workspace, SQLite3, or schema engine where available).
+    FOR <expr>           Apply an expression filter using the predicate pipeline.
+    ORDER <tag>|PHYSICAL Set controlling order/tag when browsing DbArea-backed sources.
+
+EXAMPLES
+    SMARTBROWSER
+    SM FOR gpa >= 3.5
+    SMART ORDER LNAME
+
+NOTES
+    Smart Browser is the flagship browser. It can operate with DbArea/workspaces and,
+    when configured, can also operate with SQLite3 and schema-driven sources.
+
+SEE ALSO
+    SIMPLEBROWSER, SMARTLIST, SCHEMAS, SQLITE, REL, TUPLE
+
+STATUS
+    stable
+
+  SMART        - Alias for SMARTBROWSER.
+  SM           - Alias for SMARTBROWSER.
+  COLOR        - Switch CLI/TUI color theme.
+
+Examples:
+    COLOR GREEN
+    COLOR G+
+    COLOR AMBER
+    COLOR DEFAULT
+
+Notes:
+    Used by FOXTALK/Turbo Vision palette wiring.
+  TVISION      - Turbo Vision diagnostics / demos.
+  TURBOPACK    - Turbo Vision / pack-related utility.
+  FOXPRO       - DotTalk++ UI / browser command.
+  HELP         - General help entry point (supports /FOX and /PRED views).
+  FOXHELP      - List or search command help topics.
+
+Examples:
+    FOXHELP
+    FOXHELP SCHEMAS
+    FOXHELP REL
+
+Notes:
+    Uses the help catalogs and any HELP DBFs.
+  CMDHELP      - Build / report the HELP command catalogs.
+
+Examples:
+    CMDHELP BUILD
+    CH               (alias report, if enabled)
+
+Notes:
+    Mines command registry + foxref + optional DBF help sources.
+  COMMANDSHELP - Command help (alias of CMDHELP).
+  CMDHELPCHK   - Validate HELP catalogs vs the command registry.
+  CMDARGCHK    - Validate command argument parsing and report issues.
+  WSREPORT     - Workspace report / diagnostics.
+  SHOW         - Show internal engine state / debug views.
+  DUMP         - Debug: print a structured dump of an internal value/state.
+  VERSION      - Print build/version information.
+  DOTSCRIPT    - Run a DotTalk script file (test harness / automation).
+
+Example:
+    DOTSCRIPT run_all_sql_tests.dts
+  TEST         - DotTalk++ scripting/test harness command.
+  GO           - Execute a DotTalk++ command line (dispatch to command handlers).
+  SCAN         - Iterate records using a SCAN block (record loop).
+  ENDSCAN      - End a SCAN block.
+  CONTINUE     - Continue a running loop/scan block (scripting control flow).
+  LOOP         - Begin a LOOP block (scripting).
+  ENDLOOP      - End a LOOP block (scripting).
+  WHILE        - Begin a WHILE block (scripting).
+  ENDWHILE     - End a WHILE block (scripting control flow).
+  UNTIL        - Begin an UNTIL block (scripting).
+  ENDUNTIL     - End an UNTIL block (scripting).
+  IF           - Conditional execution block: IF ... [ELSE] ... ENDIF. [unsupported]
+  ELSE         - Optional ELSE branch for an IF block. [unsupported]
+  ENDIF        - End an IF block. [unsupported]
+  SET VAR      - Set or show a macro variable (used by &name expansion in scripts).
+  SET VAR!     - Force-set a macro variable (variant used in some scripts).
+  CALC         - Evaluate an expression and display the result.
+
+Important parsing note:
+    In current DotTalk++ behavior, if the expression contains operators like =, >=, <=,
+    it should be wrapped in parentheses to avoid being parsed as CALCWRITE syntax.
+
+Examples:
+    CALC 1 + 2
+    CALC (UPPER("a") = "A")     && safe
+    CALC UPPER("a") = "A"       && may be parsed as CALCWRITE
+
+Notes:
+    Quoted strings containing '=' are treated as literals and should not trigger CALCWRITE.
+  CALCWRITE    - Evaluate an expression and write the result to a target (see command usage).
+  EVAL         - Evaluate an expression and print its value.
+  FORMULA      - Evaluate/print an expression (FoxPro-style ? / ?? shortcut).
+  CONCAT       - Concatenate string arguments. (Available as CALC function; also usable as a command where wired.)
+  SQLITE       - SQLite integration.
+
+Examples:
+    SQLITE DB data\sql_regression.sqlite
+    SQLITE EXEC CREATE TABLE t(x INT)
+    SQLITE EXEC INSERT INTO t(x) VALUES (1)
+    SQLITE SELECT * FROM t
+
+Notes:
+    Used for regression testing and DBFâ†”SQL bridging experiments.
+  SQLVER       - Report SQLite availability and version.
+  SQL          - Execute an SQL statement using the configured SQL engine.
+  SQLSEL       - Execute an SQL SELECT and display results.
+  INSERT       - Insert data rows (scripting/SQL helper; see command usage).
+  UPDATE       - Update data rows (scripting/SQL helper; see command usage).
+  ALLTRIM      - Remove leading and trailing spaces from <cExpression>.
+  TRIM         - Remove trailing spaces from <cExpression> (alias/compat; see RTRIM).
+  LTRIM        - Remove leading spaces from <cExpression>.
+  RTRIM        - Remove trailing spaces from <cExpression>.
+  UPPER        - Convert <cExpression> to upper-case.
+  LOWER        - Convert <cExpression> to lower-case.
+  LEFT         - Return the left-most <nChars> characters of <cExpression>.
+  RIGHT        - Return the right-most <nChars> characters of <cExpression>.
+  SUBSTR       - Return substring of <cExpr> starting at <nStart> for <nLen> characters (or to end).
+  LEN          - Return the length (character count) of <cExpression>.
+  AT           - Return the 1-based position of <cSearch> within <cExpression> (case-sensitive).
+  ATC          - Return the 1-based position of <cSearch> within <cExpression> (case-insensitive).
+  STUFF        - Replace <nLen> characters of <cExpr> starting at <nStart> with <cRepl>.
+  CHR          - Convert an integer ASCII code (0-255) to a 1-character string.
+  ASC          - Return the ASCII code (0-255) of the first character of <cExpression>.
+  SPACE        - Return a character string containing <nSpaces> spaces.
+  REPLICATE    - Repeat <cExpression> <nTimes> times.
+  STR          - Convert numeric <nExpr> to a character string (optionally controlling width/decimals).
+  VAL          - Convert a numeric-looking character expression to a number.
+  PADL         - Left-pad to length <nLen>.
+  PADR         - Right-pad to length <nLen>.
+  PADC         - Center-pad to length <nLen>.
+  PROPER       - Convert <cExpression> to Proper Case (title case).
+  TRANSFORM    - Format <eExpr> as a string using an optional picture/mask.
+  DATE         - Return the current system date.
+  TIME         - Return the current system time as a character string (HH:MM:SS).
+  CTOD         - Convert a character date to a Date value using current SET DATE/SET CENTURY.
+  DTOC         - Convert a Date value to a character string using current SET DATE/SET CENTURY.
+  SUM          - Sum a numeric expression over a record set.
+  AVERAGE      - Compute the average of a numeric expression over a record set.
+  AVG          - Alias for AVERAGE (xBase compatibility).
+  MIN          - Return the smaller of <e1> and <e2> (aggregate MIN typically via SQL/CALC).
+  MAX          - Return the larger of <e1> and <e2> (aggregate MAX typically via SQL/CALC).
+  ECHO         - Print text to the console.
+  !            - Alias for BANG (execute an OS command).
+  BANG         - Execute an OS command (shell escape).
+  RUN          - Run an OS command (FoxPro). [unsupported]
+  DO           - Execute a program. (Use DOTSCRIPT instead.) [unsupported]
+  SCHEMA       - Schema architect / schema engine command family.
+  VALIDATE     - Schema/sidecar validation command.
+  AREA51       - Developer sandbox / experimental command.
+  GENERIC      - Developer utility placeholder command.
+  NORMALIZE    - Normalize/clean an input expression or text (developer utility).
+  RECORD       - Display or return the current record context (utility).
+  LOCK         - Lock the current record (or table) for editing.
+  UNLOCK       - Release a previously acquired lock (optionally all locks).
+  REFRESH      - Refresh internal state / UI view (where applicable).
+  MULTIREP     - Perform multiple replace operations in one pass (text transform).
+  ASCEND       - Set ascending sort direction for the active order/tag.
+  DESCEND      - Set descending sort direction for the active order/tag.
+Tip: FOXHELP <NAME> for details, e.g. FOXHELP INDEX
+. FOXHELP SCHEMA
+SCHEMA
+  SCHEMA [args...]
+  Schema architect / schema engine command family.
+. FOXHELP REL
+REL
+  REL <subcommand> ...
+  Relations engine commands.
+
+Subcommands:
+    REL LIST
+    REL REFRESH
+    REL ENUM               (traverse relationships; see engine notes)
+    REL SAVE [path] | REL SAVE AS <dataset>
+    REL LOAD [path] | REL LOAD AS <dataset>
+    REL ADD <parent> <child> ON <field>
+    REL CLEAR <parent>|ALL
+
+Examples:
+    REL LIST
+    REL ADD STUDENTS ENROLL ON SID
+    REL REFRESH
+
+Notes:
+    This is the modern relations layer used by tuple browsing.
+    Shakedown notes reference REL ENUM/JOIN traversal; update as those subcommands stabilize.
+. CMDHELP
+CMDHELP Report (last CMDHELP BUILD): 187 command rows, 822 arg rows -> D:\code\ccode\dottalkpp\data\help
+Switches mined from: (existing DBFs)
+
+Commands (registry U foxref)
+-------------------------------------------------------------
+ID   NAME               IMPLEMENTED  FOXREF     SUMMARY/USAGE
+146  !                  yes          yes        Alias for BANG (execute an OS command).
+166  $                  yes          no         Homegrown command.
+173  AGGS               yes          no         Homegrown command.
+112  ALLTRIM            yes          yes        Remove leading and trailing spaces from <cExpression>.
+36   APPEND             yes          yes        Append a new record (interactive in future).
+37   APPEND_BLANK       yes          yes        Append a blank record to the current table/work area. (FoxPro equivalent: APPEND BLANK)
+4    AREA               yes          yes        Report or set the current work area slot.
+152  AREA51             yes          yes        Developer sandbox / experimental command.
+126  ASC                yes          yes        Return the ASCII code (0-255) of the first character of <cExpression>.
+160  ASCEND             yes          yes        Set ascending sort direction for the active order/tag.
+122  AT                 yes          yes        Return the 1-based position of <cSearch> within <cExpression> (case-sensitive).
+123  ATC                yes          yes        Return the 1-based position of <cSearch> within <cExpression> (case-insensitive).
+141  AVERAGE            yes          yes        Compute the average of a numeric expression over a record set.
+142  AVG                yes          yes        Alias for AVERAGE (xBase compatibility).
+147  BANG               yes          yes        Execute an OS command (shell escape).
+179  BOOLEAN            yes          no         Homegrown command.
+10   BOTTOM             yes          yes        Go to last record.
+60   BROWSE             yes          no         Table browser (FoxPro).
+63   BROWSER            yes          yes        Developer browser command (experimental).
+61   BROWSETUI          yes          yes        Text-mode browser UI (developer tool).
+62   BROWSETV           yes          yes        Turbo Vision browser UI (developer tool).
+101  CALC               yes          yes        Evaluate an expression and display the result.
+
+Important parsing note:
+    In current DotTalk++ behavior, if the expression contains operators like =, >=, <=,
+    it should be wrapped in parentheses to avoid being parsed as CALCWRITE syntax.
+
+Examples:
+    CALC 1 + 2
+    CALC (UPPER("a") = "A")     && safe
+    CALC UPPER("a") = "A"       && may be parsed as CALCWRITE
+
+Notes:
+    Quoted strings containing '=' are treated as literals and should not trigger CALCWRITE.
+102  CALCWRITE          yes          yes        Evaluate an expression and write the result to a target (see command usage).
+125  CHR                yes          yes        Convert an integer ASCII code (0-255) to a 1-character string.
+31   CLEAR              yes          yes        Clear current state (filters/orders/relations) depending on context.
+2    CLOSE              yes          yes        Close the current work area or close all open tables (FoxPro: CLOSE TABLES/DATABASES/ALL).
+79   CMDARGCHK          yes          yes        Validate command argument parsing and report issues.
+76   CMDHELP            yes          yes        Build / report the HELP command catalogs.
+
+Examples:
+    CMDHELP BUILD
+    CH               (alias report, if enabled)
+
+Notes:
+    Mines command registry + foxref + optional DBF help sources.
+78   CMDHELPCHK         yes          yes        Validate HELP catalogs vs the command registry.
+185  CMDREL             yes          no         Homegrown command.
+20   CNX                yes          yes        Index container command (CNX multi-tag support).
+70   COLOR              yes          yes        Switch CLI/TUI color theme.
+
+Examples:
+    COLOR GREEN
+    COLOR G+
+    COLOR AMBER
+    COLOR DEFAULT
+
+Notes:
+    Used by FOXTALK/Turbo Vision palette wiring.
+77   COMMANDSHELP       yes          yes        Command help (alias of CMDHELP).
+47   COMMIT             yes          yes        Commit buffered TABLE updates to disk.
+
+Notes (current shakedown observations):
+    - Clears TABLE stale state on success.
+    - May currently trigger full INX rebuild work as part of the commit path (performance issue).
+105  CONCAT             yes          yes        Concatenate string arguments. (Available as CALC function; also usable as a command where wired.)
+89   CONTINUE           yes          yes        Continue a running loop/scan block (scripting control flow).
+51   COPY               yes          yes        Copy a file to a new location (FoxPro: COPY FILE ... TO ...).
+27   COUNT              yes          yes        Count matching records; optionally store the result to a variable.
+178  CREATE             yes          no         Homegrown command.
+138  CTOD               yes          yes        Convert a character date to a Date value using current SET DATE/SET CENTURY.
+136  DATE               yes          yes        Return the current system date.
+165  DATEADD            yes          no         Homegrown command.
+170  DATEDIFF           yes          no         Homegrown command.
+164  DATETIME           yes          no         Homegrown command.
+5    DBAREA             yes          yes        Report or inspect the current DbArea/workspace (diagnostics).
+181  DBAREAS            yes          no         Homegrown command.
+41   DELETE             yes          yes        Mark record(s) deleted.
+161  DESCEND            yes          yes        Set descending sort direction for the active order/tag.
+52   DIR                yes          yes        List directory contents.
+26   DISPLAY            yes          yes        Display the current record (optionally selected fields).
+84   DOTSCRIPT          yes          yes        Run a DotTalk script file (test harness / automation).
+
+Example:
+    DOTSCRIPT run_all_sql_tests.dts
+139  DTOC               yes          yes        Convert a Date value to a character string using current SET DATE/SET CENTURY.
+82   DUMP               yes          yes        Debug: print a structured dump of an internal value/state.
+145  ECHO               yes          yes        Print text to the console.
+40   EDIT               yes          yes        Edit a field/value interactively (where supported).
+97   ELSE               yes          no         Optional ELSE branch for an IF block.
+98   ENDIF              yes          no         End an IF block.
+91   ENDLOOP            yes          yes        End a LOOP block (scripting).
+88   ENDSCAN            yes          yes        End a SCAN block.
+95   ENDUNTIL           yes          yes        End an UNTIL block (scripting).
+93   ENDWHILE           yes          yes        End a WHILE block (scripting control flow).
+53   ERASE              yes          yes        Delete file(s) matching <filespec> (FoxPro: ERASE).
+103  EVAL               yes          yes        Evaluate an expression and print its value.
+49   EXPORT             yes          yes        Export to CSV.
+8    FIELDS             yes          yes        Show structure (field list).
+22   FIND               yes          yes        Find a value in the current order/index (FoxPro: FIND).
+104  FORMULA            yes          yes        Evaluate/print an expression (FoxPro-style ? / ?? shortcut).
+75   FOXHELP            yes          yes        List or search command help topics.
+
+Examples:
+    FOXHELP
+    FOXHELP SCHEMAS
+    FOXHELP REL
+
+Notes:
+    Uses the help catalogs and any HELP DBFs.
+73   FOXPRO             yes          yes        DotTalk++ UI / browser command.
+59   FOXTALK            yes          yes        Launch the Turbo Vision (FoxPro-style) TUI shell.
+
+Example:
+    FOXTALK
+
+Notes:
+    Intended for keyboard-driven browsing and diagnostics.
+    Exits back to the DotTalk++ CLI.
+153  GENERIC            yes          yes        Developer utility placeholder command.
+86   GO                 yes          yes        Execute a DotTalk++ command line (dispatch to command handlers).
+11   GOTO               yes          yes        Go to record number.
+74   HELP               yes          yes        General help entry point (supports /FOX and /PRED views).
+96   IF                 yes          no         Conditional execution block: IF ... [ELSE] ... ENDIF.
+50   IMPORT             yes          yes        Import from CSV.
+14   INDEX              yes          yes        Create an index on an expression (FoxPro syntax; CDX via TAG/OF, IDX via TO).
+24   INDEXSEEK          yes          yes        Seek using the active index/order (DotTalk++ seek wiring).
+186  INIT               yes          no         Homegrown command.
+110  INSERT             yes          yes        Insert data rows (scripting/SQL helper; see command usage).
+118  LEFT               yes          yes        Return the left-most <nChars> characters of <cExpression>.
+121  LEN                yes          yes        Return the length (character count) of <cExpression>.
+168  LIKE               yes          no         Homegrown command.
+25   LIST               yes          yes        List records with optional field selection and filtering (default skips DELETED unless DELETED/ALL is specified).
+28   LOCATE             yes          yes        Locate the first record matching a predicate/filter.
+156  LOCK               yes          yes        Lock the current record (or table) for editing.
+90   LOOP               yes          yes        Begin a LOOP block (scripting).
+183  LOOP_BUFFER        yes          no         Homegrown command.
+117  LOWER              yes          yes        Convert <cExpression> to lower-case.
+114  LTRIM              yes          yes        Remove leading spaces from <cExpression>.
+144  MAX                yes          yes        Return the larger of <e1> and <e2> (aggregate MAX typically via SQL/CALC).
+143  MIN                yes          yes        Return the smaller of <e1> and <e2> (aggregate MIN typically via SQL/CALC).
+159  MULTIREP           yes          yes        Perform multiple replace operations in one pass (text transform).
+154  NORMALIZE          yes          yes        Normalize/clean an input expression or text (developer utility).
+162  NOW                yes          no         Homegrown command.
+44   PACK               yes          yes        Permanently remove deleted rows (see notes).
+133  PADC               yes          yes        Center-pad to length <nLen>.
+131  PADL               yes          yes        Left-pad to length <nLen>.
+132  PADR               yes          yes        Right-pad to length <nLen>.
+33   PREDHELP           yes          yes        Help for predicates/expressions and filtering.
+34   PREDICATES         yes          yes        List supported predicates/operators for filtering.
+134  PROPER             yes          yes        Convert <cExpression> to Proper Case (title case).
+163  REBUILD            yes          no         Homegrown command.
+42   RECALL             yes          yes        Un-delete record(s).
+13   RECNO              yes          yes        Return the current record number.
+155  RECORD             yes          yes        Display or return the current record context (utility).
+64   RECORDVIEW         yes          yes        Vertical record viewer.
+158  REFRESH            yes          yes        Refresh internal state / UI view (where applicable).
+19   REINDEX            yes          yes        Rebuild index files for the current table (or all open tables).
+56   REL                yes          yes        Relations engine commands.
+
+Subcommands:
+    REL LIST
+    REL REFRESH
+    REL ENUM               (traverse relationships; see engine notes)
+    REL SAVE [path] | REL SAVE AS <dataset>
+    REL LOAD [path] | REL LOAD AS <dataset>
+    REL ADD <parent> <child> ON <field>
+    REL CLEAR <parent>|ALL
+
+Examples:
+    REL LIST
+    REL ADD STUDENTS ENROLL ON SID
+    REL REFRESH
+
+Notes:
+    This is the modern relations layer used by tuple browsing.
+    Shakedown notes reference REL ENUM/JOIN traversal; update as those subcommands stabilize.
+175  RELATIONS          yes          no         Homegrown command.
+176  REL_LIST           yes          no         Homegrown command.
+177  REL_REFRESH        yes          no         Homegrown command.
+39   REPLACE            yes          yes        Replace a field value with an expression (optionally across records).
+128  REPLICATE          yes          yes        Repeat <cExpression> <nTimes> times.
+119  RIGHT              yes          yes        Return the right-most <nChars> characters of <cExpression>.
+48   ROLLBACK           yes          no         Discard buffered TABLE updates (planned; not confirmed in current shakedown runs).
+115  RTRIM              yes          yes        Remove trailing spaces from <cExpression>.
+87   SCAN               yes          yes        Iterate records using a SCAN block (record loop).
+182  SCAN_BUFFER        yes          no         Homegrown command.
+150  SCHEMA             yes          yes        Schema architect / schema engine command family.
+55   SCHEMAS            yes          yes        Bulk-open DBFs into consecutive work areas.
+
+Usage:
+    SCHEMAS
+        Report current workspace contents (where implemented).
+
+    SCHEMAS CLOSE
+        Close all work areas and clear relations state.
+
+    SCHEMAS OPEN DBF
+        Scan the configured DBF root and open tables into areas 0..N.
+
+    SCHEMAS OPEN <dir>
+        Scan a specific directory and open DBFs into areas 0..N.
+
+Notes:
+    Intended for dataset bring-up and browser sessions.
+23   SEEK               yes          yes        Seek an exact match using the current index/order.
+3    SELECT             yes          yes        Select the active work area by number or alias.
+171  SET                yes          no         Homegrown command.
+174  SET RELATION       yes          no         Homegrown command.
+172  SET UNIQUE         yes          no         Homegrown command.
+32   SETCASE            yes          yes        Control case-sensitivity / collation mode for comparisons.
+21   SETCNX             yes          yes        Attach/activate a CNX container for the current area.
+30   SETFILTER          yes          yes        Set a filter expression (DotTalk++ variant).
+18   SETINDEX           yes          yes        Activate an index for the area (DotTalk++ convenience wiring).
+16   SETORDER           yes          yes        Set controlling order/tag for the current area (or PHYSICAL for natural order).
+54   SETPATH            yes          yes        Manage runtime root directories.
+
+Usage:
+    SETPATH
+        Show current roots.
+
+    SETPATH RESET
+        Restore defaults (based on DATA root).
+
+    SETPATH <SLOT> <path>
+        Set a root slot to absolute(path). If <path> is relative, it is resolved under DATA.
+
+Slots:
+    DATA, DBF, INDEXES, SCHEMAS, SCRIPTS, TESTS, HELP, LOGS, TMP
+
+Notes:
+    Used so HELP/TESTS/etc. can be moved without requiring full paths.
+81   SHOW               yes          yes        Show internal engine state / debug views.
+187  SHUTDOWN           yes          no         Homegrown command.
+65   SIMPLEBROWSER      yes          yes        SIMPLEBROWSER  (SB)
+NAME
+    SIMPLEBROWSER
+
+ALIASES
+    SB
+
+PURPOSE
+    Workspace/DbArea-centric interactive browser for table relationships and logical rows.
+
+SYNTAX
+    SIMPLEBROWSER [FOR <expr>] [ORDER <tag>|PHYSICAL] [LIMIT <n>]
+
+OPTIONS / SUBCOMMANDS
+    FOR <expr>           Apply a filter expression (tuple/expr aware).
+    CLEAR FOR            Clear active filter.
+    ORDER PHYSICAL|INX|CNX|<tag>   Change controlling order/tag.
+    SHOW CHILDREN [LIMIT n]        Browse related child rows from current record.
+    SHOW|HIDE SCHEMA|JSON          Toggle schema/JSON debug overlays.
+    STATUS VERBOSE|COMPACT         Toggle status verbosity.
+
+EXAMPLES
+    SIMPLEBROWSER
+    SB FOR lname = "GRIMWOOD"
+    SB ORDER LNAME
+    SB SHOW CHILDREN LIMIT 20
+
+NOTES
+    Simple Browser is designed for browsing within the current workspace DbArea.
+    It is order-aware and expression/predicate aware.
+
+SEE ALSO
+    SMARTBROWSER, SMARTLIST, REL, TUPLE, SCHEMAS
+
+STATUS
+    stable
+
+12   SKIP               yes          yes        Move the record pointer forward/backward by <nRecords> (default 1).
+67   SMARTBROWSER       yes          yes        SMARTBROWSER  (SM, SMART)
+NAME
+    SMARTBROWSER
+
+ALIASES
+    SM, SMART
+
+PURPOSE
+    Advanced browser/workhorse for relational + expression-aware browsing across backends.
+
+SYNTAX
+    SMARTBROWSER [<source>] [FOR <expr>] [ORDER <tag>|PHYSICAL]
+
+OPTIONS / SUBCOMMANDS
+    <source>             Optional source (DbArea/workspace, SQLite3, or schema engine where available).
+    FOR <expr>           Apply an expression filter using the predicate pipeline.
+    ORDER <tag>|PHYSICAL Set controlling order/tag when browsing DbArea-backed sources.
+
+EXAMPLES
+    SMARTBROWSER
+    SM FOR gpa >= 3.5
+    SMART ORDER LNAME
+
+NOTES
+    Smart Browser is the flagship browser. It can operate with DbArea/workspaces and,
+    when configured, can also operate with SQLite3 and schema-driven sources.
+
+SEE ALSO
+    SIMPLEBROWSER, SMARTLIST, SCHEMAS, SQLITE, REL, TUPLE
+
+STATUS
+    stable
+
+35   SMARTLIST          yes          yes        LIST-style output with SQL-grade filtering (order-aware).
+
+Examples:
+    SMARTLIST 20 FOR gpa >= 3.5
+    SMARTLIST ALL FOR lname LIKE "SMI%"
+
+Notes:
+    Evaluates filters using the expression/predicate pipeline.
+184  SORT               yes          no         Homegrown command.
+127  SPACE              yes          yes        Return a character string containing <nSpaces> spaces.
+108  SQL                yes          yes        Execute an SQL statement using the configured SQL engine.
+180  SQLERASE           yes          no         Homegrown command.
+106  SQLITE             yes          yes        SQLite integration.
+
+Examples:
+    SQLITE DB data\sql_regression.sqlite
+    SQLITE EXEC CREATE TABLE t(x INT)
+    SQLITE EXEC INSERT INTO t(x) VALUES (1)
+    SQLITE SELECT * FROM t
+
+Notes:
+    Used for regression testing and DBFâ†”SQL bridging experiments.
+109  SQLSEL             yes          yes        Execute an SQL SELECT and display results.
+107  SQLVER             yes          yes        Report SQLite availability and version.
+6    STATUS             yes          yes        Display area status.
+129  STR                yes          yes        Convert numeric <nExpr> to a character string (optionally controlling width/decimals).
+167  STRCAT             yes          no         Homegrown command.
+7    STRUCT             yes          yes        Display table structure.
+124  STUFF              yes          yes        Replace <nLen> characters of <cExpr> starting at <nStart> with <cRepl>.
+120  SUBSTR             yes          yes        Return substring of <cExpr> starting at <nStart> for <nLen> characters (or to end).
+140  SUM                yes          yes        Sum a numeric expression over a record set.
+46   TABLE              yes          yes        Table buffering / stale tracking.
+
+Subcommands:
+    TABLE ON
+        Enable table buffering for the current area. REPLACE writes into a per-field buffer and
+        marks fields STALE instead of immediately writing to disk.
+
+    TABLE OFF
+        Disable buffering. REPLACE writes directly to disk (no buffering).
+
+    TABLE STALE
+        Show which fields are currently stale (buffered) for the current area.
+
+    TABLE FRESH [ALL|<n>|<n>,<m>]
+        Apply buffered updates to disk and clear stale flags on success.
+        (Scope forms depend on build; ALL / area lists were previously supported.)
+
+Notes:
+    - In current shakedown observations, LIST output reflects the physical record, not buffered overlays.
+    - Some builds may not recognize TABLE REFRESH; prefer TABLE FRESH.
+85   TEST               yes          yes        DotTalk++ scripting/test harness command.
+137  TIME               yes          yes        Return the current system time as a character string (HH:MM:SS).
+169  TODAY              yes          no         Homegrown command.
+9    TOP                yes          yes        Go to first record.
+135  TRANSFORM          yes          yes        Format <eExpr> as a string using an optional picture/mask.
+113  TRIM               yes          yes        Remove trailing spaces from <cExpression> (alias/compat; see RTRIM).
+57   TUPLE              yes          yes        Build one tuple row from fields across work areas.
+
+Examples:
+    TUPLE *                    (all fields from current area)
+    TUPLE LNAME,FNAME          (selected fields from current area)
+    TUPLE #11.*                (all fields from area 11)
+    TUPLE #9.*,#11.LNAME       (mix of areas)
+
+Notes:
+    #n prefixes a work area slot; "*" means all fields for that area.
+    Output fields are separated by ASCII Unit Separator (0x1F).
+58   TUPTALK            yes          yes        DotTalk++ tuple/logical-row command.
+72   TURBOPACK          yes          yes        Turbo Vision / pack-related utility.
+71   TVISION            yes          yes        Turbo Vision diagnostics / demos.
+43   UNDELETE           yes          yes        Un-delete (recall) the current record or selection.
+157  UNLOCK             yes          yes        Release a previously acquired lock (optionally all locks).
+94   UNTIL              yes          yes        Begin an UNTIL block (scripting).
+111  UPDATE             yes          yes        Update data rows (scripting/SQL helper; see command usage).
+116  UPPER              yes          yes        Convert <cExpression> to upper-case.
+1    USE                yes          yes        Open a DBF in a work area.
+130  VAL                yes          yes        Convert a numeric-looking character expression to a number.
+151  VALIDATE           yes          yes        Schema/sidecar validation command.
+83   VERSION            yes          yes        Print build/version information.
+29   WHERE              yes          yes        Apply an SQL-like filter to the current context.
+92   WHILE              yes          yes        Begin a WHILE block (scripting).
+80   WSREPORT           yes          yes        Workspace report / diagnostics.
+45   ZAP                yes          yes        Remove all records.
+38   APPEND BLANK       no           no         Append blank record (compatibility alias).
+149  DO                 no           no         Execute a program. (Use DOTSCRIPT instead.)
+148  RUN                no           no         Run an OS command (FoxPro).
+66   SB                 no           yes        Alias for SIMPLEBROWSER.
+17   SET INDEX          no           yes        Attach/activate a single-tag INX index (base name).
+15   SET ORDER          no           yes        Set controlling index tag (compatibility form; see SETORDER).
+99   SET VAR            no           yes        Set or show a macro variable (used by &name expansion in scripts).
+100  SET VAR!           no           yes        Force-set a macro variable (variant used in some scripts).
+69   SM                 no           yes        Alias for SMARTBROWSER.
+68   SMART              no           yes        Alias for SMARTBROWSER.
+. COMMANDSHELP
+CMDHELP Report (last CMDHELP BUILD): 187 command rows, 822 arg rows -> D:\code\ccode\dottalkpp\data\help
+Switches mined from: (existing DBFs)
+
+Commands (registry U foxref)
+-------------------------------------------------------------
+ID   NAME               IMPLEMENTED  FOXREF     SUMMARY/USAGE
+146  !                  yes          yes        Alias for BANG (execute an OS command).
+166  $                  yes          no         Homegrown command.
+173  AGGS               yes          no         Homegrown command.
+112  ALLTRIM            yes          yes        Remove leading and trailing spaces from <cExpression>.
+36   APPEND             yes          yes        Append a new record (interactive in future).
+37   APPEND_BLANK       yes          yes        Append a blank record to the current table/work area. (FoxPro equivalent: APPEND BLANK)
+4    AREA               yes          yes        Report or set the current work area slot.
+152  AREA51             yes          yes        Developer sandbox / experimental command.
+126  ASC                yes          yes        Return the ASCII code (0-255) of the first character of <cExpression>.
+160  ASCEND             yes          yes        Set ascending sort direction for the active order/tag.
+122  AT                 yes          yes        Return the 1-based position of <cSearch> within <cExpression> (case-sensitive).
+123  ATC                yes          yes        Return the 1-based position of <cSearch> within <cExpression> (case-insensitive).
+141  AVERAGE            yes          yes        Compute the average of a numeric expression over a record set.
+142  AVG                yes          yes        Alias for AVERAGE (xBase compatibility).
+147  BANG               yes          yes        Execute an OS command (shell escape).
+179  BOOLEAN            yes          no         Homegrown command.
+10   BOTTOM             yes          yes        Go to last record.
+60   BROWSE             yes          no         Table browser (FoxPro).
+63   BROWSER            yes          yes        Developer browser command (experimental).
+61   BROWSETUI          yes          yes        Text-mode browser UI (developer tool).
+62   BROWSETV           yes          yes        Turbo Vision browser UI (developer tool).
+101  CALC               yes          yes        Evaluate an expression and display the result.
+
+Important parsing note:
+    In current DotTalk++ behavior, if the expression contains operators like =, >=, <=,
+    it should be wrapped in parentheses to avoid being parsed as CALCWRITE syntax.
+
+Examples:
+    CALC 1 + 2
+    CALC (UPPER("a") = "A")     && safe
+    CALC UPPER("a") = "A"       && may be parsed as CALCWRITE
+
+Notes:
+    Quoted strings containing '=' are treated as literals and should not trigger CALCWRITE.
+102  CALCWRITE          yes          yes        Evaluate an expression and write the result to a target (see command usage).
+125  CHR                yes          yes        Convert an integer ASCII code (0-255) to a 1-character string.
+31   CLEAR              yes          yes        Clear current state (filters/orders/relations) depending on context.
+2    CLOSE              yes          yes        Close the current work area or close all open tables (FoxPro: CLOSE TABLES/DATABASES/ALL).
+79   CMDARGCHK          yes          yes        Validate command argument parsing and report issues.
+76   CMDHELP            yes          yes        Build / report the HELP command catalogs.
+
+Examples:
+    CMDHELP BUILD
+    CH               (alias report, if enabled)
+
+Notes:
+    Mines command registry + foxref + optional DBF help sources.
+78   CMDHELPCHK         yes          yes        Validate HELP catalogs vs the command registry.
+185  CMDREL             yes          no         Homegrown command.
+20   CNX                yes          yes        Index container command (CNX multi-tag support).
+70   COLOR              yes          yes        Switch CLI/TUI color theme.
+
+Examples:
+    COLOR GREEN
+    COLOR G+
+    COLOR AMBER
+    COLOR DEFAULT
+
+Notes:
+    Used by FOXTALK/Turbo Vision palette wiring.
+77   COMMANDSHELP       yes          yes        Command help (alias of CMDHELP).
+47   COMMIT             yes          yes        Commit buffered TABLE updates to disk.
+
+Notes (current shakedown observations):
+    - Clears TABLE stale state on success.
+    - May currently trigger full INX rebuild work as part of the commit path (performance issue).
+105  CONCAT             yes          yes        Concatenate string arguments. (Available as CALC function; also usable as a command where wired.)
+89   CONTINUE           yes          yes        Continue a running loop/scan block (scripting control flow).
+51   COPY               yes          yes        Copy a file to a new location (FoxPro: COPY FILE ... TO ...).
+27   COUNT              yes          yes        Count matching records; optionally store the result to a variable.
+178  CREATE             yes          no         Homegrown command.
+138  CTOD               yes          yes        Convert a character date to a Date value using current SET DATE/SET CENTURY.
+136  DATE               yes          yes        Return the current system date.
+165  DATEADD            yes          no         Homegrown command.
+170  DATEDIFF           yes          no         Homegrown command.
+164  DATETIME           yes          no         Homegrown command.
+5    DBAREA             yes          yes        Report or inspect the current DbArea/workspace (diagnostics).
+181  DBAREAS            yes          no         Homegrown command.
+41   DELETE             yes          yes        Mark record(s) deleted.
+161  DESCEND            yes          yes        Set descending sort direction for the active order/tag.
+52   DIR                yes          yes        List directory contents.
+26   DISPLAY            yes          yes        Display the current record (optionally selected fields).
+84   DOTSCRIPT          yes          yes        Run a DotTalk script file (test harness / automation).
+
+Example:
+    DOTSCRIPT run_all_sql_tests.dts
+139  DTOC               yes          yes        Convert a Date value to a character string using current SET DATE/SET CENTURY.
+82   DUMP               yes          yes        Debug: print a structured dump of an internal value/state.
+145  ECHO               yes          yes        Print text to the console.
+40   EDIT               yes          yes        Edit a field/value interactively (where supported).
+97   ELSE               yes          no         Optional ELSE branch for an IF block.
+98   ENDIF              yes          no         End an IF block.
+91   ENDLOOP            yes          yes        End a LOOP block (scripting).
+88   ENDSCAN            yes          yes        End a SCAN block.
+95   ENDUNTIL           yes          yes        End an UNTIL block (scripting).
+93   ENDWHILE           yes          yes        End a WHILE block (scripting control flow).
+53   ERASE              yes          yes        Delete file(s) matching <filespec> (FoxPro: ERASE).
+103  EVAL               yes          yes        Evaluate an expression and print its value.
+49   EXPORT             yes          yes        Export to CSV.
+8    FIELDS             yes          yes        Show structure (field list).
+22   FIND               yes          yes        Find a value in the current order/index (FoxPro: FIND).
+104  FORMULA            yes          yes        Evaluate/print an expression (FoxPro-style ? / ?? shortcut).
+75   FOXHELP            yes          yes        List or search command help topics.
+
+Examples:
+    FOXHELP
+    FOXHELP SCHEMAS
+    FOXHELP REL
+
+Notes:
+    Uses the help catalogs and any HELP DBFs.
+73   FOXPRO             yes          yes        DotTalk++ UI / browser command.
+59   FOXTALK            yes          yes        Launch the Turbo Vision (FoxPro-style) TUI shell.
+
+Example:
+    FOXTALK
+
+Notes:
+    Intended for keyboard-driven browsing and diagnostics.
+    Exits back to the DotTalk++ CLI.
+153  GENERIC            yes          yes        Developer utility placeholder command.
+86   GO                 yes          yes        Execute a DotTalk++ command line (dispatch to command handlers).
+11   GOTO               yes          yes        Go to record number.
+74   HELP               yes          yes        General help entry point (supports /FOX and /PRED views).
+96   IF                 yes          no         Conditional execution block: IF ... [ELSE] ... ENDIF.
+50   IMPORT             yes          yes        Import from CSV.
+14   INDEX              yes          yes        Create an index on an expression (FoxPro syntax; CDX via TAG/OF, IDX via TO).
+24   INDEXSEEK          yes          yes        Seek using the active index/order (DotTalk++ seek wiring).
+186  INIT               yes          no         Homegrown command.
+110  INSERT             yes          yes        Insert data rows (scripting/SQL helper; see command usage).
+118  LEFT               yes          yes        Return the left-most <nChars> characters of <cExpression>.
+121  LEN                yes          yes        Return the length (character count) of <cExpression>.
+168  LIKE               yes          no         Homegrown command.
+25   LIST               yes          yes        List records with optional field selection and filtering (default skips DELETED unless DELETED/ALL is specified).
+28   LOCATE             yes          yes        Locate the first record matching a predicate/filter.
+156  LOCK               yes          yes        Lock the current record (or table) for editing.
+90   LOOP               yes          yes        Begin a LOOP block (scripting).
+183  LOOP_BUFFER        yes          no         Homegrown command.
+117  LOWER              yes          yes        Convert <cExpression> to lower-case.
+114  LTRIM              yes          yes        Remove leading spaces from <cExpression>.
+144  MAX                yes          yes        Return the larger of <e1> and <e2> (aggregate MAX typically via SQL/CALC).
+143  MIN                yes          yes        Return the smaller of <e1> and <e2> (aggregate MIN typically via SQL/CALC).
+159  MULTIREP           yes          yes        Perform multiple replace operations in one pass (text transform).
+154  NORMALIZE          yes          yes        Normalize/clean an input expression or text (developer utility).
+162  NOW                yes          no         Homegrown command.
+44   PACK               yes          yes        Permanently remove deleted rows (see notes).
+133  PADC               yes          yes        Center-pad to length <nLen>.
+131  PADL               yes          yes        Left-pad to length <nLen>.
+132  PADR               yes          yes        Right-pad to length <nLen>.
+33   PREDHELP           yes          yes        Help for predicates/expressions and filtering.
+34   PREDICATES         yes          yes        List supported predicates/operators for filtering.
+134  PROPER             yes          yes        Convert <cExpression> to Proper Case (title case).
+163  REBUILD            yes          no         Homegrown command.
+42   RECALL             yes          yes        Un-delete record(s).
+13   RECNO              yes          yes        Return the current record number.
+155  RECORD             yes          yes        Display or return the current record context (utility).
+64   RECORDVIEW         yes          yes        Vertical record viewer.
+158  REFRESH            yes          yes        Refresh internal state / UI view (where applicable).
+19   REINDEX            yes          yes        Rebuild index files for the current table (or all open tables).
+56   REL                yes          yes        Relations engine commands.
+
+Subcommands:
+    REL LIST
+    REL REFRESH
+    REL ENUM               (traverse relationships; see engine notes)
+    REL SAVE [path] | REL SAVE AS <dataset>
+    REL LOAD [path] | REL LOAD AS <dataset>
+    REL ADD <parent> <child> ON <field>
+    REL CLEAR <parent>|ALL
+
+Examples:
+    REL LIST
+    REL ADD STUDENTS ENROLL ON SID
+    REL REFRESH
+
+Notes:
+    This is the modern relations layer used by tuple browsing.
+    Shakedown notes reference REL ENUM/JOIN traversal; update as those subcommands stabilize.
+175  RELATIONS          yes          no         Homegrown command.
+176  REL_LIST           yes          no         Homegrown command.
+177  REL_REFRESH        yes          no         Homegrown command.
+39   REPLACE            yes          yes        Replace a field value with an expression (optionally across records).
+128  REPLICATE          yes          yes        Repeat <cExpression> <nTimes> times.
+119  RIGHT              yes          yes        Return the right-most <nChars> characters of <cExpression>.
+48   ROLLBACK           yes          no         Discard buffered TABLE updates (planned; not confirmed in current shakedown runs).
+115  RTRIM              yes          yes        Remove trailing spaces from <cExpression>.
+87   SCAN               yes          yes        Iterate records using a SCAN block (record loop).
+182  SCAN_BUFFER        yes          no         Homegrown command.
+150  SCHEMA             yes          yes        Schema architect / schema engine command family.
+55   SCHEMAS            yes          yes        Bulk-open DBFs into consecutive work areas.
+
+Usage:
+    SCHEMAS
+        Report current workspace contents (where implemented).
+
+    SCHEMAS CLOSE
+        Close all work areas and clear relations state.
+
+    SCHEMAS OPEN DBF
+        Scan the configured DBF root and open tables into areas 0..N.
+
+    SCHEMAS OPEN <dir>
+        Scan a specific directory and open DBFs into areas 0..N.
+
+Notes:
+    Intended for dataset bring-up and browser sessions.
+23   SEEK               yes          yes        Seek an exact match using the current index/order.
+3    SELECT             yes          yes        Select the active work area by number or alias.
+171  SET                yes          no         Homegrown command.
+174  SET RELATION       yes          no         Homegrown command.
+172  SET UNIQUE         yes          no         Homegrown command.
+32   SETCASE            yes          yes        Control case-sensitivity / collation mode for comparisons.
+21   SETCNX             yes          yes        Attach/activate a CNX container for the current area.
+30   SETFILTER          yes          yes        Set a filter expression (DotTalk++ variant).
+18   SETINDEX           yes          yes        Activate an index for the area (DotTalk++ convenience wiring).
+16   SETORDER           yes          yes        Set controlling order/tag for the current area (or PHYSICAL for natural order).
+54   SETPATH            yes          yes        Manage runtime root directories.
+
+Usage:
+    SETPATH
+        Show current roots.
+
+    SETPATH RESET
+        Restore defaults (based on DATA root).
+
+    SETPATH <SLOT> <path>
+        Set a root slot to absolute(path). If <path> is relative, it is resolved under DATA.
+
+Slots:
+    DATA, DBF, INDEXES, SCHEMAS, SCRIPTS, TESTS, HELP, LOGS, TMP
+
+Notes:
+    Used so HELP/TESTS/etc. can be moved without requiring full paths.
+81   SHOW               yes          yes        Show internal engine state / debug views.
+187  SHUTDOWN           yes          no         Homegrown command.
+65   SIMPLEBROWSER      yes          yes        SIMPLEBROWSER  (SB)
+NAME
+    SIMPLEBROWSER
+
+ALIASES
+    SB
+
+PURPOSE
+    Workspace/DbArea-centric interactive browser for table relationships and logical rows.
+
+SYNTAX
+    SIMPLEBROWSER [FOR <expr>] [ORDER <tag>|PHYSICAL] [LIMIT <n>]
+
+OPTIONS / SUBCOMMANDS
+    FOR <expr>           Apply a filter expression (tuple/expr aware).
+    CLEAR FOR            Clear active filter.
+    ORDER PHYSICAL|INX|CNX|<tag>   Change controlling order/tag.
+    SHOW CHILDREN [LIMIT n]        Browse related child rows from current record.
+    SHOW|HIDE SCHEMA|JSON          Toggle schema/JSON debug overlays.
+    STATUS VERBOSE|COMPACT         Toggle status verbosity.
+
+EXAMPLES
+    SIMPLEBROWSER
+    SB FOR lname = "GRIMWOOD"
+    SB ORDER LNAME
+    SB SHOW CHILDREN LIMIT 20
+
+NOTES
+    Simple Browser is designed for browsing within the current workspace DbArea.
+    It is order-aware and expression/predicate aware.
+
+SEE ALSO
+    SMARTBROWSER, SMARTLIST, REL, TUPLE, SCHEMAS
+
+STATUS
+    stable
+
+12   SKIP               yes          yes        Move the record pointer forward/backward by <nRecords> (default 1).
+67   SMARTBROWSER       yes          yes        SMARTBROWSER  (SM, SMART)
+NAME
+    SMARTBROWSER
+
+ALIASES
+    SM, SMART
+
+PURPOSE
+    Advanced browser/workhorse for relational + expression-aware browsing across backends.
+
+SYNTAX
+    SMARTBROWSER [<source>] [FOR <expr>] [ORDER <tag>|PHYSICAL]
+
+OPTIONS / SUBCOMMANDS
+    <source>             Optional source (DbArea/workspace, SQLite3, or schema engine where available).
+    FOR <expr>           Apply an expression filter using the predicate pipeline.
+    ORDER <tag>|PHYSICAL Set controlling order/tag when browsing DbArea-backed sources.
+
+EXAMPLES
+    SMARTBROWSER
+    SM FOR gpa >= 3.5
+    SMART ORDER LNAME
+
+NOTES
+    Smart Browser is the flagship browser. It can operate with DbArea/workspaces and,
+    when configured, can also operate with SQLite3 and schema-driven sources.
+
+SEE ALSO
+    SIMPLEBROWSER, SMARTLIST, SCHEMAS, SQLITE, REL, TUPLE
+
+STATUS
+    stable
+
+35   SMARTLIST          yes          yes        LIST-style output with SQL-grade filtering (order-aware).
+
+Examples:
+    SMARTLIST 20 FOR gpa >= 3.5
+    SMARTLIST ALL FOR lname LIKE "SMI%"
+
+Notes:
+    Evaluates filters using the expression/predicate pipeline.
+184  SORT               yes          no         Homegrown command.
+127  SPACE              yes          yes        Return a character string containing <nSpaces> spaces.
+108  SQL                yes          yes        Execute an SQL statement using the configured SQL engine.
+180  SQLERASE           yes          no         Homegrown command.
+106  SQLITE             yes          yes        SQLite integration.
+
+Examples:
+    SQLITE DB data\sql_regression.sqlite
+    SQLITE EXEC CREATE TABLE t(x INT)
+    SQLITE EXEC INSERT INTO t(x) VALUES (1)
+    SQLITE SELECT * FROM t
+
+Notes:
+    Used for regression testing and DBFâ†”SQL bridging experiments.
+109  SQLSEL             yes          yes        Execute an SQL SELECT and display results.
+107  SQLVER             yes          yes        Report SQLite availability and version.
+6    STATUS             yes          yes        Display area status.
+129  STR                yes          yes        Convert numeric <nExpr> to a character string (optionally controlling width/decimals).
+167  STRCAT             yes          no         Homegrown command.
+7    STRUCT             yes          yes        Display table structure.
+124  STUFF              yes          yes        Replace <nLen> characters of <cExpr> starting at <nStart> with <cRepl>.
+120  SUBSTR             yes          yes        Return substring of <cExpr> starting at <nStart> for <nLen> characters (or to end).
+140  SUM                yes          yes        Sum a numeric expression over a record set.
+46   TABLE              yes          yes        Table buffering / stale tracking.
+
+Subcommands:
+    TABLE ON
+        Enable table buffering for the current area. REPLACE writes into a per-field buffer and
+        marks fields STALE instead of immediately writing to disk.
+
+    TABLE OFF
+        Disable buffering. REPLACE writes directly to disk (no buffering).
+
+    TABLE STALE
+        Show which fields are currently stale (buffered) for the current area.
+
+    TABLE FRESH [ALL|<n>|<n>,<m>]
+        Apply buffered updates to disk and clear stale flags on success.
+        (Scope forms depend on build; ALL / area lists were previously supported.)
+
+Notes:
+    - In current shakedown observations, LIST output reflects the physical record, not buffered overlays.
+    - Some builds may not recognize TABLE REFRESH; prefer TABLE FRESH.
+85   TEST               yes          yes        DotTalk++ scripting/test harness command.
+137  TIME               yes          yes        Return the current system time as a character string (HH:MM:SS).
+169  TODAY              yes          no         Homegrown command.
+9    TOP                yes          yes        Go to first record.
+135  TRANSFORM          yes          yes        Format <eExpr> as a string using an optional picture/mask.
+113  TRIM               yes          yes        Remove trailing spaces from <cExpression> (alias/compat; see RTRIM).
+57   TUPLE              yes          yes        Build one tuple row from fields across work areas.
+
+Examples:
+    TUPLE *                    (all fields from current area)
+    TUPLE LNAME,FNAME          (selected fields from current area)
+    TUPLE #11.*                (all fields from area 11)
+    TUPLE #9.*,#11.LNAME       (mix of areas)
+
+Notes:
+    #n prefixes a work area slot; "*" means all fields for that area.
+    Output fields are separated by ASCII Unit Separator (0x1F).
+58   TUPTALK            yes          yes        DotTalk++ tuple/logical-row command.
+72   TURBOPACK          yes          yes        Turbo Vision / pack-related utility.
+71   TVISION            yes          yes        Turbo Vision diagnostics / demos.
+43   UNDELETE           yes          yes        Un-delete (recall) the current record or selection.
+157  UNLOCK             yes          yes        Release a previously acquired lock (optionally all locks).
+94   UNTIL              yes          yes        Begin an UNTIL block (scripting).
+111  UPDATE             yes          yes        Update data rows (scripting/SQL helper; see command usage).
+116  UPPER              yes          yes        Convert <cExpression> to upper-case.
+1    USE                yes          yes        Open a DBF in a work area.
+130  VAL                yes          yes        Convert a numeric-looking character expression to a number.
+151  VALIDATE           yes          yes        Schema/sidecar validation command.
+83   VERSION            yes          yes        Print build/version information.
+29   WHERE              yes          yes        Apply an SQL-like filter to the current context.
+92   WHILE              yes          yes        Begin a WHILE block (scripting).
+80   WSREPORT           yes          yes        Workspace report / diagnostics.
+45   ZAP                yes          yes        Remove all records.
+38   APPEND BLANK       no           no         Append blank record (compatibility alias).
+149  DO                 no           no         Execute a program. (Use DOTSCRIPT instead.)
+148  RUN                no           no         Run an OS command (FoxPro).
+66   SB                 no           yes        Alias for SIMPLEBROWSER.
+17   SET INDEX          no           yes        Attach/activate a single-tag INX index (base name).
+15   SET ORDER          no           yes        Set controlling index tag (compatibility form; see SETORDER).
+99   SET VAR            no           yes        Set or show a macro variable (used by &name expansion in scripts).
+100  SET VAR!           no           yes        Force-set a macro variable (variant used in some scripts).
+69   SM                 no           yes        Alias for SMARTBROWSER.
+68   SMART              no           yes        Alias for SMARTBROWSER.
+. CMDHELPCHK
+Opened D:\code\ccode\dottalkpp\data\help\commands.dbf (187 rows)
+Columns: [ID:N,10] [COMMAND:C,24] [IMPLEMENT:L,1] [SUPPORTED:L,1] [USAGE:M,10] [VERBOSE:M,10]
+Missing expected columns; need at least ID, COMMAND, and one memo (USAGE)
+. CMDARGCHK
+CMDARGCHK: quick sanity checker (stub).
+  This build only emits guidance so we don't rely on private DbArea APIs.
+  Try the following sequence if you want to validate relations:
+    SELECT cmd_args
+    INDEX ON COMMAND TAG CMDA
+    SETINDEX CMDA.inx
+    SETORDER CMDA
+    SELECT commands
+    INDEX ON COMMAND TAG CMDP
+    SETINDEX CMDP.inx
+    SETORDER CMDP
+    SET RELATIONS TO COMMAND INTO cmd_args
+  Then run: LIST 5 FOR COMMAND="APPEND" in cmd_args and DISPLAY in commands.
+.
+. ECHO ===== PATHS / ROOTS =====
+===== PATHS / ROOTS =====
+. SETPATH
+SETPATH state:
+  DATA = D:\code\ccode\dottalkpp\data
+  DBF = D:\code\ccode\dottalkpp\data\dbf
+  INDEXES = D:\code\ccode\dottalkpp\data\indexes
+  SCHEMAS = D:\code\ccode\dottalkpp\data\schemas
+  SCRIPTS = D:\code\ccode\dottalkpp\data\scripts
+  TESTS = D:\code\ccode\dottalkpp\data\tests
+  HELP = D:\code\ccode\dottalkpp\data\help
+  LOGS = D:\code\ccode\dottalkpp\data\logs
+  TMP = D:\code\ccode\dottalkpp\data\tmp
+. SETPATH RESET
+SETPATH: reset to defaults.
+SETPATH state:
+  DATA = D:\code\ccode\dottalkpp\data
+  DBF = D:\code\ccode\dottalkpp\data\dbf
+  INDEXES = D:\code\ccode\dottalkpp\data\indexes
+  SCHEMAS = D:\code\ccode\dottalkpp\data\schemas
+  SCRIPTS = D:\code\ccode\dottalkpp\data\scripts
+  TESTS = D:\code\ccode\dottalkpp\data\tests
+  HELP = D:\code\ccode\dottalkpp\data\help
+  LOGS = D:\code\ccode\dottalkpp\data\logs
+  TMP = D:\code\ccode\dottalkpp\data\tmp
+. SETPATH
+SETPATH state:
+  DATA = D:\code\ccode\dottalkpp\data
+  DBF = D:\code\ccode\dottalkpp\data\dbf
+  INDEXES = D:\code\ccode\dottalkpp\data\indexes
+  SCHEMAS = D:\code\ccode\dottalkpp\data\schemas
+  SCRIPTS = D:\code\ccode\dottalkpp\data\scripts
+  TESTS = D:\code\ccode\dottalkpp\data\tests
+  HELP = D:\code\ccode\dottalkpp\data\help
+  LOGS = D:\code\ccode\dottalkpp\data\logs
+  TMP = D:\code\ccode\dottalkpp\data\tmp
+. DIR
+
+ Directory of D:\code\ccode\dottalkpp\data
+
+2026-01-26 09:31         87           .lock
+2026-01-17 20:50    <DIR>          .relations
+2026-02-07 21:46    <DIR>          backup
+2026-01-11 09:10         16,847       CSV.csv
+2026-02-15 14:49    <DIR>          dbf
+2026-02-12 10:25         0            filedoesnotexist
+2026-01-17 20:50    <DIR>          help
+2026-01-31 14:27    <DIR>          indexes
+2026-01-17 20:50    <DIR>          logs
+2025-12-12 12:41    <DIR>          out
+2025-08-26 17:29         317          run-tests.bat
+2025-08-26 17:12         276          run_tests.bat
+2025-11-15 11:14         2,868        run_tests.ps1
+2026-02-07 19:14    <DIR>          schemas
+2026-02-13 16:06    <DIR>          scripts
+2026-02-12 10:24         0            students
+2026-02-15 14:49         898          students_norm.csv
+2026-02-15 14:49         778          students_norm.tsv
+2026-01-06 23:27         5,420        tassign.csv
+2026-02-08 07:54    <DIR>          tests
+2026-02-15 04:46    <DIR>          tmp
+2026-02-15 14:49         8,192        tmpsql_regression.sqlite
+2025-12-25 13:07         1,195        to.csv
+2026-02-16 09:08    <DIR>          _drops
+             12 Dir(s)
+             12 File(s)  36,878 bytes
+. DIR data
+Path not found: data
+. DIR dbf
+
+ Directory of D:\code\ccode\dottalkpp\data\dbf
+
+2025-09-11 21:22         474          [DBF] BUILDING.DBF
+2025-09-11 21:22         12,722       [DBF] CLASSES.DBF
+2026-01-11 11:18         1,476        community_college_schema.txt
+2025-09-11 21:22         6,662        [DBF] COURSES.DBF
+2025-09-11 21:22         548          [DBF] DEPT.DBF
+2025-09-11 21:22         26,980       [DBF] ENROLL.DBF
+2025-09-11 21:22         718          [DBF] MAJORS.DBF
+2026-01-11 11:21         1,170        MCC Build full relations graph (CNX-backed).dts
+2025-09-11 18:22         1,476        MCC README.txt
+2026-02-07 21:38         1,476        MCC_README.txt
+2026-01-11 11:22         1,110        My Community College Indexing.dts
+2025-09-11 21:22         1,476        README.txt
+2025-09-11 21:22         670          [DBF] ROOMS.DBF
+2025-09-12 04:06         178          [DBF] smoketest.dbf
+2026-02-15 14:49         22,776       [DBF] STUDENTS.dbf
+2025-09-11 21:22         4,330        [DBF] STUD_MAJ.DBF
+2025-09-11 21:22         5,130        [DBF] TASSIGN.DBF
+2025-09-11 21:22         2,158        [DBF] TEACHERS.dbf
+2025-09-11 21:22         199          [DBF] TERMS.DBF
+             0 Dir(s)
+             19 File(s)  91,729 bytes
+. DIR indexes
+
+ Directory of D:\code\ccode\dottalkpp\data\indexes
+
+2026-01-17 20:50    <DIR>          backups
+2026-02-13 19:34         5,668        BUILDING.cnx
+2026-01-31 15:59         77,936       CLASSES.cnx
+2026-02-07 21:40         23,104       COURSES.cnx
+2026-02-07 21:40         5,320        DEPT.cnx
+2026-02-07 21:40         145,048      ENROLL.cnx
+2026-02-07 21:40         6,832        MAJORS.cnx
+2026-02-07 21:41         10,864       ROOMS.cnx
+2026-02-13 08:23         1,018,844    STUDENTS.cnx
+2026-02-15 14:49         5,795        STUDENTS.inx
+2026-02-07 21:42         69,648       STUD_MAJ.cnx
+2026-02-07 21:42         62,976       TASSIGN.cnx
+2026-02-07 21:42         15,616       TEACHERS.cnx
+2026-02-04 14:32         563          teachers.inx
+2026-02-07 21:42         4,798        TERMS.cnx
+             1 Dir(s)
+             14 File(s)  1,453,012 bytes
+. DIR tmp
+
+ Directory of D:\code\ccode\dottalkpp\data\tmp
+
+2026-02-15 14:49         17           dt_probe.txt
+2026-02-08 11:17         17           dt_probe2.txt
+2026-02-15 14:49         37           mini_regression.dts
+2026-02-15 04:46         8,192        sql_regression.sqlite
+2026-02-13 19:57         329          students_norm.csv
+2026-02-13 19:57         275          students_norm.tsv
+             0 Dir(s)
+             6 File(s)  8,867 bytes
+.
+. ECHO ===== STARTUP / DIAGNOSTICS =====
+===== STARTUP / DIAGNOSTICS =====
+. INIT
+INIT: Paths
+  DATA     : D:\code\ccode\dottalkpp\data
+  DBF      : D:\code\ccode\dottalkpp\data\dbf
+  INDEXES  : D:\code\ccode\dottalkpp\data\indexes
+  SCHEMAS  : D:\code\ccode\dottalkpp\data\schemas
+  SCRIPTS  : D:\code\ccode\dottalkpp\data\scripts
+  TESTS    : D:\code\ccode\dottalkpp\data\tests
+  HELP     : D:\code\ccode\dottalkpp\data\help
+  LOGS     : D:\code\ccode\dottalkpp\data\logs
+  TMP      : D:\code\ccode\dottalkpp\data\tmp
+. DBAREA
+============================================================
+DBAREA - Current Work Area Summary
+============================================================
+Area (slot)         : 0
+DBF (abs)           :
+Logical name        :
+Legacy name()       :
+Records             : 0
+Record length       : 0
+recordLength()      : 0
+Fields              : 0
+Recno               : 0
+Deleted flag        : 0
+
+Index / Order
+-------------
+Index file          : D:\code\ccode\dottalkpp\data\indexes\teachers.cnx
+Order       : ASCEND
+Index file  : D:\code\ccode\dottalkpp\data\indexes\teachers.cnx (TID)
+Active tag  : TID
+Sort        : TID
+
+Fields
+------
+(none)
+============================================================
+. DBAREAS
+============================================================
+DBAREA - Current Work Area Summary
+============================================================
+Area (slot)         : 0
+DBF (abs)           :
+Logical name        :
+Legacy name()       :
+Records             : 0
+Record length       : 0
+recordLength()      : 0
+Fields              : 0
+Recno               : 0
+Deleted flag        : 0
+
+Index / Order
+-------------
+Index file          : D:\code\ccode\dottalkpp\data\indexes\teachers.cnx
+Order       : ASCEND
+Index file  : D:\code\ccode\dottalkpp\data\indexes\teachers.cnx (TID)
+Active tag  : TID
+Sort        : TID
+
+Fields
+------
+(none)
+============================================================
+. AREA
+Current area: 0
+  File: (unknown)  Recs: 0  Recno: 0
+  DBF (abs)           : (unknown)
+  Logical name        : (unknown)
+  Legacy name()       : (unknown)
+  Order: ASCEND
+  Index file  : D:\code\ccode\dottalkpp\data\indexes\teachers.cnx (TID)
+  Active tag  : TID
+. STATUS
+Area 0:   () [current]
+Order       : ASCEND
+  Index file  : D:\code\ccode\dottalkpp\data\indexes\teachers.cnx
+  Active tag  : TID
+  Tags        : TID, DEPT_ID, LNAME, FNAME
+  Records     : 0
+. WSREPORT
+DotTalk Status Report
+
+Workspace
+----------------------------------------
+  Slot  Name
+  ----- --------
+
+Environment
+----------------------------------------
+  CWD               : D:\code\ccode\dottalkpp\data
+  OS                : Windows
+  USER              : deral
+  HOME              : C:\Users\deral
+  TEMP              : C:\Users\deral\AppData\Local\Temp
+
+DotTalk / Build variables
+----------------------------------------
+  DOTTALK_DATA      : (not set)
+  DOTTALK_DBF       : (not set)
+  DOTTALK_INDEXES   : (not set)
+  DOTTALK_SCHEMAS   : (not set)
+  DOTTALK_SCRIPTS   : (not set)
+  DOTTALK_TESTS     : (not set)
+  DOTTALK_HELP      : (not set)
+  DOTTALK_LOGS      : (not set)
+  DOTTALK_TMP       : (not set)
+  TVISION_ROOT      : (not set)
+  VCPKG_ROOT        : C:\Users\deral\vcpkg
+  VCPKG_DEFAULT_TRIPLET: (not set)
+  CMAKE_GENERATOR   : (not set)
+  CMAKE_TOOLCHAIN_FILE: (not set)
+
+Paths (SETPATH)
+----------------------------------------
+SETPATH state:
+  DATA = D:\code\ccode\dottalkpp\data
+  DBF = D:\code\ccode\dottalkpp\data\dbf
+  INDEXES = D:\code\ccode\dottalkpp\data\indexes
+  SCHEMAS = D:\code\ccode\dottalkpp\data\schemas
+  SCRIPTS = D:\code\ccode\dottalkpp\data\scripts
+  TESTS = D:\code\ccode\dottalkpp\data\tests
+  HELP = D:\code\ccode\dottalkpp\data\help
+  LOGS = D:\code\ccode\dottalkpp\data\logs
+  TMP = D:\code\ccode\dottalkpp\data\tmp
+
+SET / Runtime Settings
+----------------------------------------
+  TALK              : ON
+  STATUS            : OFF
+  TIME              : OFF
+  CLOCK             : OFF
+  CONSOLE           : ON
+  BELL              : OFF
+
+  SAFETY            : ON
+  DELETED           : ON
+  EXACT             : OFF
+  ESCAPE            : ON
+  CARRY             : OFF
+  CONFIRM           : OFF
+  EXCLUSIVE         : OFF
+  MULTILOCKS        : OFF
+
+  CENTURY           : OFF
+  DATE              : MDY
+  DECIMALS          : 2
+  FIXED             : OFF
+  MEMOWIDTH         : 50
+  MEMOERROR         : ON
+
+  DEFAULT           : (none)
+  PATH              : (none)
+
+Output Routing
+----------------------------------------
+  CONSOLE           : ON
+  PRINT             : OFF
+  ALTERNATE         : OFF
+  TALK              : OFF
+  ECHO              : ON
+  PRINT TO          : (none)
+  ALTERNATE TO      : (none)
+
+Areas / Index Summary
+----------------------------------------
+Area 0:   () [current]
+Index / Order
+----------------------------------------
+Order       : PHYSICAL
+  Tags        : (none)
+  Records     : 0
+  Recno       : 0
+  Record len  : 0
+  Fields      : 0
+
+. SHOW
+Field  Name          Type Len Dec
+. SHOW ORDER
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+. SHOW FILTER
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+. SHOW BREADCRUMBS
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+. DUMP DATE()
+.
+. ECHO ===== SCHEMAS BRING-UP =====
+===== SCHEMAS BRING-UP =====
+. SCHEMAS
+SCHEMAS: Listing open work areas...
+  Area 0: --- closed ---
+  Area 1: --- closed ---
+  Area 2: --- closed ---
+  Area 3: --- closed ---
+  Area 4: --- closed ---
+  Area 5: --- closed ---
+  Area 6: --- closed ---
+  Area 7: --- closed ---
+  Area 8: --- closed ---
+  Area 9: --- closed ---
+  Area 10: --- closed ---
+  Area 11: --- closed ---
+  Area 12: --- closed ---
+  Area 13: --- closed ---
+  Area 14: --- closed ---
+  Area 15: --- closed ---
+  Area 16: --- closed ---
+  Area 17: --- closed ---
+  Area 18: --- closed ---
+  Area 19: --- closed ---
+  Area 20: --- closed ---
+  Area 21: --- closed ---
+  Area 22: --- closed ---
+  Area 23: --- closed ---
+  Area 24: --- closed ---
+  Area 25: --- closed ---
+  Area 26: --- closed ---
+  Area 27: --- closed ---
+  Area 28: --- closed ---
+  Area 29: --- closed ---
+  Area 30: --- closed ---
+  Area 31: --- closed ---
+SCHEMAS: 0 of 32 area(s) in use.
+. SCHEMAS CLOSE
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+. REL CLEAR ALL
+REL: cleared all
+OK
+. SCHEMAS OPEN DBF
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SCHEMAS OPEN: scanning directory: DBF
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'smoketest.dbf'
+  Area 8: opened 'STUD_MAJ.DBF'
+  Area 9: opened 'STUDENTS.dbf'
+  Area 10: opened 'TASSIGN.DBF'
+  Area 11: opened 'TEACHERS.dbf'
+  Area 12: opened 'TERMS.DBF'
+SCHEMAS: 13 table(s) opened into area(s) 0..12.
+. SCHEMAS
+SCHEMAS: Listing open work areas...
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'smoketest.dbf'
+  Area 8: opened 'STUD_MAJ.DBF'
+  Area 9: opened 'STUDENTS.dbf'
+  Area 10: opened 'TASSIGN.DBF'
+  Area 11: opened 'TEACHERS.dbf'
+  Area 12: opened 'TERMS.DBF'
+  Area 13: --- closed ---
+  Area 14: --- closed ---
+  Area 15: --- closed ---
+  Area 16: --- closed ---
+  Area 17: --- closed ---
+  Area 18: --- closed ---
+  Area 19: --- closed ---
+  Area 20: --- closed ---
+  Area 21: --- closed ---
+  Area 22: --- closed ---
+  Area 23: --- closed ---
+  Area 24: --- closed ---
+  Area 25: --- closed ---
+  Area 26: --- closed ---
+  Area 27: --- closed ---
+  Area 28: --- closed ---
+  Area 29: --- closed ---
+  Area 30: --- closed ---
+  Area 31: --- closed ---
+SCHEMAS: 13 of 32 area(s) in use.
+.
+. ECHO ===== BASELINE CLOCK / DATE-TIME =====
+===== BASELINE CLOCK / DATE-TIME =====
+. DATE
+20260216
+. TODAY
+20260216
+. TIME
+091345
+. NOW
+20260216091345
+. DATETIME
+20260216091345
+. CALC DATE()
+20260216
+. CALC TODAY()
+20260216
+. CALC TIME()
+091345
+. CALC NOW()
+20260216091345
+. CALC DATETIME()
+20260216091345
+. CALC (DATE() = TODAY())
+.T.
+. CALC (NOW() = DATETIME())
+.T.
+.
+. ECHO ===== CANARIES: DATE ALGEBRA + COMPARISONS =====
+===== CANARIES: DATE ALGEBRA + COMPARISONS =====
+. CALC DATE() + 2
+20260218
+. CALC DATE() - 2
+20260214
+. ECHO [CANARY DATE-CMP-1] Expect .T.:
+[CANARY DATE-CMP-1] Expect .T.:
+. CALC ((DATE() + 2) > DATE())
+.F.
+. ECHO [CANARY DATE-CMP-2] Expect .T.:
+[CANARY DATE-CMP-2] Expect .T.:
+. CALC ((DATE() - 2) < DATE())
+.F.
+.
+. ECHO ===== CTOD / DTOC =====
+===== CTOD / DTOC =====
+. ECHO [CANARY CTOD-UNQUOTED-HYPHEN] Expect clean error (per rule: hyphen dates must be quoted):
+[CANARY CTOD-UNQUOTED-HYPHEN] Expect clean error (per rule: hyphen dates must be quoted):
+. CTOD 2000-01-01
+20000101
+.
+. CTOD "2000-01-01"
+20000101
+. CTOD "2000/01/01"
+20000101
+. CTOD 20000101
+20000101
+.
+. CALC CTOD("2000-01-01")
+20000101
+. CALC DTOC(CTOD("2000-01-01"))
+20000101
+. ECHO [CANARY DTOC-ROUNDTRIP] Expect .T.:
+[CANARY DTOC-ROUNDTRIP] Expect .T.:
+. CALC (DTOC(CTOD("2000-01-01")) = "20000101")
+.T.
+.
+. ECHO [CANARY DATE+1 EQ] Expect .T.:
+[CANARY DATE+1 EQ] Expect .T.:
+. CALC (CTOD("2000-01-01") + 1 = CTOD("2000-01-02"))
+.F.
+. ECHO [CANARY DATE-1 EQ] Expect .T.:
+[CANARY DATE-1 EQ] Expect .T.:
+. CALC (CTOD("2000-01-01") - 1 = CTOD("1999-12-31"))
+.F.
+.
+. ECHO ===== DATEADD / DATEDIFF (command + CALC) =====
+===== DATEADD / DATEDIFF (command + CALC) =====
+. * Command-form tests use constants (no DATE()/CTOD() token-eval assumptions)
+. ECHO [DATEADD cmd] Expect 20000131:
+[DATEADD cmd] Expect 20000131:
+. DATEADD 20000101, 30
+20000131
+. ECHO [DATEADD cmd] Expect 19991202:
+[DATEADD cmd] Expect 19991202:
+. DATEADD 20000101, -30
+19991202
+. ECHO [DATEDIFF cmd] Expect 1:
+[DATEDIFF cmd] Expect 1:
+. DATEDIFF 20000102, 20000101
+-1
+.
+. * CALC-form tests (engine function evaluation)
+. CALC DATEADD(DATE(), 30)
+20260318
+. CALC DATEDIFF(DATE(), CTOD("2000-01-01"))
+-9543
+.
+. ECHO ===== CANARIES: RHS EXPRESSIONS IN COMPARISONS =====
+===== CANARIES: RHS EXPRESSIONS IN COMPARISONS =====
+. ECHO [CANARY RHS-EQ-1] Expect .T.:
+[CANARY RHS-EQ-1] Expect .T.:
+. CALC (3 = 1 + 2)
+.T.
+. ECHO [CANARY RHS-EQ-2] Expect .T.:
+[CANARY RHS-EQ-2] Expect .T.:
+. CALC ((1 + 2) = (6 / 2))
+.T.
+. ECHO [CANARY RHS-EQ-3] Expect .T.:
+[CANARY RHS-EQ-3] Expect .T.:
+. CALC ((1 + 2 * 3) = (1 + (2 * 3)))
+.T.
+.
+. ECHO ===== STRING / CHAR COMMANDS =====
+===== STRING / CHAR COMMANDS =====
+. ALLTRIM "  hi  "
+hi
+. LTRIM "  hi"
+hi
+. RTRIM "hi  "
+hi
+. TRIM "hi  "
+hi
+. UPPER "aBc"
+ABC
+. LOWER "aBc"
+abc
+. PROPER "joHN"
+John
+. LEN "ABCDE"
+5
+. LEFT "ABCDE", 3
+ABC
+. RIGHT "ABCDE", 2
+DE
+. SUBSTR "ABCDE", 2, 3
+BCD
+. AT "CD", "ABCDE"
+3
+. ATC "cd", "ABCDE"
+3
+. CHR 65
+A
+. ASC "A"
+65
+. SPACE 3
+
+. REPLICATE "x", 5
+xxxxx
+. PADC "hi", 6
+  hi
+. PADL "hi", 6
+    hi
+. PADR "hi", 6
+hi
+. STUFF "ABCDE", 2, 2, "ZZ"
+AZZDE
+. STR 123
+       123
+. VAL "123.45"
+123.45
+. ECHO [CANARY TRANSFORM-ARGS] Expect error (missing 2nd arg):
+[CANARY TRANSFORM-ARGS] Expect error (missing 2nd arg):
+. TRANSFORM 123
+TRANSFORM expects 2 argument(s).
+. LIKE "SMITH", "SMI%"
+.F.
+.
+. ECHO ===== NORMALIZE / MULTIREP / CONCAT / STRCAT =====
+===== NORMALIZE / MULTIREP / CONCAT / STRCAT =====
+. ECHO [CANARY NORMALIZE-CLI] Expect usage (args required):
+[CANARY NORMALIZE-CLI] Expect usage (args required):
+. NORMALIZE "  a  b  "
+Usage: NORMALIZE <C|N|D|L> <len> [dec_if_N] <value...>
+  Example: NORMALIZE D 8 11/05/2025
+           NORMALIZE N 10 2 1,234.50
+. ECHO [CANARY MULTIREP-CLI] Expect usage/error until grammar is finalized:
+[CANARY MULTIREP-CLI] Expect usage/error until grammar is finalized:
+. MULTIREP "banana", "a", "A", "n", "N"
+REPLACE_MULTI: expected WITH after field.
+Usage: REPLACE_MULTI <field> WITH <value>[, <field> WITH <value>]...
+. CONCAT "A", "B"
+AB
+. CALC CONCAT("A","B")
+AB
+. STRCAT "A", "B"
+AB
+.
+. ECHO ===== TABLES: CORE TABLE/ORDER/CURSOR PROBES =====
+===== TABLES: CORE TABLE/ORDER/CURSOR PROBES =====
+. ECHO [NOTE] Probe pairs: RECORD/RECNO before+after LIST/SMARTLIST/WHERE/REINDEX to observe cursor restore behavior.
+[NOTE] Probe pairs: RECORD/RECNO before+after LIST/SMARTLIST/WHERE/REINDEX to observe cursor restore behavior.
+.
+. ECHO ===== BUILDING =====
+===== BUILDING =====
+. SELECT BUILDING
+Selected area 0.
+Current area: 0
+  File: BUILDING  Recs: 8  Recno: 1
+. AREA
+Current area: 0
+  File: BUILDING  Recs: 8  Recno: 1
+  DBF (abs)           : D:\code\ccode\dottalkpp\data\dbf\BUILDING.DBF
+  Logical name        : BUILDING
+  Legacy name()       : BUILDING
+  Path: D:\code\ccode\dottalkpp\data\dbf\BUILDING.DBF
+  Order: NATURAL
+. STRUCT
+Fields (2)
+  #  Name          Type   Len   Dec
+   1  BLDG          C        6     0
+   2  NAME          C       40     0
+Dbfile      : BUILDING  (BUILDING)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. FIELDS
+# Name Type Len
+- ---- ---- --- ---
+1 BLDG C      6   0
+2 NAME C     40   0
+. COUNT
+8
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      BLDG   NAME
+     1 BLDG01 Science Hall
+     2 BLDG02 Main Hall
+     3 BLDG03 Library
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. DISPLAY
+Record 1
+  BLDG = BLDG01
+  NAME = Science Hall
+. RECORDVIEW
+Record 1
+  BLDG = BLDG01
+  NAME = Science Hall
+. TOP
+Recno: 1
+. RECNO
+1
+. SKIP 1
+Recno: 2
+. RECNO
+2
+. BOTTOM
+Recno: 8
+. RECNO
+8
+. TOP
+Recno: 1
+. RECNO
+1
+. SETORDER BLDG
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\BLDG.cnx
+. ASCEND
+No active index.
+. LIST 3
+      BLDG   NAME
+     1 BLDG01 Science Hall
+     2 BLDG02 Main Hall
+     3 BLDG03 Library
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. DESCEND
+No active index.
+. LIST 3
+      BLDG   NAME
+     1 BLDG01 Science Hall
+     2 BLDG02 Main Hall
+     3 BLDG03 Library
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. ASCEND
+No active index.
+. SET UNIQUE ON
+Usage: SET UNIQUE FIELD <name> ON|OFF
+. SET UNIQUE OFF
+Usage: SET UNIQUE FIELD <name> ON|OFF
+. SETORDER PHYSICAL
+SET ORDER: cleared (physical order).
+. LIST 3
+      BLDG   NAME
+     1 BLDG01 Science Hall
+     2 BLDG02 Main Hall
+     3 BLDG03 Library
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+.
+. ECHO ===== ROOMS =====
+===== ROOMS =====
+. SELECT ROOMS
+Selected area 6.
+Current area: 6
+  File: ROOMS  Recs: 30  Recno: 1
+. STRUCT
+Fields (3)
+  #  Name          Type   Len   Dec
+   1  ROOM          C        8     0
+   2  BLDG          C        6     0
+   3  CAP           N        3     0
+Dbfile      : ROOMS  (ROOMS)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+30
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      ROOM     BLDG   CAP
+     1 BLDG01-1 BLDG01  28
+     2 BLDG01-1 BLDG01  51
+     3 BLDG01-1 BLDG01  40
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+BLDG01-1 | BLDG01 |  28
+. TOP
+Recno: 1
+. SKIP 1
+Recno: 2
+. BOTTOM
+Recno: 30
+. TOP
+Recno: 1
+. SETORDER ROOM
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\ROOM.cnx
+. LIST 3
+      ROOM     BLDG   CAP
+     1 BLDG01-1 BLDG01  28
+     2 BLDG01-1 BLDG01  51
+     3 BLDG01-1 BLDG01  40
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. SETORDER PHYSICAL
+SET ORDER: cleared (physical order).
+. LIST 3
+      ROOM     BLDG   CAP
+     1 BLDG01-1 BLDG01  28
+     2 BLDG01-1 BLDG01  51
+     3 BLDG01-1 BLDG01  40
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+.
+. ECHO ===== DEPT =====
+===== DEPT =====
+. SELECT DEPT
+Selected area 3.
+Current area: 3
+  File: DEPT  Recs: 10  Recno: 1
+. STRUCT
+Fields (2)
+  #  Name          Type   Len   Dec
+   1  DEPT_ID       C        4     0
+   2  NAME          C       40     0
+Dbfile      : DEPT  (DEPT)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+10
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      DEPT_ID NAME
+     1 MATH Mathematics
+     2 ENGL English
+     3 HIST History
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+MATH | Mathematics
+. TOP
+Recno: 1
+. SKIP 1
+Recno: 2
+. BOTTOM
+Recno: 10
+. TOP
+Recno: 1
+. SETORDER DEPT_ID
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\DEPT_ID.cnx
+. LIST 3
+      DEPT_ID NAME
+     1 MATH Mathematics
+     2 ENGL English
+     3 HIST History
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. SETORDER PHYSICAL
+SET ORDER: cleared (physical order).
+. LIST 3
+      DEPT_ID NAME
+     1 MATH Mathematics
+     2 ENGL English
+     3 HIST History
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+.
+. ECHO ===== MAJORS =====
+===== MAJORS =====
+. SELECT MAJORS
+Selected area 5.
+Current area: 5
+  File: MAJORS  Recs: 12  Recno: 1
+. STRUCT
+Fields (3)
+  #  Name          Type   Len   Dec
+   1  MAJOR         C        4     0
+   2  NAME          C       40     0
+   3  DEPT_ID       C        4     0
+Dbfile      : MAJORS  (MAJORS)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+12
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      MAJOR NAME                                     DEPT_ID
+     1 MATH Mathematics                              MATH
+     2 ENGL English                                  ENGL
+     3 HIST History                                  HIST
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+MATH | Mathematics | MATH
+. TOP
+Recno: 1
+. SKIP 1
+Recno: 2
+. BOTTOM
+Recno: 12
+. TOP
+Recno: 1
+. SETORDER MAJOR
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\MAJOR.cnx
+. LIST 3
+      MAJOR NAME                                     DEPT_ID
+     1 MATH Mathematics                              MATH
+     2 ENGL English                                  ENGL
+     3 HIST History                                  HIST
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. SETORDER PHYSICAL
+SET ORDER: cleared (physical order).
+. LIST 3
+      MAJOR NAME                                     DEPT_ID
+     1 MATH Mathematics                              MATH
+     2 ENGL English                                  ENGL
+     3 HIST History                                  HIST
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+.
+. ECHO ===== TERMS =====
+===== TERMS =====
+. SELECT TERMS
+Selected area 12.
+Current area: 12
+  File: TERMS  Recs: 3  Recno: 1
+. STRUCT
+Fields (3)
+  #  Name          Type   Len   Dec
+   1  TERM          C        6     0
+   2  START         D        8     0
+   3  END           D        8     0
+Dbfile      : TERMS  (TERMS)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+3
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST ALL
+      TERM   START    END
+     1 F25    20250922 20251212
+     2 W26    20260106 20260320
+     3 S26    20260406 20260619
+3 record(s) listed.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+F25 | 20250922 | 20251212
+. TOP
+Recno: 1
+. SKIP 1
+Recno: 2
+. BOTTOM
+Recno: 3
+. TOP
+Recno: 1
+. SETORDER TERM
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\TERM.cnx
+. LIST ALL
+      TERM   START    END
+     1 F25    20250922 20251212
+     2 W26    20260106 20260320
+     3 S26    20260406 20260619
+3 record(s) listed.
+. SETORDER PHYSICAL
+SET ORDER: cleared (physical order).
+. LIST ALL
+      TERM   START    END
+     1 F25    20250922 20251212
+     2 W26    20260106 20260320
+     3 S26    20260406 20260619
+3 record(s) listed.
+.
+. ECHO ===== COURSES =====
+===== COURSES =====
+. SELECT COURSES
+Selected area 2.
+Current area: 2
+  File: COURSES  Recs: 100  Recno: 1
+. STRUCT
+Fields (4)
+  #  Name          Type   Len   Dec
+   1  CID           C        8     0
+   2  TITLE         C       50     0
+   3  DEPT_ID       C        4     0
+   4  CREDITS       N        2     0
+Dbfile      : COURSES  (COURSES)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+100
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      CID      TITLE                                              DEPT_ID CREDITS
+     1 MATH160  Calculus I                                         MATH  3
+     2 ARTS110  Design                                             ARTS  3
+     3 ENGL260  Creative Writing                                   ENGL  4
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+MATH160 | Calculus I | MATH |  3
+. TOP
+Recno: 1
+. SKIP 1
+Recno: 2
+. BOTTOM
+Recno: 100
+. TOP
+Recno: 1
+. SETORDER CID
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\CID.cnx
+. LIST 3
+      CID      TITLE                                              DEPT_ID CREDITS
+     1 MATH160  Calculus I                                         MATH  3
+     2 ARTS110  Design                                             ARTS  3
+     3 ENGL260  Creative Writing                                   ENGL  4
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. SETORDER PHYSICAL
+SET ORDER: cleared (physical order).
+. LIST 3
+      CID      TITLE                                              DEPT_ID CREDITS
+     1 MATH160  Calculus I                                         MATH  3
+     2 ARTS110  Design                                             ARTS  3
+     3 ENGL260  Creative Writing                                   ENGL  4
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+.
+. ECHO ===== TEACHERS (INX single-order) =====
+===== TEACHERS (INX single-order) =====
+. SELECT TEACHERS
+Selected area 11.
+Current area: 11
+  File: TEACHERS  Recs: 20  Recno: 1
+. STRUCT
+Fields (7)
+  #  Name          Type   Len   Dec
+   1  TID           N        6     0
+   2  LNAME         C       20     0
+   3  FNAME         C       15     0
+   4  DEPT_ID       C        4     0
+   5  EMAIL         C       40     0
+   6  HIRE_DATE     D        8     0
+   7  TENURED       L        1     0
+Dbfile      : TEACHERS  (TEACHERS)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+20
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      TID    LNAME                FNAME           DEPT_ID EMAIL                                    HIRE_DATE TENURED
+     1 100000 Wilson               Sam             HIST swilson@mcc.edu                          20170116 F
+     2 100001 Thompson             Emma            HIST ethompson@mcc.edu                        20241125 F
+     3 100002 Smith                Sam             CHEM ssmith@mcc.edu                           20171104 T
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+100000 | Wilson | Sam | HIST | swilson@mcc.edu | 20170116 | F
+. TOP
+Recno: 1
+. SKIP 1
+Recno: 2
+. BOTTOM
+Recno: 20
+. TOP
+Recno: 1
+. FIND LNAME = "WILSON"
+1: Wilson
+. SEEK LNAME = "WILSON"
+Found at 1.
+. INDEXSEEK "WILSON"
+INDEXSEEK(): 0
+.
+. ECHO ===== CLASSES =====
+===== CLASSES =====
+. SELECT CLASSES
+Selected area 1.
+Current area: 1
+  File: CLASSES  Recs: 200  Recno: 1
+. STRUCT
+Fields (9)
+  #  Name          Type   Len   Dec
+   1  CLS_ID        C       10     0
+   2  TERM          C        6     0
+   3  CID           C        8     0
+   4  SEC           N        2     0
+   5  ROOM          C        8     0
+   6  DAYS          C        7     0
+   7  TIME          C       11     0
+   8  TID           N        6     0
+   9  CAP           N        3     0
+Dbfile      : CLASSES  (CLASSES)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+200
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      CLS_ID     TERM   CID      SEC ROOM     DAYS    TIME        TID    CAP
+     1 F25PSYC120 F25    PSYC120   5 BLDG05-1 TR      09:00-09:50 100018  32
+     2 S26BIOL170 S26    BIOL170   1 BLDG06-1 TR      10:00-10:50 100002  26
+     3 S26BIOL110 S26    BIOL110   2 BLDG01-1 F       11:00-11:50 100003  40
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+F25PSYC120 | F25 | PSYC120 |  5 | BLDG05-1 | TR | 09:00-09:50 | 100018 |  32
+. TOP
+Recno: 1
+. SKIP 1
+Recno: 2
+. BOTTOM
+Recno: 200
+. TOP
+Recno: 1
+. SETORDER CLS_ID
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\CLS_ID.cnx
+. LIST 3
+      CLS_ID     TERM   CID      SEC ROOM     DAYS    TIME        TID    CAP
+     1 F25PSYC120 F25    PSYC120   5 BLDG05-1 TR      09:00-09:50 100018  32
+     2 S26BIOL170 S26    BIOL170   1 BLDG06-1 TR      10:00-10:50 100002  26
+     3 S26BIOL110 S26    BIOL110   2 BLDG01-1 F       11:00-11:50 100003  40
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. SETORDER PHYSICAL
+SET ORDER: cleared (physical order).
+. LIST 3
+      CLS_ID     TERM   CID      SEC ROOM     DAYS    TIME        TID    CAP
+     1 F25PSYC120 F25    PSYC120   5 BLDG05-1 TR      09:00-09:50 100018  32
+     2 S26BIOL170 S26    BIOL170   1 BLDG06-1 TR      10:00-10:50 100002  26
+     3 S26BIOL110 S26    BIOL110   2 BLDG01-1 F       11:00-11:50 100003  40
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+.
+. ECHO ===== STUDENTS (INX single-order) =====
+===== STUDENTS (INX single-order) =====
+. SELECT STUDENTS
+Selected area 9.
+Current area: 9
+  File: STUDENTS  Recs: 206  Recno: 1
+. STRUCT
+Fields (9)
+  #  Name          Type   Len   Dec
+   1  SID           N        8     0
+   2  LNAME         C       20     0
+   3  FNAME         C       15     0
+   4  DOB           D        8     0
+   5  GENDER        C        1     0
+   6  MAJOR         C        4     0
+   7  ENROLL_D      D        8     0
+   8  GPA           N        4     2
+   9  EMAIL         C       40     0
+Dbfile      : STUDENTS  (STUDENTS)
+Index file  : (none)
+Tags        : (none)
+Active tag  : (none)
+. COUNT
+206
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. LIST 3
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+     1 50000000 Taylor               DeraldNew       19921225 X CSCI 00000000 3.18 quinn.taylor0@student.mcc.edu        
+     2 50000001 YY_TUPBUF            ZZ_TUPBUF       19560213 X CSCI 20240923 3.59 mason.martin1@student.mcc.edu        
+     3 50000002 Ramirez              Skyler          19890329 X HIST 20240722 2.58 skyler.ramirez2@student.mcc.edu      
+3 record(s) listed (limit 3). Use LIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+50000000 | Taylor | DeraldNew | 19921225 | X | CSCI | 00000000 | 3.18 | quinn.taylor0@student.mcc.edu
+. TOP
+Recno: 1
+. RECNO
+1
+.
+. ECHO ===== LOCATE / FIND / SEEK =====
+===== LOCATE / FIND / SEEK =====
+. LOCATE FOR LNAME = "DAVIS"
+Located.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+4
+. TUPLE *
+50000003 | Davis | Sophia | 19970808 | M | PHYS | 20250519 | 3.81 | sophia.davis3@student.mcc.edu
+. TOP
+Recno: 1
+. LOCATE FOR LNAME = "TAYLOR"
+Located.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. TUPLE *
+50000000 | Taylor | DeraldNew | 19921225 | X | CSCI | 00000000 | 3.18 | quinn.taylor0@student.mcc.edu
+. TOP
+Recno: 1
+. FIND LNAME = "TAYLOR"
+1: Taylor
+25: Taylor
+34: Taylor
+61: Taylor
+78: Taylor
+121: Taylor
+140: Taylor
+. TOP
+Recno: 1
+. FIND LNAME = "WHITE"
+12: White
+55: White
+94: White
+101: White
+117: White
+149: White
+168: White
+. TOP
+Recno: 1
+. SEEK LNAME = "DAVIS"
+Found at 4.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+4
+. TUPLE *
+50000003 | Davis | Sophia | 19970808 | M | PHYS | 20250519 | 3.81 | sophia.davis3@student.mcc.edu
+. TOP
+Recno: 1
+. SEEK FNAME = "ALEX"
+Found at 6.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+6
+. TUPLE *
+50000005 | Rodriguez | Alex | 19900617 | M | BUSN | 20231223 | 2.88 | alex.rodriguez5@student.mcc.edu
+.
+. ECHO ===== BOOLEAN / PREDICATE GRAMMAR =====
+===== BOOLEAN / PREDICATE GRAMMAR =====
+. TOP
+Recno: 1
+. LOCATE FOR LNAME = "TAYLOR"
+Located.
+. LIST 1
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+     1 50000000 Taylor               DeraldNew       19921225 X CSCI 00000000 3.18 quinn.taylor0@student.mcc.edu        
+1 record(s) listed (limit 1). Use LIST ALL to show more.
+. BOOLEAN (GPA > 3)
+.T.
+. BOOLEAN (GPA < 3)
+.F.
+. BOOLEAN (GPA >= 2 AND GPA <= 4)
+.T.
+.
+. ECHO ===== SMARTLIST / WHERE / SETFILTER =====
+===== SMARTLIST / WHERE / SETFILTER =====
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. SMARTLIST 5 FOR GPA >= 3.5
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+     2 50000001 YY_TUPBUF            ZZ_TUPBUF       19560213 X CSCI 20240923 3.59 mason.martin1@student.mcc.edu        
+     4 50000003 Davis                Sophia          19970808 M PHYS 20250519 3.81 sophia.davis3@student.mcc.edu        
+     7 50000006 Garcia               Mia             20011225 M BIOL 20230313 3.55 mia.garcia6@student.mcc.edu          
+     9 50000008 Lopez                Ethan           20000429 F CSCI 20240926 3.77 ethan.lopez8@student.mcc.edu         
+    11 50000010 Clark                Parker          20021115 F BIOL 20230228 3.58 parker.clark10@student.mcc.edu       
+5 record(s) listed (limit 5). Use SMARTLIST ALL to show more.
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. WHERE GPA >= 3.5
+. SHOW FILTER
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+. COUNT
+206
+.
+. SETFILTER LNAME = "TAYLOR"
+SET FILTER: expected 'TO'.
+. SHOW FILTER
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+. COUNT
+206
+.
+. ECHO ===== AGGREGATES =====
+===== AGGREGATES =====
+. SUM GPA
+606.88
+. AVERAGE GPA
+2.94602
+. AVG GPA
+2.94602
+. MIN 1, 2
+1
+. MAX 1, 2
+1
+.
+. ECHO ===== STUDENTS DATE FIELDS + DATE ALGEBRA =====
+===== STUDENTS DATE FIELDS + DATE ALGEBRA =====
+. LOCATE FOR LNAME = "TAYLOR"
+Located.
+. TUPLE DOB
+19921225
+. TUPLE ENROLL_D
+00000000
+. CALC DOB
+19921225
+. CALC DOB + 1
+19921226
+. CALC DOB - 1
+19921224
+. CALC DATEADD(DOB, 30)
+19930124
+. CALC DATEDIFF(DATE(), DOB)
+-12106
+. CALC DATE() - DOB
+-12106
+. ECHO [CANARY DATEDIFF-MATCH] Expect .T.:
+[CANARY DATEDIFF-MATCH] Expect .T.:
+. CALC (DATEDIFF(DATE(), DOB) = (DATE() - DOB))
+.F.
+.
+. ECHO ===== RELATIONS ENGINE =====
+===== RELATIONS ENGINE =====
+. REL LIST
+Relations for parent: STUDENTS
+  (none)
+. REL CLEAR ALL
+REL: cleared all
+OK
+. REL ADD STUDENTS ENROLL ON SID
+REL: STUDENTS -> ENROLL ON SID
+OK
+. REL ADD ENROLL CLASSES ON CLS_ID
+REL: ENROLL -> CLASSES ON CLS_ID
+OK
+. REL LIST
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 4)
+. REL REFRESH
+OK
+. REL_LIST
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 4)
+. REL_REFRESH
+OK
+. CMDREL
+CMDREL: How to relate COMMANDS -> CMD_ARGS by COMMAND
+
+1) CHILD (cmd_args):
+   SELECT cmd_args
+   INDEX ON COMMAND TAG CMDA
+   SETINDEX CMDA.inx
+   SETORDER CMDA
+
+2) PARENT (commands):
+   SELECT commands
+   INDEX ON COMMAND TAG CMDP
+   SETINDEX CMDP.inx
+   SETORDER CMDP
+
+3) Wire relation (same raw field on both sides):
+   SET RELATIONS TO COMMAND INTO cmd_args
+
+4) Sanity:
+   SELECT commands
+   SEEK "APPEND"     && requires the COMMAND index to be active
+   SELECT cmd_args
+   LIST FOR COMMAND="APPEND"
+
+Notes:
+ - If you prefer expression-based keys (e.g. UPPER(RTRIM(COMMAND))),
+   use the same expression for both parent and child index tags *and* in SET RELATIONS.
+. CMDREL LIST
+CMDREL: How to relate COMMANDS -> CMD_ARGS by COMMAND
+
+1) CHILD (cmd_args):
+   SELECT cmd_args
+   INDEX ON COMMAND TAG CMDA
+   SETINDEX CMDA.inx
+   SETORDER CMDA
+
+2) PARENT (commands):
+   SELECT commands
+   INDEX ON COMMAND TAG CMDP
+   SETINDEX CMDP.inx
+   SETORDER CMDP
+
+3) Wire relation (same raw field on both sides):
+   SET RELATIONS TO COMMAND INTO cmd_args
+
+4) Sanity:
+   SELECT commands
+   SEEK "APPEND"     && requires the COMMAND index to be active
+   SELECT cmd_args
+   LIST FOR COMMAND="APPEND"
+
+Notes:
+ - If you prefer expression-based keys (e.g. UPPER(RTRIM(COMMAND))),
+   use the same expression for both parent and child index tags *and* in SET RELATIONS.
+. CMDREL REFRESH
+CMDREL: How to relate COMMANDS -> CMD_ARGS by COMMAND
+
+1) CHILD (cmd_args):
+   SELECT cmd_args
+   INDEX ON COMMAND TAG CMDA
+   SETINDEX CMDA.inx
+   SETORDER CMDA
+
+2) PARENT (commands):
+   SELECT commands
+   INDEX ON COMMAND TAG CMDP
+   SETINDEX CMDP.inx
+   SETORDER CMDP
+
+3) Wire relation (same raw field on both sides):
+   SET RELATIONS TO COMMAND INTO cmd_args
+
+4) Sanity:
+   SELECT commands
+   SEEK "APPEND"     && requires the COMMAND index to be active
+   SELECT cmd_args
+   LIST FOR COMMAND="APPEND"
+
+Notes:
+ - If you prefer expression-based keys (e.g. UPPER(RTRIM(COMMAND))),
+   use the same expression for both parent and child index tags *and* in SET RELATIONS.
+.
+. ECHO ===== TUPLE CROSS-AREA =====
+===== TUPLE CROSS-AREA =====
+. SELECT STUDENTS
+Selected area 9.
+Current area: 9
+  File: STUDENTS  Recs: 206  Recno: 1
+. LOCATE FOR LNAME = "TAYLOR"
+Located.
+. TUPLE *
+50000000 | Taylor | DeraldNew | 19921225 | X | CSCI | 00000000 | 3.18 | quinn.taylor0@student.mcc.edu
+. TUPLE LNAME,FNAME
+Taylor | DeraldNew
+. TUPLE #11.*
+50000000 | Taylor | DeraldNew | 19921225 | X | CSCI | 00000000 | 3.18 | quinn.taylor0@student.mcc.edu
+. TUPLE #9.*,#11.LNAME
+50000000 | Taylor | DeraldNew | 19921225 | X | CSCI | 00000000 | 3.18 | quinn.taylor0@student.mcc.edu
+. TUPTALK
+TUPTALK / TT ? tuple normalization harness
+Syntax:
+  TUPTALK                 # show this help + status
+  TUPTALK RESET
+  TUPTALK ADD <type> <len> [<dec>] <raw...>
+      type: C|N|D|L (case-insensitive)
+      len : integer > 0
+      dec : required for N (>=0), omitted for C/D/L
+      raw : rest of the line, stored as-typed (quotes allowed)
+  TUPTALK LIST
+  TUPTALK NORMALIZE
+  TUPTALK DUMP
+  TUPTALK EXPORT CSV|TSV [<path>]
+      Export: index,type,len,dec,raw,norm (CSV quoted / TSV sanitized)
+  TUPTALK PUSH <fieldName|#>
+      Add one entry using the current record?s value and the field?s type/len/dec
+      Matching: exact(case-insensitive) ? unique prefix ? unique substring
+  TUPTALK PUSH ALL [FILTER <mask>]
+      Add entries for all fields; optional <mask> like CND to restrict types
+  TUPTALK PUSH FILTER <mask>
+      Alias for: PUSH ALL FILTER <mask>
+  TUPTALK PUSH ROW
+      Add one entry that is the entire fixed-width padded row (schema-aligned)
+  TUPTALK HELP
+Examples:
+  TUPTALK PUSH LASTNAME
+  TUPTALK PUSH 3
+  TUPTALK PUSH ALL
+  TUPTALK PUSH ALL FILTER CND
+  TUPTALK PUSH ROW
+TUPTALK: (empty)
+.
+. ECHO ===== TABLE BUFFER CANARY =====
+===== TABLE BUFFER CANARY =====
+. SELECT STUDENTS
+Selected area 9.
+Current area: 9
+  File: STUDENTS  Recs: 206  Recno: 1
+. LOCATE FOR LNAME = "TAYLOR"
+Located.
+. LIST 1
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+     1 50000000 Taylor               DeraldNew       19921225 X CSCI 00000000 3.18 quinn.taylor0@student.mcc.edu        
+1 record(s) listed (limit 1). Use LIST ALL to show more.
+. TUPLE *
+50000000 | Taylor | DeraldNew | 19921225 | X | CSCI | 00000000 | 3.18 | quinn.taylor0@student.mcc.edu
+. TABLE ON
+TABLE: 1 area(s) updated.
+. REPLACE FNAME WITH "DeraldNew"
+Buffered REPLACE FNAME at rec 1.
+. ECHO [CANARY BUF-VIS-1] TUPLE shows buffer immediately:
+[CANARY BUF-VIS-1] TUPLE shows buffer immediately:
+. TUPLE *
+50000000 | Taylor | DeraldNew | 19921225 | X | CSCI | 00000000 | 3.18 | quinn.taylor0@student.mcc.edu
+. ECHO [CANARY BUF-VIS-2] LIST still shows DBF until COMMIT:
+[CANARY BUF-VIS-2] LIST still shows DBF until COMMIT:
+. LIST 1
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+     1 50000000 Taylor               DeraldNew       19921225 X CSCI 00000000 3.18 quinn.taylor0@student.mcc.edu        
+1 record(s) listed (limit 1). Use LIST ALL to show more.
+. COMMIT
+COMMIT: reindexing INX...
+REINDEX (rebuild)
+  Index file   : D:\code\ccode\dottalkpp\data\indexes\STUDENTS.inx
+  Tag expr     : lname
+REINDEX: wrote STUDENTS.inx  (2INX v2, expr: lname, ASC)
+REINDEX: TABLE STALE cleared (fresh).
+Note: Index file was regenerated from its stored tag expression.
+COMMIT: done. (1 recs)
+. ECHO [CANARY BUF-VIS-3] LIST now reflects committed value:
+[CANARY BUF-VIS-3] LIST now reflects committed value:
+. LIST 1
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+   206          SHAKEDOWN            Derald                                   -0.0                                      
+1 record(s) listed (limit 1). Use LIST ALL to show more.
+.
+. REPLACE FNAME WITH "Derald"
+Buffered REPLACE FNAME at rec 206.
+. COMMIT
+COMMIT: reindexing INX...
+REINDEX (rebuild)
+  Index file   : D:\code\ccode\dottalkpp\data\indexes\STUDENTS.inx
+  Tag expr     : lname
+REINDEX: wrote STUDENTS.inx  (2INX v2, expr: lname, ASC)
+REINDEX: TABLE STALE cleared (fresh).
+Note: Index file was regenerated from its stored tag expression.
+COMMIT: done. (1 recs)
+. TABLE OFF
+TABLE: 1 area(s) updated.
+. LIST 1
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+   206          SHAKEDOWN            Derald                                   -0.0                                      
+1 record(s) listed (limit 1). Use LIST ALL to show more.
+.
+. ECHO ===== CALCWRITE REVERSIBLE WRITE (GPA +/- 0.01) =====
+===== CALCWRITE REVERSIBLE WRITE (GPA +/- 0.01) =====
+. SELECT STUDENTS
+Selected area 9.
+Current area: 9
+  File: STUDENTS  Recs: 206  Recno: 206
+. LOCATE FOR LNAME = "TAYLOR"
+Located.
+. TABLE ON
+TABLE: 1 area(s) updated.
+. TUPLE GPA
+3.18
+. CALC GPA = GPA + 0.01
+CALCWRITE: buffered GPA = 3.19 at rec 1.
+. TUPLE GPA
+3.19
+. COMMIT
+COMMIT: reindexing INX...
+REINDEX (rebuild)
+  Index file   : D:\code\ccode\dottalkpp\data\indexes\STUDENTS.inx
+  Tag expr     : lname
+REINDEX: wrote STUDENTS.inx  (2INX v2, expr: lname, ASC)
+REINDEX: TABLE STALE cleared (fresh).
+Note: Index file was regenerated from its stored tag expression.
+COMMIT: done. (1 recs)
+. LIST 1
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+   206          SHAKEDOWN            Derald                                   -0.0                                      
+1 record(s) listed (limit 1). Use LIST ALL to show more.
+. CALC GPA = GPA - 0.01
+CALCWRITE: buffered GPA = -0.0 at rec 206.
+. COMMIT
+COMMIT: reindexing INX...
+REINDEX (rebuild)
+  Index file   : D:\code\ccode\dottalkpp\data\indexes\STUDENTS.inx
+  Tag expr     : lname
+REINDEX: wrote STUDENTS.inx  (2INX v2, expr: lname, ASC)
+REINDEX: TABLE STALE cleared (fresh).
+Note: Index file was regenerated from its stored tag expression.
+COMMIT: done. (1 recs)
+. LIST 1
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL                           
+   206          SHAKEDOWN            Derald                                   -0.0                                      
+1 record(s) listed (limit 1). Use LIST ALL to show more.
+. TABLE OFF
+TABLE: 1 area(s) updated.
+.
+. ECHO ===== INDEX / CNX / SETINDEX / SETCNX / REINDEX =====
+===== INDEX / CNX / SETINDEX / SETCNX / REINDEX =====
+. SELECT BUILDING
+Selected area 0.
+Current area: 0
+  File: BUILDING  Recs: 8  Recno: 1
+. CNX building
+CNX: unknown subcommand: building
+. SETCNX TO "indexes\building.cnx"
+SET CNX: file not found: D:\code\ccode\dottalkpp\data\indexes\TO.cnx
+. SETORDER BLDG
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\BLDG.cnx
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. REINDEX
+REINDEX: tag file not found: D:\code\ccode\dottalkpp\data\indexes\BUILDING.inx
+Hint: create it with: INDEX ON <field|#n> TAG BUILDING.inx
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. SHOW ORDER
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+.
+. SELECT ROOMS
+Selected area 6.
+Current area: 6
+  File: ROOMS  Recs: 30  Recno: 1
+. CNX rooms
+CNX: unknown subcommand: rooms
+. SETCNX TO "indexes\rooms.cnx"
+SET CNX: file not found: D:\code\ccode\dottalkpp\data\indexes\TO.cnx
+. SETORDER ROOM
+SET ORDER: file not found: D:\code\ccode\dottalkpp\data\indexes\ROOM.cnx
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. REINDEX
+REINDEX: tag file not found: D:\code\ccode\dottalkpp\data\indexes\ROOMS.inx
+Hint: create it with: INDEX ON <field|#n> TAG ROOMS.inx
+. RECORD
+RECORD (edit): no UI available. Use: RECORD <field> WITH <value>
+. RECNO
+1
+. SHOW ORDER
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+.
+. SELECT STUDENTS
+Selected area 9.
+Current area: 9
+  File: STUDENTS  Recs: 206  Recno: 206
+. SETINDEX
+SET INDEX: missing filename.
+. REINDEX
+REINDEX (rebuild)
+  Index file   : D:\code\ccode\dottalkpp\data\indexes\STUDENTS.inx
+  Tag expr     : lname
+REINDEX: wrote STUDENTS.inx  (2INX v2, expr: lname, ASC)
+Note: Index file was regenerated from its stored tag expression.
+. SHOW ORDER
+SHOW syntax
+  SHOW TABLE
+  SHOW COLUMNS
+  SHOW INDEX
+. INDEXSEEK "DAVIS"
+INDEXSEEK(): 4
+.
+. ECHO ===== FILE OPS (SAFE, under tmp\) =====
+===== FILE OPS (SAFE, under tmp\) =====
+. ECHO [NOTE] Windows-only BANG usage:
+[NOTE] Windows-only BANG usage:
+. ! cmd /c "echo DotTalkTmpProbe>tmp\dt_probe.txt"
+. DIR tmp\dt_probe.txt
+2026-02-16 09:13                 17 dt_probe.txt
+. COPY FILE tmp\dt_probe.txt TO tmp\dt_probe2.txt
+COPY FILE failed: Destination exists (use OVERWRITE): tmp\dt_probe2.txt
+. DIR tmp\dt_probe*.txt
+Path not found: tmp\dt_probe*.txt
+. ERASE tmp\dt_probe*.txt
+ERASE: Table not found: tmp\dt_probe*.txt
+. DIR tmp\dt_probe*.txt
+Path not found: tmp\dt_probe*.txt
+.
+. ECHO ===== SQLITE =====
+===== SQLITE =====
+. * Note: SQLITE supports VERSION/OPEN/CLOSE/EXEC/SELECT (no "DB" subcommand).
+. SQLITE OPEN "tmp\sql_regression.sqlite"
+SQLITE: opened tmpsql_regression.sqlite
+. SQLITE EXEC CREATE TABLE IF NOT EXISTS t(x INT);
+OK
+. SQLITE EXEC DELETE FROM t;
+OK
+. SQLITE EXEC INSERT INTO t(x) VALUES (1);
+OK
+. SQLITE EXEC INSERT INTO t(x) VALUES (2);
+OK
+. SQLITE SELECT SELECT * FROM t;
+x
+-
+1
+2
+. SQLITE SELECT * FROM t
+SQLITE SELECT failed: sqlite_query prepare rc=1: near "*": syntax error
+. SQLITE CLOSE
+SQLITE: closed
+.
+. ECHO ====== SQL =======
+====== SQL =======
+. SQLSEL FOR LNAME = WHITE
+SQL DEBUG ? raw: "FOR LNAME = WHITE"
+SQL DEBUG ? normalized: LNAME = "WHITE"
+SQL DEBUG ? fields: LNAME
+[rec 1] LNAME="TAYLOR" => false
+[rec 2] LNAME="YY_TUPBUF" => false
+[rec 3] LNAME="RAMIREZ" => false
+[rec 4] LNAME="DAVIS" => false
+[rec 5] LNAME="RODRIGUEZ" => false
+[rec 6] LNAME="RODRIGUEZ" => false
+[rec 7] LNAME="GARCIA" => false
+[rec 8] LNAME="RAMIREZ" => false
+[rec 9] LNAME="LOPEZ" => false
+[rec 10] LNAME="MARTIN" => false
+[rec 11] LNAME="CLARK" => false
+[rec 12] LNAME="WHITE" => true
+[rec 13] LNAME="LEWIS" => false
+[rec 14] LNAME="SMITH" => false
+[rec 15] LNAME="JACKSON" => false
+[rec 16] LNAME="MARTIN" => false
+[rec 17] LNAME="BROWN" => false
+[rec 18] LNAME="WILLIAMS" => false
+[rec 19] LNAME="HARRIS" => false
+[rec 20] LNAME="MARTINEZ" => false
+[rec 21] LNAME="ANDERSON" => false
+[rec 22] LNAME="LOPEZ" => false
+[rec 23] LNAME="DAVIS" => false
+[rec 24] LNAME="THOMPSON" => false
+[rec 25] LNAME="TAYLOR" => false
+[rec 26] LNAME="GONZALEZ" => false
+[rec 27] LNAME="MILLER" => false
+[rec 28] LNAME="ROBINSON" => false
+[rec 29] LNAME="RAMIREZ" => false
+[rec 30] LNAME="WILLIAMS" => false
+[rec 31] LNAME="GARCIA" => false
+[rec 32] LNAME="LEE" => false
+[rec 33] LNAME="SANCHEZ" => false
+[rec 34] LNAME="TAYLOR" => false
+[rec 35] LNAME="ROBINSON" => false
+[rec 36] LNAME="DAVIS" => false
+[rec 37] LNAME="HARRIS" => false
+[rec 38] LNAME="HARRIS" => false
+[rec 39] LNAME="HERNANDEZ" => false
+[rec 40] LNAME="LOPEZ" => false
+[rec 41] LNAME="MARTINEZ" => false
+[rec 42] LNAME="WILLIAMS" => false
+[rec 43] LNAME="MILLER" => false
+[rec 44] LNAME="LOPEZ" => false
+[rec 45] LNAME="CLARK" => false
+[rec 46] LNAME="SMITH" => false
+[rec 47] LNAME="ANDERSON" => false
+[rec 48] LNAME="MOORE" => false
+[rec 49] LNAME="MARTIN" => false
+[rec 50] LNAME="WASHINGTON" => false
+[rec 51] LNAME="MARTINEZ" => false
+[rec 52] LNAME="HARRIS" => false
+[rec 53] LNAME="ROBINSON" => false
+[rec 54] LNAME="DAVIS" => false
+[rec 55] LNAME="WHITE" => true
+[rec 56] LNAME="HARRIS" => false
+[rec 57] LNAME="SANCHEZ" => false
+[rec 58] LNAME="GARCIA" => false
+[rec 59] LNAME="HARRIS" => false
+[rec 60] LNAME="RAMIREZ" => false
+[rec 61] LNAME="TAYLOR" => false
+[rec 62] LNAME="MOORE" => false
+[rec 63] LNAME="JACKSON" => false
+[rec 64] LNAME="MARTINEZ" => false
+[rec 65] LNAME="THOMPSON" => false
+[rec 66] LNAME="THOMAS" => false
+[rec 67] LNAME="PEREZ" => false
+[rec 68] LNAME="MARTINEZ" => false
+[rec 69] LNAME="CLARK" => false
+[rec 70] LNAME="JOHNSON" => false
+[rec 71] LNAME="MARTIN" => false
+[rec 72] LNAME="MARTIN" => false
+[rec 73] LNAME="LEWIS" => false
+[rec 74] LNAME="HERNANDEZ" => false
+[rec 75] LNAME="SANCHEZ" => false
+[rec 76] LNAME="WILSON" => false
+[rec 77] LNAME="BROWN" => false
+[rec 78] LNAME="TAYLOR" => false
+[rec 79] LNAME="ANDERSON" => false
+[rec 80] LNAME="THOMAS" => false
+[rec 81] LNAME="JOHNSON" => false
+[rec 82] LNAME="SANCHEZ" => false
+[rec 83] LNAME="WILLIAMS" => false
+[rec 84] LNAME="ANDERSON" => false
+[rec 85] LNAME="RODRIGUEZ" => false
+[rec 86] LNAME="ANDERSON" => false
+[rec 87] LNAME="RAMIREZ" => false
+[rec 88] LNAME="HARRIS" => false
+[rec 89] LNAME="MILLER" => false
+[rec 90] LNAME="CLARK" => false
+[rec 91] LNAME="JACKSON" => false
+[rec 92] LNAME="SMITH" => false
+[rec 93] LNAME="JACKSON" => false
+[rec 94] LNAME="WHITE" => true
+[rec 95] LNAME="MARTIN" => false
+[rec 96] LNAME="GARCIA" => false
+[rec 97] LNAME="MILLER" => false
+[rec 98] LNAME="LEE" => false
+[rec 99] LNAME="SANCHEZ" => false
+[rec 100] LNAME="LEE" => false
+[rec 101] LNAME="WHITE" => true
+[rec 102] LNAME="LEWIS" => false
+[rec 103] LNAME="WILLIAMS" => false
+[rec 104] LNAME="MOORE" => false
+[rec 105] LNAME="RODRIGUEZ" => false
+[rec 106] LNAME="LOPEZ" => false
+[rec 107] LNAME="SANCHEZ" => false
+[rec 108] LNAME="WILSON" => false
+[rec 109] LNAME="GONZALEZ" => false
+[rec 110] LNAME="MILLER" => false
+[rec 111] LNAME="GARCIA" => false
+[rec 112] LNAME="RAMIREZ" => false
+[rec 113] LNAME="ANDERSON" => false
+[rec 114] LNAME="CLARK" => false
+[rec 115] LNAME="SANCHEZ" => false
+[rec 116] LNAME="RODRIGUEZ" => false
+[rec 117] LNAME="WHITE" => true
+[rec 118] LNAME="MARTIN" => false
+[rec 119] LNAME="GONZALEZ" => false
+[rec 120] LNAME="ROBINSON" => false
+[rec 121] LNAME="TAYLOR" => false
+[rec 122] LNAME="MILLER" => false
+[rec 123] LNAME="MILLER" => false
+[rec 124] LNAME="JOHNSON" => false
+[rec 125] LNAME="JACKSON" => false
+[rec 126] LNAME="RODRIGUEZ" => false
+[rec 127] LNAME="MILLER" => false
+[rec 128] LNAME="ROBINSON" => false
+[rec 129] LNAME="WILSON" => false
+[rec 130] LNAME="ROBINSON" => false
+[rec 131] LNAME="PEREZ" => false
+[rec 132] LNAME="BROWN" => false
+[rec 133] LNAME="WILSON" => false
+[rec 134] LNAME="JOHNSON" => false
+[rec 135] LNAME="ROBINSON" => false
+[rec 136] LNAME="BROWN" => false
+[rec 137] LNAME="ANDERSON" => false
+[rec 138] LNAME="THOMPSON" => false
+[rec 139] LNAME="WILLIAMS" => false
+[rec 140] LNAME="TAYLOR" => false
+[rec 141] LNAME="RODRIGUEZ" => false
+[rec 142] LNAME="CLARK" => false
+[rec 143] LNAME="MARTINEZ" => false
+[rec 144] LNAME="GONZALEZ" => false
+[rec 145] LNAME="MILLER" => false
+[rec 146] LNAME="MILLER" => false
+[rec 147] LNAME="RODRIGUEZ" => false
+[rec 148] LNAME="JONES" => false
+[rec 149] LNAME="WHITE" => true
+[rec 150] LNAME="SMITH" => false
+[rec 151] LNAME="RODRIGUEZ" => false
+[rec 152] LNAME="LEE" => false
+[rec 153] LNAME="JACKSON" => false
+[rec 154] LNAME="RAMIREZ" => false
+[rec 155] LNAME="CLARK" => false
+[rec 156] LNAME="MOORE" => false
+[rec 157] LNAME="WILSON" => false
+[rec 158] LNAME="THOMPSON" => false
+[rec 159] LNAME="HARRIS" => false
+[rec 160] LNAME="HERNANDEZ" => false
+[rec 161] LNAME="THOMPSON" => false
+[rec 162] LNAME="HARRIS" => false
+[rec 163] LNAME="ANDERSON" => false
+[rec 164] LNAME="SMITH" => false
+[rec 165] LNAME="ROBINSON" => false
+[rec 166] LNAME="MOORE" => false
+[rec 167] LNAME="LEWIS" => false
+[rec 168] LNAME="WHITE" => true
+[rec 169] LNAME="MARTINEZ" => false
+[rec 170] LNAME="LEWIS" => false
+[rec 171] LNAME="DAVIS" => false
+[rec 172] LNAME="JONES" => false
+[rec 173] LNAME="MARTIN" => false
+[rec 174] LNAME="MILLER" => false
+[rec 175] LNAME="SANCHEZ" => false
+[rec 176] LNAME="JONES" => false
+[rec 177] LNAME="SANCHEZ" => false
+[rec 178] LNAME="RAMIREZ" => false
+[rec 179] LNAME="WILLIAMS" => false
+[rec 180] LNAME="ANDERSON" => false
+[rec 181] LNAME="RODRIGUEZ" => false
+[rec 182] LNAME="JONES" => false
+[rec 183] LNAME="THOMPSON" => false
+[rec 184] LNAME="MARTIN" => false
+[rec 185] LNAME="WILLIAMS" => false
+[rec 186] LNAME="CLARK" => false
+[rec 187] LNAME="LEE" => false
+[rec 188] LNAME="GONZALEZ" => false
+[rec 189] LNAME="HARRIS" => false
+[rec 190] LNAME="MARTINEZ" => false
+[rec 191] LNAME="HARRIS" => false
+[rec 192] LNAME="ROBINSON" => false
+[rec 193] LNAME="JOHNSON" => false
+[rec 194] LNAME="JACKSON" => false
+[rec 195] LNAME="RODRIGUEZ" => false
+[rec 196] LNAME="MILLER" => false
+[rec 197] LNAME="PEREZ" => false
+[rec 198] LNAME="PEREZ" => false
+[rec 199] LNAME="RODRIGUEZ" => false
+[rec 200] LNAME="DAVIS" => false
+[rec 201] LNAME="ZETA" => false
+[rec 202] LNAME="ZETA" => false
+[rec 203] LNAME="OMEGA" => false
+[rec 204] LNAME="ZETA2" => false
+[rec 205] LNAME="WASHINGTON" => false
+[rec 206] LNAME="SHAKEDOWN" => false
+SQL DEBUG ? scanned: 206  matched: 7
+7
+.
+. ECHO ===== DOTSCRIPT / GO (REAL, NOT USAGE) =====
+===== DOTSCRIPT / GO (REAL, NOT USAGE) =====
+. ! cmd /c "echo SET ECHO ON>tmp\mini_regression.dts"
+. ! cmd /c "echo ECHO MINI_DOTSCRIPT_OK>>tmp\mini_regression.dts"
+. DOTSCRIPT tmp\mini_regression.dts
+Echo is ON
+MINI_DOTSCRIPT_OK
+. GO ECHO GO_OK
+GO: unrecognized form. Use TOP, BOTTOM, TO n, RECORD n, or a number.
+.
+. ECHO ===== SCRIPTING BLOCKS (SAFE NON-LOOPING) =====
+===== SCRIPTING BLOCKS (SAFE NON-LOOPING) =====
+. IF .F.
+.     ECHO IF_BRANCH_RAN_UNEXPECTED
+. ELSE
+.     ECHO ELSE_BRANCH_RAN_OK
+ELSE_BRANCH_RAN_OK
+. ENDIF
+.
+. WHILE .F.
+WHILE: buffering body. Type ENDWHILE to execute loop.
+.     ECHO WHILE_BODY_RAN_UNEXPECTED
+WHILE_BODY_RAN_UNEXPECTED
+. ENDWHILE
+ENDWHILE: executed 0 iteration(s) over 0 line(s).
+.
+. UNTIL .T.
+UNTIL: buffering body. Type ENDUNTIL to execute loop.
+.     ECHO UNTIL_BODY_RAN_UNEXPECTED
+UNTIL_BODY_RAN_UNEXPECTED
+. ENDUNTIL
+ENDUNTIL: executed 0 iteration(s) over 0 line(s).
+.
+. SELECT BUILDING
+Selected area 0.
+Current area: 0
+  File: BUILDING  Recs: 8  Recno: 1
+. TOP
+Recno: 1
+. SCAN
+SCAN: buffering lines. Type ENDSCAN to execute.
+.     TUPLE *
+. ENDSCAN
+BLDG01 | Science Hall
+BLDG02 | Main Hall
+BLDG03 | Library
+BLDG04 | Business Center
+BLDG05 | Arts Center
+BLDG06 | Technology
+BLDG07 | Gym
+BLDG08 | Annex
+ENDSCAN: 8 match(es), 8 iteration(s).
+.
+. IF .F.
+.     LOOP
+.         ECHO LOOP_BODY
+.         CONTINUE
+.     ENDLOOP
+. ENDIF
+.
+. USE students NOINDEX
+USE: 'students.dbf' is already open in area 9. Close it first (e.g., SCHEMAS CLOSE 9).
+. SELECT students
+Selected area 9.
+Current area: 9
+  File: STUDENTS  Recs: 206  Recno: 1
+. TUPTALK RESET
+TUPTALK: tuple buffer cleared.
+. TUPTALK PUSH ALL
+TUPTALK: pushed #0 from field 1 (SID, type=N len=8 dec=0).
+TUPTALK: pushed #1 from field 2 (LNAME, type=C len=20 dec=0).
+TUPTALK: pushed #2 from field 3 (FNAME, type=C len=15 dec=0).
+TUPTALK: pushed #3 from field 4 (DOB, type=D len=8 dec=0).
+TUPTALK: pushed #4 from field 5 (GENDER, type=C len=1 dec=0).
+TUPTALK: pushed #5 from field 6 (MAJOR, type=C len=4 dec=0).
+TUPTALK: pushed #6 from field 7 (ENROLL_D, type=D len=8 dec=0).
+TUPTALK: pushed #7 from field 8 (GPA, type=N len=4 dec=2).
+TUPTALK: pushed #8 from field 9 (EMAIL, type=C len=40 dec=0).
+TUPTALK PUSH ALL: added 9 entries.
+. TUPTALK PUSH FILTER CND
+TUPTALK: pushed #9 from field 1 (SID, type=N len=8 dec=0).
+TUPTALK: pushed #10 from field 2 (LNAME, type=C len=20 dec=0).
+TUPTALK: pushed #11 from field 3 (FNAME, type=C len=15 dec=0).
+TUPTALK: pushed #12 from field 4 (DOB, type=D len=8 dec=0).
+TUPTALK: pushed #13 from field 5 (GENDER, type=C len=1 dec=0).
+TUPTALK: pushed #14 from field 6 (MAJOR, type=C len=4 dec=0).
+TUPTALK: pushed #15 from field 7 (ENROLL_D, type=D len=8 dec=0).
+TUPTALK: pushed #16 from field 8 (GPA, type=N len=4 dec=2).
+TUPTALK: pushed #17 from field 9 (EMAIL, type=C len=40 dec=0).
+TUPTALK PUSH ALL FILTER CND: added 9 entries.
+. TUPTALK PUSH LASTNAME
+TUPTALK PUSH: field "LASTNAME" not found (use name or 1-based index; matching is exact, then unique prefix, then unique substring).
+. TUPTALK PUSH 3
+TUPTALK: pushed #18 from field 3 (FNAME, type=C len=15 dec=0).
+. TUPTALK PUSH ROW
+TUPTALK: pushed ROW as #19 (len=108, fields=9).
+. TUPTALK LIST
+TUPTALK LIST (20 entries):
+  [0] type=N len=8 dec=0 raw=[50000000]
+  [1] type=C len=20 dec=0 raw=[Taylor]
+  [2] type=C len=15 dec=0 raw=[DeraldNew]
+  [3] type=D len=8 dec=0 raw=[19921225]
+  [4] type=C len=1 dec=0 raw=[X]
+  [5] type=C len=4 dec=0 raw=[CSCI]
+  [6] type=D len=8 dec=0 raw=[00000000]
+  [7] type=N len=4 dec=2 raw=[3.19]
+  [8] type=C len=40 dec=0 raw=[quinn.taylor0@student.mcc.edu]
+  [9] type=N len=8 dec=0 raw=[50000000]
+  [10] type=C len=20 dec=0 raw=[Taylor]
+  [11] type=C len=15 dec=0 raw=[DeraldNew]
+  [12] type=D len=8 dec=0 raw=[19921225]
+  [13] type=C len=1 dec=0 raw=[X]
+  [14] type=C len=4 dec=0 raw=[CSCI]
+  [15] type=D len=8 dec=0 raw=[00000000]
+  [16] type=N len=4 dec=2 raw=[3.19]
+  [17] type=C len=40 dec=0 raw=[quinn.taylor0@student.mcc.edu]
+  [18] type=C len=15 dec=0 raw=[DeraldNew]
+  [19] type=C len=108 dec=0 raw=[50000000Taylor              DeraldNew      19921225XCSCI000000003.19quinn.taylor0@student.mcc.edu           ]
+. TUPTALK NORMALIZE
+TUPTALK NORMALIZE:
+  [0] type=N len=8 dec=0
+       raw : [50000000]
+       norm: [50000000]
+  [1] type=C len=20 dec=0
+       raw : [Taylor]
+       norm: [Taylor]
+  [2] type=C len=15 dec=0
+       raw : [DeraldNew]
+       norm: [DeraldNew]
+  [3] type=D len=8 dec=0
+       raw : [19921225]
+       norm: [19921225]
+  [4] type=C len=1 dec=0
+       raw : [X]
+       norm: [X]
+  [5] type=C len=4 dec=0
+       raw : [CSCI]
+       norm: [CSCI]
+  [6] type=D len=8 dec=0
+       raw : [00000000]
+       norm: [00000000]
+  [7] type=N len=4 dec=2
+       raw : [3.19]
+       norm: [3.19]
+  [8] type=C len=40 dec=0
+       raw : [quinn.taylor0@student.mcc.edu]
+       norm: [quinn.taylor0@student.mcc.edu]
+  [9] type=N len=8 dec=0
+       raw : [50000000]
+       norm: [50000000]
+  [10] type=C len=20 dec=0
+       raw : [Taylor]
+       norm: [Taylor]
+  [11] type=C len=15 dec=0
+       raw : [DeraldNew]
+       norm: [DeraldNew]
+  [12] type=D len=8 dec=0
+       raw : [19921225]
+       norm: [19921225]
+  [13] type=C len=1 dec=0
+       raw : [X]
+       norm: [X]
+  [14] type=C len=4 dec=0
+       raw : [CSCI]
+       norm: [CSCI]
+  [15] type=D len=8 dec=0
+       raw : [00000000]
+       norm: [00000000]
+  [16] type=N len=4 dec=2
+       raw : [3.19]
+       norm: [3.19]
+  [17] type=C len=40 dec=0
+       raw : [quinn.taylor0@student.mcc.edu]
+       norm: [quinn.taylor0@student.mcc.edu]
+  [18] type=C len=15 dec=0
+       raw : [DeraldNew]
+       norm: [DeraldNew]
+  [19] type=C len=108 dec=0
+       raw : [50000000Taylor              DeraldNew      19921225XCSCI000000003.19quinn.taylor0@student.mcc.edu           ]
+       norm: [50000000Taylor              DeraldNew      19921225XCSCI000000003.19quinn.taylor0@student.mcc.edu]
+. TUPTALK DUMP
+TUPTALK DUMP:
+  [0] type=N len=8 dec=0
+       raw : [50000000]
+       norm: [50000000]
+  [1] type=C len=20 dec=0
+       raw : [Taylor]
+       norm: [Taylor]
+  [2] type=C len=15 dec=0
+       raw : [DeraldNew]
+       norm: [DeraldNew]
+  [3] type=D len=8 dec=0
+       raw : [19921225]
+       norm: [19921225]
+  [4] type=C len=1 dec=0
+       raw : [X]
+       norm: [X]
+  [5] type=C len=4 dec=0
+       raw : [CSCI]
+       norm: [CSCI]
+  [6] type=D len=8 dec=0
+       raw : [00000000]
+       norm: [00000000]
+  [7] type=N len=4 dec=2
+       raw : [3.19]
+       norm: [3.19]
+  [8] type=C len=40 dec=0
+       raw : [quinn.taylor0@student.mcc.edu]
+       norm: [quinn.taylor0@student.mcc.edu]
+  [9] type=N len=8 dec=0
+       raw : [50000000]
+       norm: [50000000]
+  [10] type=C len=20 dec=0
+       raw : [Taylor]
+       norm: [Taylor]
+  [11] type=C len=15 dec=0
+       raw : [DeraldNew]
+       norm: [DeraldNew]
+  [12] type=D len=8 dec=0
+       raw : [19921225]
+       norm: [19921225]
+  [13] type=C len=1 dec=0
+       raw : [X]
+       norm: [X]
+  [14] type=C len=4 dec=0
+       raw : [CSCI]
+       norm: [CSCI]
+  [15] type=D len=8 dec=0
+       raw : [00000000]
+       norm: [00000000]
+  [16] type=N len=4 dec=2
+       raw : [3.19]
+       norm: [3.19]
+  [17] type=C len=40 dec=0
+       raw : [quinn.taylor0@student.mcc.edu]
+       norm: [quinn.taylor0@student.mcc.edu]
+  [18] type=C len=15 dec=0
+       raw : [DeraldNew]
+       norm: [DeraldNew]
+  [19] type=C len=108 dec=0
+       raw : [50000000Taylor              DeraldNew      19921225XCSCI000000003.19quinn.taylor0@student.mcc.edu           ]
+       norm: [50000000Taylor              DeraldNew      19921225XCSCI000000003.19quinn.taylor0@student.mcc.edu]
+. TUPTALK EXPORT CSV students_norm.csv
+TUPTALK EXPORT: wrote 20 rows to "students_norm.csv".
+. TUPTALK EXPORT TSV students_norm.tsv
+TUPTALK EXPORT: wrote 20 rows to "students_norm.tsv".
+.
+. * ============================================================
+. * SQLITE_SMOKE.DTS
+. * Basic smoke test for DotTalk++ SQLITE command.
+. * - Creates an in-memory DB, makes a table, inserts a few rows, SELECTs, then closes.
+. * Keep ASCII only.
+. * ============================================================
+.
+. ECHO ===== SQLITE SMOKE START =====
+===== SQLITE SMOKE START =====
+.
+. SQLITE VERSION
+SQLite: 3.50.4
+.
+. * Open in-memory
+. SQLITE OPEN :memory:
+SQLITE: opened :memory:
+.
+. * Create + insert
+. SQLITE EXEC CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT, n INTEGER);
+OK
+. SQLITE EXEC INSERT INTO t (name, n) VALUES ('alpha', 10);
+OK
+. SQLITE EXEC INSERT INTO t (name, n) VALUES ('bravo', 20);
+OK
+. SQLITE EXEC INSERT INTO t (name, n) VALUES ('charlie', 30);
+OK
+.
+. * Query
+. SQLITE SELECT SELECT id, name, n FROM t ORDER BY id;
+id | name    | n
+---+---------+---
+1  | alpha   | 10
+2  | bravo   | 20
+3  | charlie | 30
+.
+. * Close
+. SQLITE CLOSE
+SQLITE: closed
+.
+. ECHO ===== SQLITE SMOKE END =====
+===== SQLITE SMOKE END =====
+.
+. ECHO ===== MANUAL / DESTRUCTIVE / HANG-RISK =====
+===== MANUAL / DESTRUCTIVE / HANG-RISK =====
+. ECHO [MANUAL] Interactive/hang-risk:
+[MANUAL] Interactive/hang-risk:
+. ECHO   BROWSE / BROWSER / SIMPLEBROWSER / SMARTBROWSER
+BROWSE / BROWSER / SIMPLEBROWSER / SMARTBROWSER
+. ECHO   BROWSETUI / BROWSETV / FOXTALK / FOXPRO / TVISION / TURBOPACK
+BROWSETUI / BROWSETV / FOXTALK / FOXPRO / TVISION / TURBOPACK
+. ECHO
+
+. ECHO [MANUAL] Destructive ops (do not run in automated regression):
+[MANUAL] Destructive ops (do not run in automated regression):
+. ECHO   DELETE / RECALL / UNDELETE / PACK / ZAP
+DELETE / RECALL / UNDELETE / PACK / ZAP
+. ECHO
+
+. ECHO [MANUAL] Unknown-grammar / environment-dependent (run after HELP <cmd> confirms args):
+[MANUAL] Unknown-grammar / environment-dependent (run after HELP <cmd> confirms args):
+. ECHO   EXPORT / IMPORT / REBUILD / SORT / VALIDATE / TEST / SQLERASE / SHUTDOWN
+EXPORT / IMPORT / REBUILD / SORT / VALIDATE / TEST / SQLERASE / SHUTDOWN
+.
+. ECHO ===== CLEAN SHUTDOWN =====
+===== CLEAN SHUTDOWN =====
+. SCHEMAS
+SCHEMAS: Listing open work areas...
+  Area 0: opened 'BUILDING.DBF'
+  Area 1: opened 'CLASSES.DBF'
+  Area 2: opened 'COURSES.DBF'
+  Area 3: opened 'DEPT.DBF'
+  Area 4: opened 'ENROLL.DBF'
+  Area 5: opened 'MAJORS.DBF'
+  Area 6: opened 'ROOMS.DBF'
+  Area 7: opened 'smoketest.dbf'
+  Area 8: opened 'STUD_MAJ.DBF'
+  Area 9: opened 'STUDENTS.dbf'
+  Area 10: opened 'TASSIGN.DBF'
+  Area 11: opened 'TEACHERS.dbf'
+  Area 12: opened 'TERMS.DBF'
+  Area 13: --- closed ---
+  Area 14: --- closed ---
+  Area 15: --- closed ---
+  Area 16: --- closed ---
+  Area 17: --- closed ---
+  Area 18: --- closed ---
+  Area 19: --- closed ---
+  Area 20: --- closed ---
+  Area 21: --- closed ---
+  Area 22: --- closed ---
+  Area 23: --- closed ---
+  Area 24: --- closed ---
+  Area 25: --- closed ---
+  Area 26: --- closed ---
+  Area 27: --- closed ---
+  Area 28: --- closed ---
+  Area 29: --- closed ---
+  Area 30: --- closed ---
+  Area 31: --- closed ---
+SCHEMAS: 13 of 32 area(s) in use.
+. SCHEMAS CLOSE
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 13 area(s) closed.
+. ECHO ===== EXHAUSTIVE FULL REGRESSION END =====
+===== EXHAUSTIVE FULL REGRESSION END =====
+.
+. QUIT
+SHUTDOWN: running shutdown tasks...
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 0 area(s) closed.
+SHUTDOWN: done.
+PS D:\code\ccode>
+PS D:\code\ccode> # NOTE (PowerShell, run outside DotTalk after it exits):
+PS D:\code\ccode> $py12 = "D:\code\ccode\build\vcpkg_installed\x64-windows\tools\python3\python.exe"
+PS D:\code\ccode> & $py12 D:\code\ccode\bindings\pydottalk_smoke.py
+PY: 3.12.9 (main, Feb 14 2026, 19:21:31) [MSC v.1944 64 bit (AMD64)]
+EXE: D:\code\ccode\build\vcpkg_installed\x64-windows\tools\python3\python.exe
+OK: imported pydottalk
+  file   : D:\code\ccode\build\bindings\pydottalk\Release\pydottalk.cp312-win_amd64.pyd
+  ping   : hello, world
+  version: pydottalk 0.3.0
+  dbf_dir: D:\code\ccode\dottalkpp\data\dbf
+  list_dbf count: 13
+   - D:\code\ccode\dottalkpp\data\dbf\BUILDING.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\CLASSES.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\COURSES.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\DEPT.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\ENROLL.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\MAJORS.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\ROOMS.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\smoketest.dbf
+   - D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf
+   - D:\code\ccode\dottalkpp\data\dbf\STUD_MAJ.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\TASSIGN.DBF
+   - D:\code\ccode\dottalkpp\data\dbf\TEACHERS.dbf
+   - D:\code\ccode\dottalkpp\data\dbf\TERMS.DBF
+  opening: D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf
+  isOpen  : True
+  recCount: 206
+  recno   : 1
+  fields  : 9
+  filename    : 'D:\\code\\ccode\\dottalkpp\\data\\dbf\\STUDENTS.dbf'
+  dbfDir      : 'D:\\code\\ccode\\dottalkpp\\data\\dbf'
+  dbfBasename : 'STUDENTS'
+  logicalName : 'STUDENTS'
+  recLength   : 109
+  FieldDef sample:
+   - SID N 8 0
+   - LNAME C 20 0
+   - FNAME C 15 0
+   - DOB D 8 0
+   - GENDER C 1 0
+  First record values (first up to 6 fields):
+   [1] 50000000
+   [2] Taylor
+   [3] DeraldNew
+   [4] 19921225
+   [5] X
+   [6] CSCI
+OK: smoke test completed (read-only).
+PS D:\code\ccode>

@@ -1,0 +1,31 @@
+Added as the working Codex baseline for relations.
+
+Pinned points:
+
+* One shared relation backend
+* Two command surfaces over that backend:
+
+  * DotTalk native: `REL ...`
+  * FoxPro-compatible: `SET RELATION ...`
+* Parser families must remain distinct:
+
+  * `REL`
+  * `SET RELATION`
+  * `SET RELATIONS` (legacy)
+* Singular `SET RELATION` must be dispatched before legacy plural `SET RELATIONS`
+* Both surfaces normalize to the same backend operations:
+
+  * define relation
+  * remove one relation
+  * clear current parent’s outgoing relations
+  * clear all relations
+  * list / refresh / enumerate
+* Preserve `expr_text` from FoxPro syntax even if current matching is mostly field-based
+* Do not implement FoxPro syntax by synthesizing `REL ...` text and re-parsing it
+* Help split:
+
+  * `dotref.hpp` = native DotTalk relation engine
+  * `foxref.hpp` = FoxPro relationship syntax
+  * existing `relref` remains untouched
+
+I’ll treat this as the current relations architecture baseline going forward.

@@ -1,0 +1,154 @@
+// src/dt/predicate/predicate_engine.cpp
+//
+// Core field lookup and DBF → Value logic.
+//
+// NOTE: expr::Node evaluation is intentionally left as a stub for now;
+// record_matches will treat pred=nullptr as "always true" and non-null
+// predicates as "not yet implemented" with an error.
+//
+
+#include "dt/predicate/predicate_engine.hpp"
+#include "dt/predicate/value_convert.hpp"
+#include "value_normalize.hpp"
+
+#include "xbase.hpp"
+
+#include <algorithm>
+#include <cctype>
+
+using namespace util;
+
+namespace dt::predicate {
+
+// Helper: case-insensitive equality for field names.
+static bool ieq(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        unsigned char ca = static_cast<unsigned char>(a[i]);
+        unsigned char cb = static_cast<unsigned char>(b[i]);
+        if (std::toupper(ca) != std::toupper(cb)) return false;
+    }
+    return true;
+}
+
+// ---------------------------
+// FieldTypeInfo lookup
+// ---------------------------
+
+FieldTypeInfo lookup_field(const RecordContext& rc,
+                           const std::string&   field_name) {
+    FieldTypeInfo info;
+
+    if (!rc.area) {
+        info.valid = false;
+        return info;
+    }
+
+    const auto& fs = rc.area->fields();
+    for (int i = 0; i < static_cast<int>(fs.size()); ++i) {
+        const auto& f = fs[static_cast<size_t>(i)];
+        if (ieq(f.name, field_name)) {
+            info.ftype    = f.type;
+            info.length   = f.length;
+            info.decimals = f.decimals;
+            info.index    = i + 1; // DbArea is 1-based
+            info.valid    = true;
+            return info;
+        }
+    }
+
+    info.valid = false;
+    return info;
+}
+
+// ---------------------------
+// DBF → Value via normalize
+// ---------------------------
+
+Value get_field_value_normalized(const RecordContext& rc,
+                                 const FieldTypeInfo& fti,
+                                 std::string*         error_out) {
+    if (!rc.area) {
+        if (error_out) *error_out = "RecordContext has null area.";
+        return make_null();
+    }
+    if (!fti.valid || fti.index <= 0) {
+        if (error_out) *error_out = "FieldTypeInfo is invalid.";
+        return make_null();
+    }
+
+    // DbArea::get is 1-based.
+    std::string raw = rc.area->get(fti.index);
+
+    // Use shared normalizer first.
+    auto norm = normalize_for_compare(fti.ftype,
+                                      fti.length,
+                                      fti.decimals,
+                                      raw);
+    if (!norm) {
+        if (error_out) {
+            *error_out = "normalize_for_compare rejected DBF value ["
+                       + raw + "] for field index "
+                       + std::to_string(fti.index) + ".";
+        }
+        return make_null();
+    }
+
+    return value_from_normalized(fti.ftype,
+                                 fti.length,
+                                 fti.decimals,
+                                 *norm,
+                                 error_out);
+}
+
+// ---------------------------
+// Expression evaluation stub
+// ---------------------------
+
+Value eval_expr(const expr::Node& /*expr*/,
+                const RecordContext& /*rc*/,
+                std::string* error_out) {
+    if (error_out) {
+        *error_out = "eval_expr(expr::Node) is not wired to the expression engine yet.";
+    }
+    return make_null();
+}
+
+// ---------------------------
+// Predicate evaluation
+// ---------------------------
+
+bool record_matches(xbase::DbArea&  area,
+                    int             recno,
+                    const expr::Node* pred,
+                    std::string*    error_out) {
+    // No predicate: always match.
+    if (!pred) return true;
+
+    // For now, we only implement the stub path.
+    RecordContext rc;
+    rc.area = &area;
+    rc.recno = recno;
+
+    std::string err;
+    Value v = eval_expr(*pred, rc, &err);
+
+    if (!err.empty()) {
+        if (error_out) *error_out = err;
+        return false;
+    }
+
+    bool b = false;
+    if (!coerce_to_logical(v, b, &err)) {
+        if (error_out) {
+            *error_out = err.empty()
+                ? "Failed to coerce expression to logical."
+                : err;
+        }
+        return false;
+    }
+
+    return b;
+}
+
+} // namespace dt::predicate

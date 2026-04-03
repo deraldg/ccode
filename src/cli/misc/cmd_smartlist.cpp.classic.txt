@@ -1,0 +1,475 @@
+// src/cli/cmd_smartlist.cpp
+//
+// SMARTLIST — LIST-style output honoring current order and an AST-based FOR filter.
+//
+// Usage:
+//   SMARTLIST [ALL | <limit> | DELETED] [DEBUG] [FOR <expr>]
+//
+// Notes:
+//   • Ordering: respects current INX/CNX/CDX (ASC/DESC) like LIST.
+//   • Deletion visibility: default hides deleted unless ALL; "DELETED"
+//     shows only deleted; "FOR !DELETED" also supported.
+//   • Filtering: <expr> is compiled by our AST engine (dottalk::expr).
+//     SQL-ish input is normalized via sql_to_dottalk_where before compile.
+//   • DEBUG: prints a couple of diagnostics.
+//
+
+#include "xbase.hpp"
+#include "textio.hpp"
+#include "cli/order_state.hpp"
+#include "cli/order_nav.hpp"
+#include "value_normalize.hpp"
+#include "set_relations.hpp"
+
+// Expr engine + helpers
+#include "cli/expr/api.hpp"
+#include "cli/expr/glue_xbase.hpp"
+#include "cli/expr/parse_utils.hpp"
+#include "cli/expr/line_parse_utils.hpp"
+#include "expr/sql_normalize.hpp"
+
+// std
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <set>
+#include <sstream>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+namespace {
+
+enum class DelFilter {
+    Any,          // default: hide deleted unless ALL
+    OnlyDeleted,  // show only deleted
+    OnlyAlive     // show only non-deleted (even if ALL)
+};
+
+struct Options {
+    bool all{false};
+    int  limit{20};
+    DelFilter del{DelFilter::Any};
+    bool haveExpr{false};
+    std::string exprRaw;   // text after FOR (or empty if none)
+    bool debug{false};     // set by optional DEBUG switch
+};
+
+// Preserve caller's cursor position: SMARTLIST scans by jumping around.
+struct CursorRestore {
+    xbase::DbArea& a;
+    int32_t saved_recno{0};
+    bool have{false};
+
+    explicit CursorRestore(xbase::DbArea& area) : a(area) {
+        try {
+            saved_recno = a.recno();
+            have = (saved_recno > 0);
+        } catch (...) {
+            have = false;
+        }
+    }
+
+    ~CursorRestore() {
+        if (!have) return;
+        try {
+            (void)a.gotoRec(saved_recno);
+            (void)a.readCurrent();
+        } catch (...) {}
+
+        // If relations autorefresh is enabled, re-sync children for the restored parent position.
+        try { relations_api::refresh_if_enabled(); } catch (...) {}
+    }
+};
+
+// ---------- small utils ----------
+static inline bool is_uint(const std::string& s) {
+    if (s.empty()) return false;
+    for (unsigned char c : s) if (!std::isdigit(c)) return false;
+    return true;
+}
+static inline std::string trim(std::string s) {
+    auto sp = [](unsigned char c){ return c==' '||c=='\t'||c=='\r'||c=='\n'; };
+    while (!s.empty() && sp((unsigned char)s.front())) s.erase(s.begin());
+    while (!s.empty() && sp((unsigned char)s.back()))  s.pop_back();
+    return s;
+}
+static inline std::string up(std::string s) {
+    for (auto& ch : s) ch = (char)std::toupper((unsigned char)ch);
+    return s;
+}
+static inline bool ends_with_iex(const std::string& s, const char* EXT3) {
+    size_t n=s.size();
+    return n>=4 && s[n-4]=='.'
+        && (char)std::toupper((unsigned char)s[n-3])==EXT3[0]
+        && (char)std::toupper((unsigned char)s[n-2])==EXT3[1]
+        && (char)std::toupper((unsigned char)s[n-1])==EXT3[2];
+}
+
+// Debug print helper (suppressed unless opts.debug)
+static inline void dbg(bool on, const std::string& msg) {
+    if (on) std::cout << "; " << msg << "\n";
+}
+
+// Parse options in any order up to (but not including) FOR.
+// Accepts: ALL | DELETED | <limit> | DEBUG
+static Options parse_opts(std::istringstream& iss) {
+    Options o{};
+    std::string tok;
+
+    while (true) {
+        std::streampos save = iss.tellg();
+        if (!(iss >> tok)) { break; }
+        if (textio::ieq(tok, "FOR")) {
+            // Position stream back at 'F' of FOR so caller can consume the clause uniformly.
+            iss.clear();
+            iss.seekg(save);
+            break;
+        }
+        if (textio::ieq(tok,"ALL")) {
+            o.all = true;
+            continue;
+        }
+        if (textio::ieq(tok,"DELETED")) {
+            o.del = DelFilter::OnlyDeleted;
+            continue;
+        }
+        if (textio::ieq(tok,"DEBUG")) {
+            o.debug = true;
+            continue;
+        }
+        if (is_uint(tok)) {
+            o.limit = std::max(0, std::stoi(tok));
+            continue;
+        }
+        // Unknown token: rewind and stop opt parsing (let later logic handle/ignore)
+        iss.clear();
+        iss.seekg(save);
+        break;
+    }
+
+    // Optional: FOR <expr...>
+    {
+        std::streampos save = iss.tellg();
+        std::string w;
+        if (iss >> w && textio::ieq(w, "FOR")) {
+            std::string rest; std::getline(iss, rest);
+            o.exprRaw = trim(rest);
+            o.haveExpr = !o.exprRaw.empty();
+        } else {
+            iss.clear(); iss.seekg(save);
+        }
+    }
+
+    return o;
+}
+
+static int recno_width(const xbase::DbArea& a) {
+    int n = std::max(1, a.recCount()), w=0; while (n) { n/=10; ++w; } return std::max(3,w);
+}
+
+static void header(const xbase::DbArea& a, int recw) {
+    const auto& Fs=a.fields();
+    std::cout << "  " << std::setw(recw) << "" << " ";
+    for (auto& f: Fs) std::cout << std::left << std::setw((int)f.length) << f.name << " ";
+    std::cout << std::right << "\n";
+}
+
+static void row(const xbase::DbArea& a, int recw) {
+    const auto& Fs=a.fields();
+    std::cout << ' ' << (a.isDeleted()? '*':' ') << ' ' << std::setw(recw) << a.recno() << " ";
+    for (int i=1;i<=(int)Fs.size();++i) {
+        std::string s=a.get(i); int w=(int)Fs[(size_t)(i-1)].length;
+        if ((int)s.size()>w) s.resize((size_t)w);
+        std::cout << std::left << std::setw(w) << s << " ";
+    }
+    std::cout << std::right << "\n";
+}
+
+// ---------- AST-based filter program ----------
+
+struct EvalProg {
+    bool enabled{false};
+    std::unique_ptr<dottalk::expr::Expr> prog; // compiled WHERE
+    bool eval(xbase::DbArea& A) const {
+        if (!enabled) return true;           // no filter
+        auto rv = dottalk::expr::glue::make_record_view(A);
+        return prog->eval(rv);
+    }
+};
+
+// Build evaluator from user expression, via SQL→DotTalk normalization then compile.
+// On failure, we construct a program that never matches (silent fail same as before).
+static EvalProg build_evaluator_from(const std::string& userExpr, bool debug=false) {
+    EvalProg E{};
+
+    // Normalize, strip comments, compile
+    const std::string normalized = sqlnorm::sql_to_dottalk_where(userExpr);
+    const std::string cleaned    = strip_line_comments(normalized);
+
+    auto cr = dottalk::expr::compile_where(cleaned);
+    if (!cr) {
+        // Retry on raw cleaned user text
+        auto raw_clean = strip_line_comments(userExpr);
+        cr = dottalk::expr::compile_where(raw_clean);
+    }
+    if (!cr) {
+        if (debug) std::cout << "; compile failed — FOR will match no records\n";
+        struct AlwaysFalse final : dottalk::expr::Expr {
+            bool eval(const dottalk::expr::RecordView&) const override { return false; }
+        };
+        E.enabled = true;
+        E.prog = std::unique_ptr<dottalk::expr::Expr>(new AlwaysFalse{});
+        return E;
+    }
+
+    E.enabled = true;
+    E.prog = std::move(cr.program);
+    return E;
+}
+
+// Deleted filter gate
+static inline bool pass_deleted_filter(const xbase::DbArea& a, const Options& o) {
+    const bool isDel = a.isDeleted();
+    switch (o.del) {
+        case DelFilter::OnlyDeleted: return isDel;
+        case DelFilter::OnlyAlive:   return !isDel;
+        case DelFilter::Any:
+        default:                     return o.all ? true : !isDel; // default: hide deleted unless ALL
+    }
+}
+
+} // namespace
+
+void cmd_SMARTLIST(xbase::DbArea& a, std::istringstream& iss) {
+    if (!a.isOpen()) { std::cout << "No table open.\n"; return; }
+
+    CursorRestore __restore(a);
+
+    // If invoked without parameters, show usage (then proceed).
+    {
+        std::streampos pos = iss.tellg();
+        std::string rest;
+        {
+            std::ostringstream oss;
+            oss << iss.rdbuf();               // consume to end
+            rest = oss.str();
+        }
+        iss.clear(); iss.seekg(pos);          // restore stream
+        if (trim(rest).empty()) {
+            std::cout << "Usage: SMARTLIST [ALL | <limit> | DELETED] [DEBUG] [FOR <expr>]\n";
+        }
+    }
+
+    // Always start from TOP so the scan begins at the first record.
+    a.top();
+    (void)a.readCurrent();
+
+    Options opt = parse_opts(iss);
+    const int32_t total = a.recCount(); if (total<=0) { std::cout << "(empty)\n"; return; }
+
+    // Build evaluator
+    EvalProg E{};
+    if (opt.haveExpr) {
+        // Recognize "DELETED" and "!DELETED" shorthands inside expr:
+        std::string U = up(opt.exprRaw);
+        if (U=="DELETED") { opt.del = DelFilter::OnlyDeleted; opt.haveExpr=false; }
+        else if (U=="!DELETED" || U=="~DELETED") { opt.del = DelFilter::OnlyAlive; opt.haveExpr=false; }
+        else {
+            dbg(opt.debug, std::string("Expr (raw): ")+opt.exprRaw);
+            E = build_evaluator_from(opt.exprRaw, opt.debug);
+            dbg(opt.debug, "Expr mode: AST engine");
+        }
+    }
+
+    const int recw = recno_width(a);
+    header(a, recw);
+
+    auto process_record = [&](int32_t rn, int& printed)->bool {
+        if (!a.gotoRec(rn) || !a.readCurrent()) return false;
+        if (!pass_deleted_filter(a, opt)) return true; // skip but continue
+        if (opt.haveExpr && !E.eval(a)) return true;   // skip but continue
+        row(a, recw);
+        ++printed;
+        if (!opt.all && opt.limit>0 && printed>=opt.limit) return false; // stop
+        return true;
+    };
+
+    int printed=0;
+
+    // ---------- Inside cmd_SMARTLIST, replace the whole ordering block ----------
+
+if (orderstate::hasOrder(a)) {
+    const std::string path = orderstate::orderName(a);
+    const bool asc = orderstate::isAscending(a);
+    const std::string tag = orderstate::activeTag(a);
+
+    bool handled = false;
+
+    // ── .CNX or .CDX ────────────────────────────────────────────────────────
+    if (ends_with_iex(path, "CNX") || ends_with_iex(path, "CDX")) {
+        const char* type = ends_with_iex(path, "CNX") ? "CNX" : "CDX";
+        dbg(opt.debug, std::string(type) + " ORDER: file '" + path + 
+                       "' TAG '" + (tag.empty() ? "(none)" : tag) + 
+                       "' " + (asc ? "ASC" : "DESC"));
+
+        // Resolve tag → list of field indexes (1-based)
+        const auto& Fs = a.fields();
+        auto resolve_field_1based = [&](const std::string& name) -> int {
+            for (size_t i = 0; i < Fs.size(); ++i) {
+                if (textio::ieq(Fs[i].name, name)) return static_cast<int>(i) + 1;
+            }
+            return -1;
+        };
+
+        std::vector<int> expr_fields;
+        {
+            int fidx = resolve_field_1based(tag);
+            if (fidx > 0) {
+                expr_fields.push_back(fidx);
+            } else {
+                // Try composite / UPPER(...) expression
+                std::string expr;
+                for (char c : tag) {
+                    if (!std::isspace(static_cast<unsigned char>(c))) {
+                        expr += c;
+                    }
+                }
+
+                bool is_upper = false;
+                if (expr.size() >= 7 && expr.substr(0, 6) == "UPPER(" && expr.back() == ')') {
+                    is_upper = true;
+                    expr = expr.substr(6, expr.size() - 7);
+                }
+
+                size_t pos = 0;
+                while (pos < expr.size()) {
+                    size_t plus_pos = expr.find('+', pos);
+                    std::string part = (plus_pos == std::string::npos)
+                        ? expr.substr(pos)
+                        : expr.substr(pos, plus_pos - pos);
+
+                    if (!part.empty()) {
+                        int idx = resolve_field_1based(part);
+                        if (idx <= 0) {
+                            expr_fields.clear();
+                            break;
+                        }
+                        expr_fields.push_back(idx);
+                    }
+
+                    if (plus_pos == std::string::npos) break;
+                    pos = plus_pos + 1;
+                }
+
+                // If UPPER(...) was used, we uppercase later — for now just collect fields
+            }
+        }
+
+        if (!expr_fields.empty()) {
+            // Rebuild sort key + recno list
+            std::vector<std::pair<std::string, uint32_t>> rows;
+            rows.reserve(static_cast<size_t>(std::max(0, a.recCount())));
+
+            for (int32_t rn = 1; rn <= a.recCount(); ++rn) {
+                if (!a.gotoRec(rn) || !a.readCurrent()) continue;
+
+                std::string key;
+                for (int idx : expr_fields) {
+                    key += a.get(idx);
+                }
+
+                std::string sort_key = key;
+                if (expr_fields.size() > 1 || /* was UPPER */ false) {  // adjust if you detect UPPER earlier
+                    for (char& c : sort_key) {
+                        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                    }
+                }
+
+                rows.emplace_back(std::move(sort_key), static_cast<uint32_t>(rn));
+            }
+
+            // Stable sort by key, then by recno (tie-breaker)
+            std::stable_sort(rows.begin(), rows.end(),
+                [](const auto& A, const auto& B) {
+                    if (A.first != B.first) return A.first < B.first;
+                    return A.second < B.second;
+                });
+
+            // Output in desired direction
+            if (asc) {
+                for (const auto& kv : rows) {
+                    if (!process_record(static_cast<int32_t>(kv.second), printed)) break;
+                }
+            } else {
+                for (auto it = rows.rbegin(); it != rows.rend(); ++it) {
+                    if (!process_record(static_cast<int32_t>(it->second), printed)) break;
+                }
+            }
+
+            handled = true;
+        }
+    }
+
+    // ── .INX style ───────────────────────────────────────────────────────────
+    if (!handled) {
+        std::vector<uint32_t> recnos;
+        if (order_nav_detail::load_inx_recnos(path, a.recCount(), recnos)) {
+            dbg(opt.debug, "INX ORDER: file '" + path + "' " + (asc ? "ASC" : "DESC"));
+
+            if (asc) {
+                for (uint32_t rn : recnos) {
+                    if (!process_record(static_cast<int32_t>(rn), printed)) break;
+                }
+            } else {
+                for (auto it = recnos.rbegin(); it != recnos.rend(); ++it) {
+                    if (!process_record(static_cast<int32_t>(*it), printed)) break;
+                }
+            }
+            handled = true;
+        } else {
+            dbg(opt.debug, "Failed to load index: " + path);
+        }
+    }
+
+    if (handled) {
+        // Summary
+        if (!opt.all) {
+            std::cout << printed << " record(s) listed (limit " << opt.limit 
+                      << "). Use SMARTLIST ALL to show more.\n";
+        } else {
+            std::cout << printed << " record(s) listed.\n";
+        }
+        return;
+    }
+
+    // If we reach here → index existed but could not be used → fall to physical
+    dbg(opt.debug, "No usable ordered index → falling back to physical order");
+}
+
+// ── Physical / natural order fallback ──────────────────────────────────────
+for (int32_t rn = 1; rn <= total; ++rn) {
+    if (!process_record(rn, printed)) break;
+}
+
+// Final summary (same as above)
+if (!opt.all) {
+    std::cout << printed << " record(s) listed (limit " << opt.limit 
+              << "). Use SMARTLIST ALL to show more.\n";
+} else {
+    std::cout << printed << " record(s) listed.\n";
+}
+
+    // Physical order
+    for (int32_t rn=1; rn<=total; ++rn) {
+        if (!process_record(rn, printed)) break;
+    }
+    if (!opt.all) std::cout << printed << " record(s) listed (limit " << opt.limit << "). Use SMARTLIST ALL to show more.\n";
+    else std::cout << printed << " record(s) listed.\n";
+}

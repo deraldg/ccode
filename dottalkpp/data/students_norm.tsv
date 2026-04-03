@@ -1,0 +1,21 @@
+index	type	len	dec	raw	norm
+0	N	8	0	50000000	50000000
+1	C	20	0	TESTNAME	TESTNAME
+2	C	15	0	Quinn2	Quinn2
+3	D	8	0	19921225	19921225
+4	C	1	0	X	X
+5	C	4	0	CSCI	CSCI
+6	D	8	0	20250220	20250220
+7	N	4	2	2.97	2.97
+8	C	40	0	quinn.taylor0@student.mcc.edu	quinn.taylor0@student.mcc.edu
+9	N	8	0	50000000	50000000
+10	C	20	0	TESTNAME	TESTNAME
+11	C	15	0	Quinn2	Quinn2
+12	D	8	0	19921225	19921225
+13	C	1	0	X	X
+14	C	4	0	CSCI	CSCI
+15	D	8	0	20250220	20250220
+16	N	4	2	2.97	2.97
+17	C	40	0	quinn.taylor0@student.mcc.edu	quinn.taylor0@student.mcc.edu
+18	C	15	0	Quinn2	Quinn2
+19	C	108	0	50000000TESTNAME            Quinn2         19921225XCSCI202502202.97quinn.taylor0@student.mcc.edu           	50000000TESTNAME            Quinn2         19921225XCSCI202502202.97quinn.taylor0@student.mcc.edu

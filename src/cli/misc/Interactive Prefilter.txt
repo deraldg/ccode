@@ -1,0 +1,85 @@
+// ─────────────────────────────────────────────────────────────────────
+//  Interactive shell (prefilter version)
+// ─────────────────────────────────────────────────────────────────────
+int run_shell()
+{
+    using namespace xbase;
+    using namespace dli;
+    colors::applyTheme(colors::Theme::Green);
+    XBaseEngine eng;
+    eng.selectArea(0);
+
+    // expose engine + wire relations engine and enable autorefresh
+    g_shell_engine = &eng;
+    relations_api::attach_engine(&eng);
+    relations_api::set_autorefresh(true);
+
+    // Register **only the canonical names** (no aliases any more)
+    register_shell_commands(eng, /*include_ui_cmds=*/true);
+
+    clear();
+    std::cout << "DotTalk++ type HELP. USE, SELECT <n>, AREA, COLOR <GREEN|AMBER|DEFAULT>, QUIT.\n";
+
+    std::string line;
+    while (true) {
+        std::cout << prompt_char << " ";
+        if (!std::getline(std::cin, line)) break;
+
+        // ---- ignore comments ------------------------------------------------
+        size_t i = 0;
+        while (i < line.size() && std::isspace(static_cast<unsigned char>(line[i]))) ++i;
+        if (i < line.size()) {
+            if (line[i] == '#') continue;
+            if (line[i] == '/' && i + 1 < line.size() && line[i + 1] == '/') continue;
+        }
+
+        const std::string rawLine = line;
+        std::string trimmed = textio::trim(line);
+        if (trimmed.empty()) continue;
+
+        // ---- PRE-FILTER: replace shortcut with full name -----------------
+        std::istringstream firstPass(trimmed);
+        std::string cmdToken;
+        firstPass >> cmdToken;                     // original token
+        const std::string fullCmd = shell_shortcuts::resolve(cmdToken);
+
+        // rebuild the line with the (possibly) expanded command
+        std::string expandedLine;
+        if (fullCmd != cmdToken) {
+            // keep the rest of the line unchanged (preserve quoting etc.)
+            size_t pos = trimmed.find_first_not_of(" \t", cmdToken.size());
+            if (pos != std::string::npos) {
+                expandedLine = fullCmd + trimmed.substr(pos);
+            } else {
+                expandedLine = fullCmd;
+            }
+        } else {
+            expandedLine = std::move(trimmed);
+        }
+
+        // re-tokenise the (maybe) expanded line
+        std::istringstream tok(expandedLine);
+        tok >> cmdToken;                           // now the *canonical* token
+        const std::string U = textio::up(cmdToken);
+
+        // ---- SCAN_BUFFER handling (unchanged) ----------------------------
+        if (scanblock::state().active && U != "ENDSCAN") {
+            DbArea& curCap = eng.area(eng.currentArea());
+            std::istringstream cap(rawLine);
+            dli::registry().run(curCap, "SCAN_BUFFER", cap);
+            continue;
+        }
+
+        // ---- QUIT / EXIT -------------------------------------------------
+        if (U == "QUIT" || U == "EXIT") break;
+
+        // ---- Dispatch ----------------------------------------------------
+        DbArea& cur = eng.area(eng.currentArea());
+        if (!dli::registry().run(cur, U, tok)) {
+            std::cout << "Unknown command: " << cmdToken << "\n";
+        }
+    }
+
+    g_shell_engine = nullptr;   // cleanup before exit
+    return 0;
+}

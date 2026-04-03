@@ -1,0 +1,12 @@
+* Capture metadata/reporting vs runtime order state
+COLOR DEFAULT
+USE students
+SETCNX students.cnx
+SETORDER students.cnx TAG LNAME --asc
+WSREPORT
+STRUCT INDEX
+STATUS
+SETORDER students.cnx TAG SID --desc
+WSREPORT
+STRUCT INDEX
+STATUS

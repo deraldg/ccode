@@ -1,0 +1,1 @@
+. cobol build d:\code\ccode\dottalkpp\data\projects\cobol\src\first_cobol_test.cob

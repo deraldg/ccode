@@ -1,0 +1,133 @@
+SCHEMAS LOAD: cannot read file: D:\code\ccode\dottalkpp\data\MCC_x64.dtschema
+. SCHEMAS LOAD WORKSPACES\MCC_x64
+SCHEMAS LOAD: cannot read file: D:\code\ccode\dottalkpp\data\WORKSPACES\MCC_x64.dtschema
+. SCHEMAS LOAD workspace\MCC_x64
+SCHEMAS LOAD: cannot read file: D:\code\ccode\dottalkpp\data\workspace\MCC_x64.dtschema
+. schemas load mcc
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 12 area(s) closed.
+REL: STUDENTS -> ENROLL ON SID
+REL: STUDENTS -> STUD_MAJ ON SID
+REL: STUDENTS -> MAJORS ON MAJOR
+REL: ENROLL -> CLASSES ON CLS_ID
+REL: CLASSES -> COURSES ON CID
+REL: CLASSES -> TERMS ON TERM
+REL: CLASSES -> ROOMS ON ROOM
+REL: CLASSES -> TEACHERS ON TID
+REL: CLASSES -> TASSIGN ON CLS_ID
+REL: COURSES -> DEPT ON DEPT_ID
+REL: ROOMS -> BUILDING ON BLDG
+REL: TEACHERS -> DEPT ON DEPT_ID
+REL: TASSIGN -> TEACHERS ON TID
+REL: STUD_MAJ -> MAJORS ON MAJOR
+REL: MAJORS -> DEPT ON DEPT_ID
+SCHEMAS LOAD: restored 12 area(s) and 15 relation(s).
+. select students
+Selected area 8.
+Current area: 8
+  File: STUDENTS  Recs: 205  Recno: 1
+. rel
+REL syntax
+  REL LIST [ALL]
+  REL REFRESH
+  REL JOIN [LIMIT <n>] [<child1> <child2> ...] TUPLE <expr>
+  REL ENUM [LIMIT <n>] [<child1> <child2> ...] TUPLE <expr>
+  REL SAVE [path] | REL SAVE AS <dataset>
+  REL LOAD [path] | REL LOAD AS <dataset>
+  REL ADD <parent> <child> ON <field>      # alias of SET RELATIONS ADD
+  REL CLEAR <parent>|ALL                   # alias of SET RELATIONS CLEAR
+. rel list
+Relations for parent: STUDENTS
+  -> ENROLL  (matches: 4)
+  -> STUD_MAJ  (matches: 1)
+  -> MAJORS  (matches: 1)
+. SCHEMAS LOAD workspace\MCC_x64
+SCHEMAS LOAD: cannot read file: D:\code\ccode\dottalkpp\data\workspace\MCC_x64.dtschema
+. SCHEMAS LOAD mcc_x64
+SCHEMAS CLOSE: Closing all work areas...
+REL: cleared all
+SCHEMAS: 12 area(s) closed.
+REL: STUDENTS -> ENROLL ON SID
+REL: STUDENTS -> STUD_MAJ ON SID
+REL: STUDENTS -> MAJORS ON MAJOR
+REL: ENROLL -> CLASSES ON CLS_ID
+REL: CLASSES -> COURSES ON CID
+REL: CLASSES -> TERMS ON TERM
+REL: CLASSES -> ROOMS ON ROOM
+REL: CLASSES -> TEACHERS ON TID
+REL: CLASSES -> TASSIGN ON CLS_ID
+REL: COURSES -> DEPT ON DEPT_ID
+REL: ROOMS -> BUILDING ON BLDG
+REL: TEACHERS -> DEPT ON DEPT_ID
+REL: TASSIGN -> TEACHERS ON TID
+REL: STUD_MAJ -> MAJORS ON MAJOR
+REL: MAJORS -> DEPT ON DEPT_ID
+SCHEMAS LOAD: restored 12 area(s) and 15 relation(s).
+. erzatz
+Unknown command: ERZATZ
+. ersatz
+ERSATZ Relational Browser
+ROOT: STUDENTS  RECNO: 1
+PATH: ENROLL -> CLASSES -> TASSIGN -> TEACHERS -> DEPT
+LIMIT: 10
+ORDER: physical
+
+CURRENT ROOT RECORD
+  SID      : 50000000
+  LNAME    : Taylor
+  FNAME    : Quinn
+  DOB      : 19921225
+  GENDER   : X
+  MAJOR    : CSCI
+  ENROLL_D : 20250220
+  GPA      : 2.97
+  EMAIL    : quinn.taylor0@student.mcc.edu
+
+RELATION TREE
+  STUDENTS
+   -> ENROLL   ON SID
+      -> CLASSES   ON CLS_ID
+         -> COURSES   ON CID
+            -> DEPT   ON DEPT_ID
+         -> TERMS   ON TERM
+         -> ROOMS   ON ROOM
+            -> BUILDING   ON BLDG
+         -> TEACHERS   ON TID
+            -> DEPT   ON DEPT_ID
+         -> TASSIGN   ON CLS_ID
+            -> TEACHERS   ON TID
+               -> DEPT   ON DEPT_ID
+   -> STUD_MAJ   ON SID
+      -> MAJORS   ON MAJOR
+         -> DEPT   ON DEPT_ID
+   -> MAJORS   ON MAJOR
+      -> DEPT   ON DEPT_ID
+
+DESCENDANT SUMMARY
+  ENROLL   : 4
+  CLASSES  : 0
+  TASSIGN  : 0
+  TEACHERS : 0
+  DEPT     : 0
+
+TUPLE GRID
+STUDENTS.LNAME       STUDENTS.FNAME  GENDER ENROLL.CLS_ID GRADE CLASSES.CLS_ID SEC TASSIGN.CLS_ID TID    TEACHER
+S.LNAME       TEACHERS.FNAME  DEPT_ID NAME
+Taylor               Quinn           X      S26PHYS210    IP    S26PHYS210       6 S26PHYS210     100008 Martin
+              Jordan          ARTS    Arts
+Taylor               Quinn           X      W26CHEM200    IP    W26CHEM200       2 W26CHEM200     100001 Thompso
+n             Emma            HIST    History
+Taylor               Quinn           X      S26MATH140    C+    S26MATH140       1 S26MATH140     100001 Thompso
+n             Emma            HIST    History
+Taylor               Quinn           X      S26MATH140    C+    S26MATH140       1 S26MATH140     100012 Gonzale
+z             Reese           ENGL    English
+Taylor               Quinn           X      S26MATH140    C+    S26MATH140       2 S26MATH140     100001 Thompso
+n             Emma            HIST    History
+Taylor               Quinn           X      S26MATH140    C+    S26MATH140       2 S26MATH140     100012 Gonzale
+z             Reese           ENGL    English
+Taylor               Quinn           X      F25ARTS102    B+    F25ARTS102       2 F25ARTS102     100017 Harris
+              Mason           ARTS    Arts
+
+ROWS SHOWN: 7 / LIMIT 10 | STATUS: OK
+.

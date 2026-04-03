@@ -1,0 +1,99 @@
+// src/cli/dirty_prompt.cpp
+#include "cli/dirty_prompt.hpp"
+
+#include <cctype>
+#include <iostream>
+#include <string>
+
+#include "cli/table_state.hpp"
+#include "xbase.hpp"
+
+namespace dottalk::dirty {
+
+static bool g_suppress_prompts = false;
+
+static inline bool prompt_yes_no(const std::string& opLabel, const std::string& scopeLabel) {
+    std::cout << "TABLE: uncommitted changes detected (" << scopeLabel
+              << "). Continue " << opLabel << "? (y/N) ";
+
+    std::string answer;
+    if (!std::getline(std::cin, answer)) return false;
+
+    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
+    while (!answer.empty() && is_space((unsigned char)answer.front())) answer.erase(answer.begin());
+    while (!answer.empty() && is_space((unsigned char)answer.back()))  answer.pop_back();
+    for (auto& c : answer) c = (char)std::tolower((unsigned char)c);
+
+    return (answer == "y" || answer == "yes");
+}
+
+extern "C" xbase::XBaseEngine* shell_engine();
+
+static int area_index_from_ref(xbase::DbArea& areaRef) {
+    xbase::XBaseEngine* eng = nullptr;
+    try { eng = shell_engine(); } catch (...) { eng = nullptr; }
+    if (!eng) return -1;
+
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        try {
+            if (&(eng->area(i)) == &areaRef) return i;
+        } catch (...) {
+        }
+    }
+    return -1;
+}
+
+static bool is_quit_like(const std::string& opLabel) {
+    std::string u = opLabel;
+    for (auto& c : u) c = (char)std::toupper((unsigned char)c);
+    return (u == "QUIT" || u == "EXIT");
+}
+
+bool maybe_prompt_area(const int area0, const std::string& opLabel) {
+    if (g_suppress_prompts) return true;
+    if (!table::is_enabled(area0) || !table::is_dirty(area0)) return true;
+
+    const bool ok = prompt_yes_no(opLabel, std::string("area ") + std::to_string(area0));
+    if (ok && is_quit_like(opLabel)) g_suppress_prompts = true;
+    return ok;
+}
+
+bool maybe_prompt_area(xbase::DbArea& areaRef, const char* opLabel) {
+    if (g_suppress_prompts) return true;
+
+    const std::string label = opLabel ? std::string(opLabel) : std::string();
+    const int idx = area_index_from_ref(areaRef);
+    if (idx >= 0) {
+        return maybe_prompt_area(idx, label);
+    }
+
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        if (table::is_enabled(i) && table::is_dirty(i)) {
+            const bool ok = prompt_yes_no(label, "unknown area (index unavailable)");
+            if (ok && is_quit_like(label)) g_suppress_prompts = true;
+            return ok;
+        }
+    }
+    return true;
+}
+
+bool maybe_prompt_all(xbase::XBaseEngine& eng, const std::string& opLabel) {
+    if (g_suppress_prompts) return true;
+
+    int dirtyCount = 0;
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        (void)eng;
+        if (table::is_enabled(i) && table::is_dirty(i)) ++dirtyCount;
+    }
+    if (dirtyCount == 0) return true;
+
+    const bool ok = prompt_yes_no(opLabel, std::string("all areas (") + std::to_string(dirtyCount) + " dirty)");
+    if (ok && is_quit_like(opLabel)) g_suppress_prompts = true;
+    return ok;
+}
+
+bool maybe_prompt_all(xbase::XBaseEngine& eng, const char* opLabel) {
+    return maybe_prompt_all(eng, opLabel ? std::string(opLabel) : std::string());
+}
+
+} // namespace dottalk::dirty

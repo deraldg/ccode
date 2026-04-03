@@ -1,0 +1,322 @@
+. SET ECHO OFF
+Echo is OFF
+. * ============================================================
+. * MCC_CALC_DATE_REPLACE_SHAKEDOWN.DTS
+. * Focus: STUDENTS.DOB + STUDENTS.ENROLL_D
+. * - CALC date functions on real DBF date fields
+. * - REPLACE date fields using DATE()/DATEADD()/field->field copy
+. * - Restores original values at the end (for SID 50000001)
+. * ============================================================
+.
+. ECHO ===== DATE/REPLACE SHAKE-DOWN START =====
+. COLOR DEFAULT
+COLOR set to DEFAULT (LightGray/Black)
+.
+. USE STUDENTS
+Opened STUDENTS with 201 records.
+Auto-attached order: STUDENTS.cnx (tag: SID)
+.
+. * Anchor on a stable record
+. TOP
+Recno: 1
+. LOCATE FOR SID = 50000001
+Located.
+. RECNO
+2
+. TUPLE
+50000001WashingtonGeorgeXCSCI202507104.59test@example.com
+; TUPLE: 50000001 | Washington | George | "" | X | CSCI | 20250710 | 4.59 | test@example.com
+. * Force known-good baseline for repeatable runs
+. * Make sure MULTIREP doesn't regress   (unquoted raw data char replacement)
+. MULTIREP LNAME WITH Washington, FNAME WITH George, DOB WITH 19560213, GENDER WITH X, ENROLL_D WITH 20240922
+REPLACE_MULTI: updated 5 field(s) at rec 2.
+.
+. ECHO -- Anchor record BEFORE --
+. LIST 2
+      SID      LNAME                FNAME           DOB      GENDER MAJOR ENROLL_D GPA  EMAIL
+; CNX ORDER: file 'D:\code\ccode\dottalkpp\data\indexes\STUDENTS.cnx'  TAG 'SID'  ASC
+     1 50000000 Washington           Abraham         19990101 X CSCI 20260129 3.00 quinn.taylor0@student.mcc.edu
+     2 50000001 Washington           George          19560213 X CSCI 20240922 4.59 test@example.com
+2 record(s) listed (limit 2). Use LIST ALL to show more.
+. TUP DOB
+19560213
+; TUPLE: 19560213
+. TUP ENROLL_D
+20240922
+; TUPLE: 20240922
+.
+. ECHO ===== CALC: read date fields + comparisons =====
+. CALC DOB
+19560213
+. CALC ENROLL_D
+20240922
+. CALC DATE()
+20260204
+. CALC TODAY()
+20260204
+.
+. CALC (ENROLL_D > DOB)
+.T.
+. CALC (DATE() >= DOB)
+.T.
+. CALC (DOB <= DATE())
+.T.
+.
+. ECHO ===== DIAGNOSTIC: function-vs-literal compares =====
+. CALC (DATE() > 20000101)
+.T.
+. CALC (DATE() > "20000101")
+.T.
+. CALC (DATE() > CTOD(20000101))
+.T.
+. * Optional (if CTOD also accepts quoted):
+. CALC (DATE() > CTOD("20000101"))
+.T.
+.
+. CALC (20000101 < DATE())
+.T.
+. CALC (DOB < DATE())
+.T.
+. * reverse
+. CALC (20000101 > DATE())
+.F.
+. CALC (DOB > DATE())
+.F.
+.
+. CALC CTOD("2000-01-01")
+20000101
+. CALC (CTOD("2000-01-01") + 1)
+20,000,101
+. CALC (CTOD("2000-01-01") + 1 = CTOD("2000-01-02"))
+.F.
+.
+.
+. ECHO ===== REGRESSION SANITY CHECKS =====
+. CALC (DATE() = DATE())
+.T.
+. CALC (DATE() = TODAY())
+.T.
+. CALC (1 = 1)
+.T.
+.
+. * Compare as strings
+. CALC (DOB = "19560213")
+.T.
+. CALC (ENROLL_D = "20250710")
+.F.
+.
+. * Numeric/date mixed compare
+. CALC (DOB = 19560213)
+.T.
+. CALC (ENROLL_D = 20250710)
+.F.
+.
+. ECHO ===== CALC: DATEADD / DATEDIFF over fields =====
+. CALC DATEADD(DOB, 30)
+19560314
+. CALC DATEADD(ENROLL_D, -30)
+20240823
+. CALC DATEDIFF(ENROLL_D, DOB)
+25059
+. CALC DATEDIFF(DATE(), DOB)
+25559
+.
+. ECHO ===== REPLACE: DOB := DATE() then restore =====
+. REPLACE DOB WITH DATE()
+Replaced field #4 at rec 2.
+. TUP DOB
+20260204
+; TUPLE: 20260204
+. REPLACE DOB WITH 20050925
+Replaced field #4 at rec 2.
+. TUP DOB
+20050925
+; TUPLE: 20050925
+.
+. ECHO ===== REPLACE: DOB := ENROLL_D (field->field) then restore =====
+. REPLACE DOB WITH ENROLL_D
+Replaced field #4 at rec 2.
+. TUP DOB
+20240922
+; TUPLE: 20240922
+. REPLACE DOB WITH 20050925
+Replaced field #4 at rec 2.
+. TUP DOB
+20050925
+; TUPLE: 20050925
+.
+. ECHO ===== REPLACE: ENROLL_D := DATEADD(DATE(), 10) then restore =====
+. REPLACE ENROLL_D WITH DATEADD(DATE(), 10)
+Replaced field #7 at rec 2.
+. TUP ENROLL_D
+20260214
+; TUPLE: 20260214
+. REPLACE ENROLL_D WITH 20250710
+Replaced field #7 at rec 2.
+. TUP ENROLL_D
+20250710
+; TUPLE: 20250710
+.
+. ECHO ===== REPLACE: DOB := DATEADD(DOB, 1) then restore =====
+. REPLACE DOB WITH DATEADD(DOB, 1)
+Replaced field #4 at rec 2.
+. TUP DOB
+20050926
+; TUPLE: 20050926
+. REPLACE DOB WITH 20050925
+Replaced field #4 at rec 2.
+. TUP DOB
+20050925
+; TUPLE: 20050925
+.
+. ECHO ===== Post-write verification =====
+. TUP DOB
+20050925
+; TUPLE: 20050925
+. TUP ENROLL_D
+20250710
+; TUPLE: 20250710
+. CALC DATEDIFF(ENROLL_D, DOB)
+7228
+. CALC (DOB = "20050925")
+.T.
+. CALC (ENROLL_D = "20250710")
+.T.
+.
+. * OPTIONAL negative test (leave commented unless you are actively testing blank-date handling)
+. TUP DOB
+20050925
+; TUPLE: 20050925
+. * REPLACE DOB WITH 00000000
+. REPLACE DOB WITH "        "
+Replaced field #4 at rec 2.
+. CALC DATEDIFF(DATE(), DOB)
+0
+.
+. * REPLACE DOB WITH 20050925
+.
+. ECHO ===== STRING SHAKEDOWN FOR REGRESSION TESTING =====
+. SET VAR TMP_NAME = LincolnTown
+. SHOW VAR
+VARS: 1 defined.
+  TMP_NAME = LincolnTown
+. GOTO 50
+Recno: 50
+. TUP
+50000049WashingtonGeorge19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | Washington | George | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE LNAME WITH GRIMWOOD
+Replaced field #2 at rec 50.
+. REPLACE FNAME WITH DERALD
+Replaced field #3 at rec 50.
+. TUP
+50000049GRIMWOODDERALD19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | GRIMWOOD | DERALD | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE LNAME WITH RIGHT(FNAME,5)
+Replaced field #2 at rec 50.
+. TUP
+50000049ERALDDERALD19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | ERALD | DERALD | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE FNAME WITH CONCAT(ABC,DEF,GHI)
+Replaced field #3 at rec 50.
+. TUP
+50000049ERALDABCDEFGHI19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | ERALD | ABCDEFGHI | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE FNAME WITH LEFT(RIGHT(FNAME,4),2)
+Replaced field #3 at rec 50.
+. TUP
+50000049ERALDFG19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | ERALD | FG | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE FNAME WITH Derald
+Replaced field #3 at rec 50.
+. REPLACE FNAME WITH RIGHT(LEFT(FNAME,5),2)
+Replaced field #3 at rec 50.
+. TUP
+50000049ERALDal19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | ERALD | al | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE FNAME WITH DeraldRaymondGrimwoodJunior
+Replaced field #3 at rec 50.
+. TUP
+50000049ERALDDeraldRaymondGr19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | ERALD | DeraldRaymondGr | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. CALC LEFT(FNAME,10) && (should show 10 chars, not 9)
+DeraldRaym
+. CALC RIGHT(LEFT(FNAME,10),7)
+aldRaym
+.
+. LEFT RIGHT(FNAME,10),7
+DeraldRaym
+. LEFT FNAME,4
+Dera
+. RIGHT FNAME,4
+ndGr
+.
+. REPLACE FNAME WITH RIGHT(LEFT(FNAME,10),7)
+Replaced field #3 at rec 50.
+. TUP
+50000049ERALDaldRaym19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | ERALD | aldRaym | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE FNAME WITH RIGHT(TRIM(FNAME),5)
+Replaced field #3 at rec 50.
+. TUP
+50000049ERALDdRaym19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | ERALD | dRaym | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. REPLACE FNAME WITH &TMP_NAME
+Replaced field #3 at rec 50.
+. REPLACE LNAME WITH &TMP_NAME
+Replaced field #2 at rec 50.
+. TUP
+50000049LincolnTownLincolnTown19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | LincolnTown | LincolnTown | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. ECHO ===== VAL() REGRESSION =====
+. CALC VAL("123")
+123
+. CALC (VAL("123") = 123)
+.T.
+. CALC (VAL("123") = VAL(123))
+.T.
+. CALC (VAL("123") = VAL("123"))
+.T.
+.
+. CALC LEFT(FNAME,10) && (should show 10 chars, not 9)
+LincolnTow
+. CALC RIGHT(LEFT(FNAME,10),7)
+colnTow
+. TUP
+50000049LincolnTownLincolnTown19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | LincolnTown | LincolnTown | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+.
+. MULTIREP LNAME WITH Washington, FNAME WITH George, DOB WITH 19560213, GENDER WITH X, ENROLL_D WITH 20240922
+REPLACE_MULTI: updated 5 field(s) at rec 50.
+. TUP
+50000049WashingtonGeorge19560213XARTS202409223.69logan.johnson49@student.mcc.edu
+; TUPLE: 50000049 | Washington | George | 19560213 | X | ARTS | 20240922 | 3.69 | logan.johnson49@student.mcc.edu
+. ECHO ===== DATE/REPLACE SHAKE-DOWN END =====
+.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

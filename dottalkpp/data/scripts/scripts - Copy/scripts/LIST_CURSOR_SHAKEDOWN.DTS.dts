@@ -1,0 +1,168 @@
+* ============================================================
+* LIST_CURSOR_SHAKEDOWN.DTS
+* Verifies:
+*   1) LIST summary prints:
+*        Cursor: Area n of 0 ... n Physical Recno n, Logical Row n
+*   2) plain LIST is cursor-anchored
+*   3) LIST does not advance/persist cursor movement
+*   4) LIST TOP / LIST BOTTOM / LIST ALL behavior
+*   5) ordered vs physical stream behavior
+* ============================================================
+
+SET ECHO OFF
+ECHO ===== LIST CURSOR SHAKEDOWN START =====
+
+COLOR DEFAULT
+VERSION
+WSREPORT
+
+* ------------------------------------------------------------
+* 0. Open community college set
+* ------------------------------------------------------------
+ECHO ===== SECTION 0: OPEN =====
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+STATUS
+
+* ------------------------------------------------------------
+* 1. Pick a table with enough rows
+* ------------------------------------------------------------
+ECHO ===== SECTION 1: STUDENTS NATURAL ORDER =====
+SELECT 9
+AREA
+FIELDS
+COUNT
+
+ECHO ----- TOP then LIST -----
+TOP
+LIST
+
+ECHO ----- LIST again: should start from same cursor because LIST restores cursor -----
+LIST
+
+ECHO ----- SKIP 5 then LIST: plain LIST should now anchor from moved cursor -----
+SKIP 5
+LIST
+
+ECHO ----- LIST again: should show same starting point as prior LIST -----
+LIST
+
+ECHO ----- GO 1 then LIST -----
+GO 1
+LIST
+
+ECHO ----- BOTTOM then LIST -----
+BOTTOM
+LIST
+
+ECHO ----- LIST TOP -----
+LIST TOP
+
+ECHO ----- LIST BOTTOM -----
+LIST BOTTOM
+
+ECHO ----- LIST ALL -----
+LIST ALL
+
+* ------------------------------------------------------------
+* 2. Deleted/filter interaction in physical order
+* ------------------------------------------------------------
+ECHO ===== SECTION 2: FILTER / DELETED =====
+TOP
+SET DELETED ON
+LIST
+
+SET FILTER TO MAJOR = "CS"
+TOP
+LIST
+COUNT
+
+ECHO ----- move inside filtered stream and LIST again -----
+SKIP 2
+LIST
+
+SET FILTER TO
+SET DELETED ON
+TOP
+LIST
+
+* ------------------------------------------------------------
+* 3. Ordered stream behavior
+* ------------------------------------------------------------
+ECHO ===== SECTION 3: ORDERED STREAM =====
+SET ORDER TO 0
+TOP
+LIST
+
+ECHO ----- activate a tag if present -----
+SET ORDER TO TAG LNAME
+AREA
+TOP
+LIST
+
+ECHO ----- plain LIST again: same cursor because LIST restores -----
+LIST
+
+ECHO ----- SKIP 3 in ordered stream, then LIST -----
+SKIP 3
+LIST
+
+ECHO ----- SEEK in ordered stream, then LIST -----
+SEEK "SMITH"
+LIST
+
+ECHO ----- TOP in ordered stream, then LIST -----
+TOP
+LIST
+
+ECHO ----- BOTTOM in ordered stream, then LIST -----
+BOTTOM
+LIST
+
+ECHO ----- LIST ALL in ordered stream -----
+LIST ALL
+
+ECHO ----- disable order, back to natural -----
+SET ORDER TO 0
+TOP
+LIST
+
+* ------------------------------------------------------------
+* 4. Another area sanity check
+* ------------------------------------------------------------
+ECHO ===== SECTION 4: SECOND TABLE =====
+SELECT 10
+AREA
+COUNT
+TOP
+LIST
+SKIP 2
+LIST
+LIST TOP
+LIST BOTTOM
+LIST ALL
+
+* ------------------------------------------------------------
+* 5. Cross-area cursor line sanity
+* ------------------------------------------------------------
+ECHO ===== SECTION 5: AREA NUMBER SANITY =====
+SELECT 9
+TOP
+LIST
+
+SELECT 10
+TOP
+LIST
+
+SELECT 2
+TOP
+LIST
+
+* ------------------------------------------------------------
+* 6. Final workspace report
+* ------------------------------------------------------------
+ECHO ===== SECTION 6: FINAL STATUS =====
+STATUS
+WSREPORT
+
+ECHO ===== LIST CURSOR SHAKEDOWN END =====

@@ -1,0 +1,391 @@
+// cmd_calcwrite.cpp
+//
+// CALCWRITE - evaluate an expression and write the result to a field.
+//
+// Key behaviors (mirrors cmd_replace):
+//   * When TABLE buffering is ON for the current area:
+//       - do NOT lock
+//       - do NOT write to disk
+//       - stage the field update into the per-area TableBuffer
+//       - set DIRTY and mark the edited field STALE
+//   * When TABLE buffering is OFF:
+//       - lock the current record
+//       - write directly to disk
+//
+// Additional regression hardening:
+//   * If the RHS mentions any field names, attempt to ensure the current record is loaded
+//     before evaluating (prevents "0/-0.00" results after cursor-changing commands that
+//     don't load the record buffer).
+//   * Normalize negative-zero for numeric fields and validate numeric/date/logical widths
+//     (avoid silent truncation like "-0.00" -> "-0.0" for N(4,2)).
+//
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+#include "cli/settings.hpp"
+#include "cli/table_state.hpp"
+#include "shell.hpp"
+#include "xbase.hpp"
+#include "xbase_locks.hpp"
+
+#include "cli/expr/api.hpp"
+#include "cli/expr/fn_date.hpp"
+#include "cli/expr/fn_string.hpp"
+#include "cli/expr/glue_xbase.hpp"
+
+namespace {
+
+static inline void trim_inplace(std::string& s) {
+    size_t b = 0;
+    while (b < s.size() && std::isspace((unsigned char)s[b])) ++b;
+    size_t e = s.size();
+    while (e > b && std::isspace((unsigned char)s[e - 1])) --e;
+    s = s.substr(b, e - b);
+}
+
+static inline std::string trim_copy(std::string s) { trim_inplace(s); return s; }
+
+static std::string upper_copy(std::string s) {
+    for (char& c : s) c = (char)std::toupper((unsigned char)c);
+    return s;
+}
+
+// Keep parsing of assignments robust: "FIELD = <expr>" where '=' is not inside quotes.
+static bool split_assignment(const std::string& src, std::string& out_lhs, std::string& out_rhs) {
+    bool in_quote = false;
+    for (size_t i = 0; i < src.size(); ++i) {
+        const char c = src[i];
+        if (c == '"') in_quote = !in_quote;
+        if (!in_quote && c == '=') {
+            out_lhs = src.substr(0, i);
+            out_rhs = src.substr(i + 1);
+            trim_inplace(out_lhs);
+            trim_inplace(out_rhs);
+            return !out_lhs.empty() && !out_rhs.empty();
+        }
+    }
+    return false;
+}
+
+static int field_index_ci(const xbase::DbArea& area, const std::string& needle) {
+    const std::string u = upper_copy(trim_copy(needle));
+    const auto& defs = area.fields();
+    for (size_t i = 0; i < defs.size(); ++i) {
+        if (upper_copy(defs[i].name) == u) return (int)i + 1; // 1-based
+    }
+    return 0;
+}
+
+static bool rhs_mentions_any_field(const std::string& rhs, const xbase::DbArea& area) {
+    std::unordered_set<std::string> names;
+    names.reserve(area.fields().size() * 2);
+    for (const auto& f : area.fields()) names.insert(upper_copy(f.name));
+
+    bool in_quote = false;
+    for (size_t i = 0; i < rhs.size();) {
+        const char c = rhs[i];
+        if (c == '"') { in_quote = !in_quote; ++i; continue; }
+        if (in_quote) { ++i; continue; }
+
+        if (std::isalpha((unsigned char)c) || c == '_') {
+            size_t j = i + 1;
+            while (j < rhs.size() && (std::isalnum((unsigned char)rhs[j]) || rhs[j] == '_')) ++j;
+            const std::string tok = upper_copy(rhs.substr(i, j - i));
+            if (names.find(tok) != names.end()) return true;
+            i = j;
+        } else {
+            ++i;
+        }
+    }
+    return false;
+}
+
+struct EvalResult {
+    enum Kind { EMPTY, BOOL, NUMBER, STRING } kind = EMPTY;
+    bool b = false;
+    double n = 0.0;
+    std::string s;
+
+    std::string to_string_lossy() const {
+        switch (kind) {
+            case STRING: return s;
+            case BOOL:   return b ? "T" : "F";
+            case NUMBER: {
+                std::ostringstream os;
+                os << n;
+                return os.str();
+            }
+            case EMPTY:
+            default:     return "";
+        }
+    }
+};
+
+static EvalResult eval_rhs(xbase::DbArea& area, const std::string& rhs_expr) {
+    // Best-effort numeric literal normalization (Fox-like): allows "1,234.50"
+    std::string rhs = rhs_expr;
+    dottalk::expr::coerce_numeric_literals_inplace(rhs);
+
+    auto prog = dottalk::expr::compile_where(rhs);
+    dottalk::expr::Vm vm;
+
+    // Buffer-aware record view.
+    auto rv = dottalk::expr::glue::make_record_view(area);
+    auto v = vm.eval(*prog, rv);
+
+    EvalResult out;
+    if (v.is_null()) {
+        out.kind = EvalResult::EMPTY;
+    } else if (v.is_bool()) {
+        out.kind = EvalResult::BOOL;
+        out.b = v.b;
+    } else if (v.is_num()) {
+        out.kind = EvalResult::NUMBER;
+        out.n = v.n;
+    } else if (v.is_str()) {
+        out.kind = EvalResult::STRING;
+        out.s = v.s;
+    } else {
+        out.kind = EvalResult::STRING;
+        out.s = v.to_string();
+    }
+    return out;
+}
+
+template <typename FieldDefT>
+static bool normalize_for_field(
+    const FieldDefT& def,
+    const EvalResult& res,
+    std::string& out_store,
+    std::string& out_err)
+{
+    out_store.clear();
+    out_err.clear();
+
+    const char ftype = (char)std::toupper((unsigned char)def.type);
+    const int flen = (int)def.len;
+    const int fdec = (int)def.dec;
+
+    auto fail = [&](const std::string& msg) {
+        out_err = msg;
+        return false;
+    };
+
+    if (flen <= 0) return fail("invalid field length.");
+
+    switch (ftype) {
+        case 'C': {
+            std::string s = (res.kind == EvalResult::STRING) ? res.s : res.to_string_lossy();
+            if ((int)s.size() > flen) s.resize((size_t)flen);
+            out_store = s;
+            return true;
+        }
+        case 'L': {
+            std::string s = (res.kind == EvalResult::STRING) ? upper_copy(trim_copy(res.s))
+                                                             : upper_copy(trim_copy(res.to_string_lossy()));
+            bool b = false;
+            if (res.kind == EvalResult::BOOL) {
+                b = res.b;
+            } else if (s == "T" || s == ".T." || s == "TRUE" || s == "1" || s == "Y" || s == "YES") {
+                b = true;
+            } else if (s == "F" || s == ".F." || s == "FALSE" || s == "0" || s == "N" || s == "NO") {
+                b = false;
+            } else {
+                return fail("logical field expects T/F (.T./.F., TRUE/FALSE, 1/0).");
+            }
+            out_store = b ? "T" : "F";
+            if ((int)out_store.size() > flen) return fail("logical value does not fit field length.");
+            return true;
+        }
+        case 'D': {
+            std::string s;
+            if (res.kind == EvalResult::STRING) {
+                s = trim_copy(res.s);
+            } else if (res.kind == EvalResult::NUMBER) {
+                long long v = (long long)std::llround(res.n);
+                s = std::to_string(v);
+            } else {
+                s = trim_copy(res.to_string_lossy());
+            }
+
+            // Allow "YYYY-MM-DD" by stripping hyphens.
+            if (s.size() == 10 && s[4] == '-' && s[7] == '-') {
+                s.erase(7, 1);
+                s.erase(4, 1);
+            }
+            if (s.size() != 8 || !std::all_of(s.begin(), s.end(),
+                [](char c){ return std::isdigit((unsigned char)c); })) {
+                return fail("date field expects YYYYMMDD (or YYYY-MM-DD).");
+            }
+            out_store = s;
+            if ((int)out_store.size() > flen) return fail("date value does not fit field length.");
+            return true;
+        }
+        case 'N': {
+            double n = 0.0;
+            if (res.kind == EvalResult::NUMBER) n = res.n;
+            else {
+                std::string s = trim_copy(res.to_string_lossy());
+                if (s.empty()) n = 0.0;
+                else {
+                    try { n = std::stod(s); } catch (...) { return fail("numeric field expects a number."); }
+                }
+            }
+
+            // Normalize negative zero at the target precision.
+            const double eps = std::pow(10.0, -(double)std::max(0, fdec)) * 0.5;
+            if (std::fabs(n) < eps) n = 0.0;
+
+            std::ostringstream os;
+            os.setf(std::ios::fixed);
+            os << std::setprecision(std::max(0, fdec)) << n;
+            std::string s = os.str();
+            trim_inplace(s);
+
+            // Fit check: do NOT silently truncate.
+            if ((int)s.size() > flen) {
+                return fail("numeric overflow: value '" + s + "' does not fit N(" +
+                            std::to_string(flen) + "," + std::to_string(fdec) + ").");
+            }
+            out_store = s;
+            return true;
+        }
+        default:
+            return fail(std::string("unsupported field type: ") + def.type);
+    }
+}
+
+static int resolve_current_index(xbase::DbArea& current) {
+    xbase::XBaseEngine* eng = shell_engine();
+    if (!eng) return -1;
+
+    const int cur = eng->currentArea();
+    if (cur >= 0 && cur < eng->maxAreas()) {
+        if (&eng->area(cur) == &current) return cur;
+    }
+
+    for (int i = 0; i < eng->maxAreas(); ++i) {
+        if (&eng->area(i) == &current) return i;
+    }
+    return -1;
+}
+
+static std::string printable_value(const std::string& store, char ftype) {
+    const char t = (char)std::toupper((unsigned char)ftype);
+    if (t == 'C') return "\"" + store + "\"";
+    return store;
+}
+
+} // namespace
+
+void cmd_CALCWRITE(xbase::DbArea& current, std::istringstream& iss) {
+    std::string rest;
+    std::getline(iss, rest);
+    trim_inplace(rest);
+
+    if (rest.empty()) {
+        std::cout << "Usage: CALCWRITE <field> = <expression>\n";
+        return;
+    }
+
+    std::string lhs, rhs;
+    if (!split_assignment(rest, lhs, rhs)) {
+        std::cout << "CALCWRITE: expected assignment form: <field> = <expression>\n";
+        return;
+    }
+
+    const int field1 = field_index_ci(current, lhs);
+    if (field1 <= 0) {
+        std::cout << "CALCWRITE: unknown field: " << lhs << "\n";
+        return;
+    }
+
+    const auto& defs = current.fields();
+    if (field1 > (int)defs.size()) {
+        std::cout << "CALCWRITE: field index out of range.\n";
+        return;
+    }
+    const auto& def = defs[(size_t)field1 - 1];
+
+    const int area0 = resolve_current_index(current);
+    const bool table_buffering = (area0 >= 0) ? dottalk::table::is_enabled(area0) : false;
+
+    // If RHS references fields, ensure record buffer is loaded so field reads are stable.
+    if (rhs_mentions_any_field(rhs, current)) {
+        (void)current.readCurrent();
+    }
+
+    EvalResult res;
+    try {
+        res = eval_rhs(current, rhs);
+    } catch (const std::exception& e) {
+        std::cout << "CALCWRITE: expression error: " << e.what() << "\n";
+        return;
+    }
+
+    std::string store, err;
+    if (!normalize_for_field(def, res, store, err)) {
+        std::cout << "CALCWRITE: " << err << "\n";
+        return;
+    }
+
+    const int rn = current.recno();
+
+    if (table_buffering && !current.filename().empty()) {
+        // Stage into table buffer (no lock, no disk write).
+        using namespace dottalk::table;
+
+        TableBuffer& tb = get_tb(area0);
+
+        std::uint64_t field_mask[kWords]{};
+        const int fieldIndex0 = field1 - 1;
+        const int word = fieldIndex0 / 64;
+        const int bit = fieldIndex0 % 64;
+        if (word >= 0 && word < (int)kWords) field_mask[word] |= (1ULL << bit);
+
+        tb.add_change(rn, CHANGE_UPDATE, field_mask, field1, store);
+
+        if (!is_dirty(area0)) set_dirty(area0, true);
+        mark_stale_field(area0, field1);
+
+        std::cout << "CALCWRITE: buffered " << def.name
+                  << " = " << printable_value(store, def.type)
+                  << " at rec " << rn << ".\n";
+        return;
+    }
+
+    // Direct write path: lock + write.
+    if (!xbase::locks::try_lock_record(current, rn)) {
+        std::cout << "CALCWRITE: could not lock record " << rn << ".\n";
+        return;
+    }
+
+    try {
+        current.set(field1, store);
+        if (!current.writeCurrent()) {
+            xbase::locks::unlock_record(current, rn);
+            std::cout << "CALCWRITE: write failed.\n";
+            return;
+        }
+    } catch (const std::exception& e) {
+        xbase::locks::unlock_record(current, rn);
+        std::cout << "CALCWRITE: set/write failed: " << e.what() << "\n";
+        return;
+    }
+
+    xbase::locks::unlock_record(current, rn);
+
+    std::cout << "CALCWRITE: wrote " << def.name
+              << " = " << printable_value(store, def.type)
+              << " at rec " << rn << ".\n";
+}

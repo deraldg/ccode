@@ -1,33 +1,31 @@
-// src/cli/shell.hpp
-#pragma once
-#include <iostream>
-#include <sstream>
+#ifndef DOTTALK_CLI_SHELL_HPP
+#define DOTTALK_CLI_SHELL_HPP
+
 #include <string>
 #include "xbase.hpp"
-#include "command_registry.hpp"
 
-class Shell {
-public:
-    Shell();
-    ~Shell();
+// Shell entry
+int run_shell();
 
-    // Basic text I/O helpers
-    void print(const std::string& s) { std::cout << s; }
-    void println(const std::string& s) { std::cout << s << std::endl; }
+// ------------------------------------------------------------
+// IF / ELSE / ENDIF control (implemented in shell.cpp / control utils)
+// ------------------------------------------------------------
+bool shell_if_can_eval();
+bool shell_if_is_suppressed();
 
-    // Access to the database API (placeholder until we wire full shell_api)
-    xbase::DbArea* current_area() { return _area; }
-    const xbase::DbArea* current_area() const { return _area; }
+void shell_if_enter(bool condition, bool evaluated);
+void shell_if_else();
+void shell_if_exit();
 
-    // placeholder API adaptor; in real builds, this is more complex
-    struct ApiProxy {
-        xbase::DbArea* current_area() { return nullptr; }
-    };
-    ApiProxy& api() { static ApiProxy proxy; return proxy; }
+// ------------------------------------------------------------
+// Boolean evaluation (shared with WHILE / UNTIL / IF)
+// Returns true if evaluation succeeded.
+// On success, *result receives the condition truth value.
+// On failure, returns false and optionally fills err.
+// ------------------------------------------------------------
+bool shell_eval_bool_expr(xbase::DbArea& area,
+                          const std::string& expr,
+                          bool* result,
+                          std::string* err = nullptr);
 
-private:
-    xbase::DbArea* _area = nullptr;
-};
-
-// Forward declaration for run_shell, defined in shell.cpp
-int run_shell(bool quiet_mode);
+#endif // DOTTALK_CLI_SHELL_HPP

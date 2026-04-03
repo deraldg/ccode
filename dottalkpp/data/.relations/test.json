@@ -1,0 +1,8 @@
+{
+  "relations": [
+    {"parent":"STUDENTS","child":"ENROLL","fields":["SID"]},
+    {"parent":"ENROLL","child":"CLASSES","fields":["CLS_ID"]},
+    {"parent":"CLASSES","child":"TASSIGN","fields":["CLS_ID"]},
+    {"parent":"TASSIGN","child":"TEACHERS","fields":["TID"]}
+  ]
+}

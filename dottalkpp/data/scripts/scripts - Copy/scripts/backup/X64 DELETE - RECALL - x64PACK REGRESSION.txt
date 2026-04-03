@@ -1,0 +1,166 @@
+```text
+ECHO OFF
+SET TALK ON
+
+* =========================================================
+* X64 DELETE / RECALL / PACK REGRESSION
+* =========================================================
+* PURPOSE
+*   1) Prove DELETE only marks row
+*   2) Prove RECALL restores row and memo before PACK
+*   3) Prove PACK physically removes deleted rows
+*   4) Prove surviving x64 memos still resolve correctly
+* =========================================================
+
+CLOSE ALL
+SCHEMAS CLOSE
+
+ERASE X64_DELTEST CONFIRM
+
+* =========================================================
+* 0) CREATE TEST TABLE
+* =========================================================
+ECHO [0] CREATE X64_DELTEST
+CREATE X64 X64_DELTEST (ID N(8,0), TITLE C(20), NOTES M)
+STRUCT
+FIELDS
+
+* =========================================================
+* 1) BUILD THREE LIVE RECORDS
+* =========================================================
+ECHO [1] BUILD THREE RECORDS
+
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH REC1
+REPLACE NOTES WITH "memo one"
+DISPLAY
+
+APPEND
+REPLACE ID WITH 2
+REPLACE TITLE WITH REC2
+REPLACE NOTES WITH "memo two"
+DISPLAY
+
+APPEND
+REPLACE ID WITH 3
+REPLACE TITLE WITH REC3
+REPLACE NOTES WITH "memo three"
+DISPLAY
+
+GO TOP
+TUP
+SKIP 1
+TUP
+SKIP 1
+TUP
+
+CLOSE
+
+* =========================================================
+* 2) REOPEN AND DELETE RECORD 2
+* =========================================================
+ECHO [2] DELETE RECORD 2
+USE X64_DELTEST
+GO TOP
+SKIP 1
+DISPLAY
+
+DELETE
+DISPLAY
+
+CLOSE
+
+* =========================================================
+* 3) REOPEN AND RECALL RECORD 2
+* =========================================================
+ECHO [3] RECALL RECORD 2 BEFORE PACK
+USE X64_DELTEST
+GO TOP
+SKIP 1
+DISPLAY
+
+RECALL
+DISPLAY
+TUP
+
+CLOSE
+
+* =========================================================
+* 4) DELETE RECORD 2 AGAIN, THEN PACK
+* =========================================================
+ECHO [4] DELETE AGAIN, THEN PACK
+USE X64_DELTEST
+GO TOP
+SKIP 1
+DISPLAY
+
+DELETE
+DISPLAY
+
+PACK
+
+* After PACK, table should reopen at TOP or be usable immediately.
+DISPLAY
+GO TOP
+DISPLAY
+SKIP 1
+DISPLAY
+
+CLOSE
+
+* =========================================================
+* 5) VERIFY ONLY RECORDS 1 AND 3 REMAIN
+* =========================================================
+ECHO [5] VERIFY LIVE ROWS AFTER PACK
+USE X64_DELTEST
+
+GO TOP
+DISPLAY
+TUP
+
+SKIP 1
+DISPLAY
+TUP
+
+* One more SKIP should fail or hit EOF depending on current behavior
+SKIP 1
+
+CLOSE
+
+* =========================================================
+* 6) VERIFY MEMOS STILL RESOLVE AFTER PACK
+* =========================================================
+ECHO [6] VERIFY SURVIVING MEMOS
+USE X64_DELTEST
+
+GO TOP
+DISPLAY
+SKIP 1
+DISPLAY
+
+CLOSE
+
+* =========================================================
+* 7) OPTIONAL MEMO TOOL CHECKS
+* =========================================================
+ECHO [7] OPTIONAL MEMO CHECKS
+USE X64_DELTEST
+
+MEMO STATUS
+MEMO VERIFY
+
+CLOSE
+
+* =========================================================
+* 8) EXPECTED RESULTS
+* =========================================================
+ECHO [8] EXPECTATIONS
+ECHO Before PACK, RECALL should restore REC2 with memo two.
+ECHO After PACK, REC2 should be gone.
+ECHO After PACK, REC1 should still show memo one.
+ECHO After PACK, REC3 should still show memo three.
+ECHO MEMO VERIFY should come back clean after PACK.
+
+ECHO DONE
+```

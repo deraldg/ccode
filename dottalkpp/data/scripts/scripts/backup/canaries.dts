@@ -1,0 +1,275 @@
+* ============================================================
+* MCC_SUPER_REGRESSIVE_SHAKEDOWN_CANARIES.DTS
+*
+* Purpose:
+* - Aggressively regression-test the known fragile spots.
+* - Label known/observed irregularities as CANARIES.
+*
+* House rules baked in:
+* - Any CALC comparisons (= <> <= >= < >) must be wrapped:
+*     CALC (<expr>)
+* - Hyphenated dates must be quoted for CTOD:
+*     CTOD("2000-01-01")
+* - TUP is table-buffer aware for display; LIST/SMARTLIST/browsers show real DBF data.
+* - Quotes required for values with spaces; optional otherwise.
+* - Cursor/area/record can move due to commands; we probe RECNO before/after.
+*
+* ASCII ONLY: do not use smart quotes or em-dashes.
+* ============================================================
+
+SET ECHO ON
+ECHO ===== SUPER REGRESSIVE SHAKE-DOWN START =====
+COLOR DEFAULT
+
+* ------------------------------------------------------------
+ECHO ===== SETUP: OPEN ALL DBF TABLES =====
+SCHEMAS CLOSE
+SCHEMAS OPEN DBF
+SCHEMAS
+
+* ------------------------------------------------------------
+ECHO ===== CALC: BASELINE ARITH / PRECEDENCE (should pass) =====
+CALC 1
+CALC 1 + 2
+CALC 10 - 3
+CALC 6 * 7
+CALC 8 / 2
+CALC (1 + 2) * 3
+CALC 1 + 2 * 3
+CALC 7 / 2
+CALC 7.0 / 2
+CALC 0 - 5
+CALC -5 + 2
+CALC 1 + -2
+CALC (0 - 2) * 3
+
+* ------------------------------------------------------------
+ECHO ===== CALC: COMPARISON RULE CHECK (must be parenthesized) =====
+ECHO [NOTE] If any of these mis-route to CALCWRITE, the parser rule regressed.
+CALC (1 = 1)
+CALC (1 < 2)
+CALC (2 > 1)
+CALC (2 >= 2)
+CALC (2 <= 2)
+CALC NOT (1 = 2)
+CALC ((1 = 1) AND (2 = 2))
+CALC ((1 = 1) OR (1 = 2))
+CALC (1 + 2 * 3 = 7)
+CALC ((1 + 2) * 3 = 9)
+
+* ------------------------------------------------------------
+ECHO ===== CALC: RHS-EXPRESSION CANARIES (known fragile) =====
+ECHO [CANARY] RHS expression in equality; should be .T.
+CALC (3 = 1 + 2)
+ECHO [CANARY] Both sides expressions; should be .T.
+CALC ((1 + 2) = (6 / 2))
+ECHO [CANARY] Nested expression compare; should be .T.
+CALC ((1 + 2 * 3) = (1 + (2 * 3)))
+
+* ------------------------------------------------------------
+ECHO ===== CALC: CLOCK / DATE-TIME (no DBF required) =====
+CALC DATE()
+CALC TODAY()
+CALC TIME()
+CALC NOW()
+CALC DATETIME()
+
+ECHO [SANITY] DATE vs TODAY, NOW vs DATETIME should match.
+CALC (DATE() = TODAY())
+CALC (NOW() = DATETIME())
+
+* ------------------------------------------------------------
+ECHO ===== DATE ARITHMETIC / COMPARE CANARIES (known failures) =====
+ECHO [CANARY] Should be .T. If .F., date-compare/coercion is broken.
+CALC ((DATE() + 2) > DATE())
+ECHO [CANARY] Should be .T. If .F., date-compare/coercion is broken.
+CALC ((DATE() - 2) < DATE())
+
+* Show the raw date arithmetic outputs too
+CALC DATE() + 2
+CALC DATE() - 2
+
+* ------------------------------------------------------------
+ECHO ===== CTOD PARSING CANARIES =====
+ECHO [NOTE] Hyphenated dates must be quoted. Unquoted is a canary for tokenization.
+ECHO [CANARY] If CTOD(2000-01-01) "works" but compares fail, tokenization is suspect.
+CALC CTOD(2000-01-01)
+
+ECHO [EXPECTED] Quoted should parse cleanly and behave consistently.
+CALC CTOD("2000-01-01")
+CALC CTOD("2000/01/01")
+CALC CTOD(20000101)
+
+ECHO [SANITY] Date-to-date compares (should be .T.)
+CALC (CTOD("2000-01-01") = CTOD("2000/01/01"))
+CALC (CTOD("2000-01-01") = CTOD(20000101))
+
+ECHO [CANARY] Date + 1 day equality. Expected .T. If .F., date math/compare is broken.
+CALC (CTOD("2000-01-01") + 1 = CTOD("2000-01-02"))
+ECHO [CANARY] Date - 1 day equality. Expected .T. If .F., date math/compare is broken.
+CALC (CTOD("2000-01-01") - 1 = CTOD("1999-12-31"))
+
+* ------------------------------------------------------------
+ECHO ===== DTOC ROUND-TRIP CANARY =====
+ECHO [CANARY] DTOC output and equality should behave predictably (string compare).
+CALC DTOC(CTOD("2000-01-01"))
+CALC (DTOC(CTOD("2000-01-01")) = "20000101")
+
+* ------------------------------------------------------------
+ECHO ===== STRING BUILTINS: BASELINE + CANARIES =====
+ECHO [SANITY] Basic string funcs on literals should work.
+CALC (UPPER("aBc") = "ABC")
+CALC (LOWER("aBc") = "abc")
+CALC (PROPER("joHN") = "John")
+CALC (LEFT("ABCDE", 3) = "ABC")
+CALC (RIGHT("ABCDE", 2) = "DE")
+CALC (ALLTRIM("  hi  ") = "hi")
+
+ECHO [CANARY] TRIM should remove BOTH sides. If it behaves like RTRIM only, this will fail.
+CALC TRIM("  hi  ")
+CALC (TRIM("  hi  ") = "hi")
+
+ECHO [SANITY] LTRIM/RTRIM are one-sided.
+CALC LTRIM("  hi  ")
+CALC RTRIM("  hi  ")
+CALC (LTRIM("  hi  ") = "hi  ")
+CALC (RTRIM("  hi  ") = "  hi")
+
+ECHO [SANITY] LEN/SUBSTR/AT
+CALC LEN("ABCDE")
+CALC SUBSTR("ABCDE", 2, 3)
+CALC AT("CD", "ABCDE")
+
+ECHO [CANARY] RAT may be unimplemented (previously returned .F.)
+CALC RAT("A", "BANANA")
+
+ECHO [SANITY] REPLICATE/SPACE
+CALC REPLICATE("x", 5)
+CALC SPACE(3)
+
+* ------------------------------------------------------------
+ECHO ===== OPEN STUDENTS: ANCHOR RECORD AND PROBE CURSOR MOVES =====
+SELECT STUDENTS
+AREA
+ECHO [STEP] Anchor on a known record by LOCATE.
+LOCATE FOR LNAME = TAYLOR
+ECHO [INFO] Current record snapshot:
+RECNO
+TUP
+TUP SID
+TUP LNAME
+TUP FNAME
+TUP DOB
+TUP ENROLL_D
+TUP GPA
+TUP EMAIL
+
+ECHO [PROBE] Cursor restore behavior around LIST.
+ECHO [NOTE] LIST may move internally then restore. We check RECNO before/after.
+ECHO [PROBE] RECNO before LIST:
+RECNO
+LIST 1
+ECHO [PROBE] RECNO after LIST (should match before if restore works):
+RECNO
+ECHO [NOTE] If RECNO changed and stayed changed, cursor restore regressed or is command-specific.
+
+* ------------------------------------------------------------
+ECHO ===== STUDENTS: DATE FIELD ALGEBRA + CANARIES =====
+ECHO [SANITY] Date arithmetic on DBF date fields should print YYYYMMDD.
+CALC DOB
+CALC DOB + 1
+CALC DOB - 1
+CALC DATEADD(DOB, 30)
+CALC DATEADD(DOB, -30)
+
+ECHO [SANITY] Day count should agree between DATEDIFF and date-date subtraction.
+CALC DATEDIFF(DATE(), DOB)
+CALC DATE() - DOB
+
+ECHO [CANARY] These printed equal before but compared .F. (type/coercion mismatch).
+CALC (DATEDIFF(DATE(), DOB) = (DATE() - DOB))
+
+* ------------------------------------------------------------
+ECHO ===== BOOLEAN/PREDICATE: FIELD-ONLY SANITY =====
+ECHO [NOTE] BOOLEAN uses predicate grammar, not CALC expr grammar.
+BOOLEAN GPA > 3
+BOOLEAN GPA < 3
+BOOLEAN GPA >= 2 AND GPA <= 4
+
+* ------------------------------------------------------------
+ECHO ===== LOCATE/FIND/SEEK: SMOKE + CURSOR NOTES =====
+ECHO [NOTE] These commands may move the record pointer. We show RECNO before/after.
+TOP
+RECNO
+LOCATE FOR LNAME = DAVIS
+RECNO
+TUP
+
+TOP
+RECNO
+LOCATE FOR LNAME = TAYLOR
+RECNO
+TUP
+
+TOP
+RECNO
+FIND LNAME = TAYLOR
+ECHO [PROBE] After FIND, record pointer may be unchanged or last hit; check:
+RECNO
+
+TOP
+RECNO
+SEEK LNAME = DAVIS
+ECHO [PROBE] After SEEK, pointer should land on found record:
+RECNO
+TUP
+
+* ------------------------------------------------------------
+ECHO ===== TABLE BUFFER DISPLAY CANARIES (TUP vs LIST) =====
+ECHO [RULE] Only TUP is buffer-aware for display. LIST shows actual DBF content.
+
+LOCATE FOR LNAME = TAYLOR
+ECHO [BASELINE] Show current values (real DBF):
+LIST 1
+ECHO [BASELINE] Show current values (buffer-aware):
+TUP
+
+ECHO [STEP] Enable table buffering, edit a field, then compare TUP vs LIST.
+TABLE ON
+REPLACE FNAME WITH "DeraldNew"
+
+ECHO [CANARY] TUP should show the buffered change immediately.
+TUP
+
+ECHO [CANARY] LIST should still show the OLD DBF value (until COMMIT) if buffering is working.
+LIST 1
+
+ECHO [PROBE] RECNO before COMMIT (should not drift unexpectedly):
+RECNO
+TUP SID
+
+ECHO [STEP] COMMIT (may rebuild indexes; should preserve current record identity).
+COMMIT
+
+ECHO [CANARY] After COMMIT, record identity should still be the same student.
+ECHO [CANARY] If SID/record changes unexpectedly, COMMIT record-preserve is broken.
+RECNO
+TUP
+TUP SID
+
+ECHO [SANITY] After COMMIT, LIST should now show the new value (real DBF updated).
+LIST 1
+
+ECHO [STEP] Restore original value to keep run reversible.
+TABLE ON
+REPLACE FNAME WITH "Derald"
+COMMIT
+LIST 1
+TUP
+
+* ------------------------------------------------------------
+ECHO ===== CLEAN SHUTDOWN =====
+SCHEMAS
+SCHEMAS CLOSE
+ECHO ===== SUPER REGRESSIVE SHAKE-DOWN END =====
+QUIT

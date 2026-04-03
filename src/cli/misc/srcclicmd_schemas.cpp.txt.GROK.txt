@@ -1,0 +1,758 @@
+// src/cli/cmd_schemas.cpp
+//
+// SCHEMAS (legacy DBF areas)
+//
+// Commands:
+// SCHEMAS : List open areas.
+// SCHEMAS OPEN [<dir>] : Open all .dbf in <dir> (non-recursive).
+// SCHEMAS OPEN <dir> recursive : (STUB) Accepts 'recursive'; falls back to non-recursive.
+// SCHEMAS OPEN <file.dbf> : Open a single .dbf into the CURRENT area.
+//
+// SCHEMAS OPEN <target> CNX [FALLBACK] [recursive] [TABLE]
+// SCHEMAS OPEN <target> INX [FALLBACK] [recursive] [TABLE]
+//
+// NOTE (per requirement):
+// - If CNX/INX is NOT specified, SCHEMAS OPEN will NOT attach/open indexes.
+// (DBF sidecars like memo are handled by the DBF open path, not by SCHEMAS.)
+// - TABLE flag will TABLE-ON each opened workarea (open DBF areas only).
+//
+// SCHEMAS CLOSE : Close all.
+// SCHEMAS CLOSE <n> [m ...] : Close by area index(es).
+// SCHEMAS CLOSE <name|file|stem|alias>[,...]: Close by name(s)/alias(es); case-insensitive.
+// SCHEMAS SAVE <file.dtschema> : Save layout (+relations if available).
+// SCHEMAS LOAD <file.dtschema> : Close all, load layout (+relations), resolve relative paths vs DATA root.
+//
+#include <algorithm>
+#include <cctype>
+#include <climits>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <type_traits>
+#include <unordered_set>
+#include <vector>
+
+#include "xbase.hpp"
+#include "cli/dirty_prompt.hpp"
+#include "cli/order_state.hpp"
+#include "cli/memo_auto.hpp"  // Memo sidecar lifecycle on close
+
+#if __has_include("set_relations.hpp")
+  #include "set_relations.hpp"
+  #define HAVE_RELATIONS 1
+#else
+  #define HAVE_RELATIONS 0
+#endif
+
+#if __has_include("cli/path_resolver.hpp") && __has_include("cli/cmd_setpath.hpp")
+  #include "cli/path_resolver.hpp"
+  #include "cli/cmd_setpath.hpp"
+  #define HAVE_PATHS 1
+#else
+  #define HAVE_PATHS 0
+#endif
+
+#if __has_include("cli/table_state.hpp")
+  #include "cli/table_state.hpp"
+  #define HAVE_TABLE 1
+#else
+  #define HAVE_TABLE 0
+#endif
+
+namespace fs = std::filesystem;
+using std::string;
+
+// CNX (compound) extensions
+static constexpr const char* kCnxPrimaryExt = ".cnx";
+static constexpr const char* kCnxCompatExt = ".cdx";
+
+// --------- Utilities --------------------------------------------------------
+static inline string trim_copy(string s) {
+    auto is_space = [](unsigned char ch){ return std::isspace(ch) != 0; };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c){ return !is_space(c); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c){ return !is_space(c); }).base(), s.end());
+    return s;
+}
+
+static inline string to_lower(string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
+    return s;
+}
+
+static inline bool ci_equal(const string& a, const string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) return false;
+    return true;
+}
+
+static inline std::string s8(const fs::path& p) {
+#if defined(_WIN32)
+    auto u = p.u8string(); return std::string(u.begin(), u.end());
+#else
+    return p.string();
+#endif
+}
+
+// Provided by interactive shell
+extern "C" xbase::XBaseEngine* shell_engine(void);
+
+static inline xbase::DbArea& get_area_0based(int area0) {
+    auto* eng = shell_engine();
+    if (!eng) throw std::runtime_error("SCHEMAS: engine not available");
+    if (area0 < 0 || area0 >= xbase::MAX_AREA) throw std::out_of_range("SCHEMAS: area out of range");
+    return eng->area(area0);
+}
+
+static inline bool area_open(const xbase::DbArea& a) {
+    try { return !a.filename().empty(); } catch (...) { return false; }
+}
+
+static int get_area_index(xbase::DbArea& areaRef) {
+    auto* eng = shell_engine(); if (!eng) return -1;
+    for (int i = 0; i < xbase::MAX_AREA; ++i) if (&eng->area(i) == &areaRef) return i;
+    return -1;
+}
+
+// Optional alias/name() support
+template <typename T>
+using has_name_t = decltype(std::declval<T&>().name());
+template <typename T, typename = typename has_name_t<T>::type>
+static inline std::string getNameIf(T& a, int) { return a.name(); }
+template <typename T>
+static inline std::string getNameIf(T&, long) { return {}; }
+
+// Path helpers
+#if HAVE_PATHS
+namespace paths = dottalk::paths;
+static inline fs::path dbf_root() { return paths::get_slot(paths::Slot::DBF); }
+static inline fs::path idx_root() { return paths::get_slot(paths::Slot::INDEXES); }
+static inline fs::path resolve_relative_to_root(const fs::path& p) {
+    if (p.is_absolute()) return p;
+    return fs::weakly_canonical(dbf_root() / p);
+}
+#else
+static inline fs::path resolve_relative_to_root(const fs::path& p) {
+    if (p.is_absolute()) return p;
+    return fs::weakly_canonical(fs::current_path() / p);
+}
+#endif
+
+// File helpers
+static bool file_exists(const fs::path& p) {
+    std::error_code ec;
+    return fs::exists(p, ec) && !ec && fs::is_regular_file(p, ec) && !ec;
+}
+
+static bool dir_exists(const fs::path& p) {
+    std::error_code ec;
+    return fs::exists(p, ec) && !ec && fs::is_directory(p, ec) && !ec;
+}
+
+static inline bool ieq_ext(const fs::path& p, const char* extDotLower) {
+    std::string e = p.extension().string();
+    const size_t nRef = std::char_traits<char>::length(extDotLower);
+    if (e.size() != nRef) return false;
+    for (size_t i = 0; i < nRef; ++i) {
+        unsigned char A = static_cast<unsigned char>(e[i]);
+        unsigned char B = static_cast<unsigned char>(extDotLower[i]);
+        if (std::tolower(A) != std::tolower(B)) return false;
+    }
+    return true;
+}
+
+static inline bool is_dbf(const fs::directory_entry& de) {
+    return de.is_regular_file() && ieq_ext(de.path(), ".dbf");
+}
+
+// --------- OPEN target resolution ------------------------------------------
+static fs::path resolve_open_target(const fs::path& raw) {
+    if (raw.empty()) return fs::current_path();
+    if (dir_exists(raw) || file_exists(raw)) return raw;
+#if HAVE_PATHS
+    const fs::path dbfRoot = dbf_root();
+    if (ci_equal(s8(raw), "dbf")) return dbfRoot;
+    {
+        fs::path cand = dbfRoot / raw;
+        if (dir_exists(cand) || file_exists(cand)) return cand;
+    }
+    if (ieq_ext(raw, ".inx") || ieq_ext(raw, ".cnx") || ieq_ext(raw, ".cdx")) {
+        fs::path stem = raw.stem();
+        fs::path cand = (dbfRoot / stem).concat(".dbf");
+        if (file_exists(cand)) return cand;
+    }
+    if (!raw.has_extension()) {
+        fs::path cand = (dbfRoot / raw).concat(".dbf");
+        if (file_exists(cand)) return cand;
+    }
+#else
+    if (!raw.has_extension()) {
+        fs::path cand = (fs::current_path() / raw).concat(".dbf");
+        if (file_exists(cand)) return cand;
+    }
+#endif
+    return raw;
+}
+
+// Index mode parsing
+enum class IndexMode { None = 0, ForceCnx, ForceInx };
+
+static inline std::optional<IndexMode> parse_index_mode_ci(const std::string& token) {
+    if (ci_equal(token, "cnx")) return IndexMode::ForceCnx;
+    if (ci_equal(token, "inx")) return IndexMode::ForceInx;
+    return std::nullopt;
+}
+
+// Index resolution (sibling first, then INDEXES slot)
+static std::optional<fs::path> find_index_for_dbf(const fs::path& dbfPath, IndexMode mode, bool fallback) {
+    auto file_ok = [](const fs::path& p) {
+        std::error_code ec;
+        return fs::exists(p, ec) && !ec && fs::is_regular_file(p, ec) && !ec;
+    };
+    const fs::path stem = dbfPath.stem();
+    auto inx_cands = [&](const fs::path& base) -> std::vector<fs::path> {
+        return {(base / stem).concat(".inx")};
+    };
+    auto cnx_cands = [&](const fs::path& base) -> std::vector<fs::path> {
+        return {(base / stem).concat(".cnx"), (base / stem).concat(".cdx")};
+    };
+    const fs::path sibDir = dbfPath.parent_path().empty() ? fs::current_path() : dbfPath.parent_path();
+#if HAVE_PATHS
+    const fs::path idxDir = idx_root();
+#else
+    const fs::path idxDir = {};
+#endif
+    auto pick = [&](const auto& cands) -> std::optional<fs::path> {
+        for (const auto& p : cands) if (file_ok(p)) return p;
+        return std::nullopt;
+    };
+    if (mode == IndexMode::ForceInx) {
+        if (auto p = pick(inx_cands(sibDir))) return p;
+        if (auto p = pick(inx_cands(idxDir))) return p;
+        if (fallback) return pick(cnx_cands(sibDir));
+    }
+    if (mode == IndexMode::ForceCnx) {
+        if (auto p = pick(cnx_cands(sibDir))) return p;
+        if (auto p = pick(cnx_cands(idxDir))) return p;
+        if (fallback) return pick(inx_cands(sibDir));
+    }
+    return std::nullopt;
+}
+
+// OPEN helpers
+struct OpenResult {
+    int area = -1;
+    fs::path dbf;
+    std::optional<fs::path> indexFile;
+    bool opened = false;
+    bool indexAttached = false;
+    string error;
+};
+
+#if HAVE_TABLE
+static void table_enable_for_area_if_open(int area0) {
+    if (area0 < 0 || area0 >= xbase::MAX_AREA) return;
+    try {
+        auto* eng = shell_engine();
+        if (!eng) return;
+        if (eng->area(area0).filename().empty()) return;
+        dottalk::table::set_enabled(area0, true);
+        dottalk::table::set_dirty(area0, false);
+        dottalk::table::set_stale(area0, false);
+    } catch (...) {}
+}
+
+static int table_enable_for_results(const std::vector<OpenResult>& results) {
+    int n = 0;
+    for (const auto& r : results) {
+        if (r.area >= 0 && r.opened) {
+            table_enable_for_area_if_open(r.area);
+            ++n;
+        }
+    }
+    return n;
+}
+#endif
+
+static std::vector<OpenResult> schema_open_directory(const fs::path& dir, IndexMode mode, bool fallback) {
+    std::vector<OpenResult> results;
+    if (!dir_exists(dir)) {
+        OpenResult r; r.error = "Not a directory: " + s8(dir);
+        results.push_back(r);
+        return results;
+    }
+    std::vector<fs::directory_entry> dbfs;
+    for (const auto& de : fs::directory_iterator(dir)) {
+        if (is_dbf(de)) dbfs.push_back(de);
+    }
+    std::sort(dbfs.begin(), dbfs.end(), [](const auto& a, const auto& b) {
+        return to_lower(s8(a.path().filename())) < to_lower(s8(b.path().filename()));
+    });
+    const int capacity = xbase::MAX_AREA;
+    const int toOpen = static_cast<int>(std::min(dbfs.size(), static_cast<size_t>(capacity)));
+    const bool overflow = dbfs.size() > static_cast<size_t>(capacity);
+    for (int area0 = 0; area0 < toOpen; ++area0) {
+        const auto& de = dbfs[area0];
+        OpenResult r;
+        r.area = area0;
+        r.dbf = de.path();
+        if (mode != IndexMode::None) {
+            r.indexFile = find_index_for_dbf(r.dbf, mode, fallback);
+        }
+        try {
+            xbase::DbArea& A = get_area_0based(area0);
+            orderstate::clearOrder(A);
+            A.close();
+            const string dbfStr = s8(r.dbf);
+            A.open(dbfStr);
+            A.setFilename(dbfStr);
+            r.opened = true;
+            if (r.indexFile) {
+                orderstate::setOrder(A, s8(*r.indexFile));
+                r.indexAttached = true;
+            }
+        } catch (const std::exception& ex) {
+            r.error = ex.what();
+        } catch (...) {
+            r.error = "Unknown error";
+        }
+        results.push_back(r);
+    }
+    if (overflow) {
+        OpenResult r; r.area = -1;
+        int skipped = static_cast<int>(dbfs.size()) - capacity;
+        r.error = "Exceeded MAX_AREA (" + std::to_string(capacity) +
+                  "). Only first " + std::to_string(capacity) + " opened; " +
+                  std::to_string(skipped) + " skipped.";
+        results.push_back(r);
+    }
+    return results;
+}
+
+static std::vector<OpenResult> schema_open_directory_recursive(const fs::path& dir, IndexMode mode, bool fallback) {
+    std::cout << "SCHEMAS OPEN: 'recursive' stub — using flat scan.\n";
+    return schema_open_directory(dir, mode, fallback);
+}
+
+static OpenResult schema_open_single_into_current(xbase::DbArea& current, const fs::path& dbfPath, IndexMode mode, bool fallback) {
+    OpenResult r;
+    r.dbf = dbfPath;
+    r.area = get_area_index(current);
+    if (mode != IndexMode::None) {
+        r.indexFile = find_index_for_dbf(dbfPath, mode, fallback);
+    }
+    try {
+        orderstate::clearOrder(current);
+        current.close();
+        const string dbfStr = s8(dbfPath);
+        current.open(dbfStr);
+        current.setFilename(dbfStr);
+        r.opened = true;
+        if (r.indexFile) {
+            orderstate::setOrder(current, s8(*r.indexFile));
+            r.indexAttached = true;
+        }
+    } catch (const std::exception& ex) {
+        r.error = ex.what();
+    } catch (...) {
+        r.error = "Unknown error";
+    }
+    return r;
+}
+
+static bool open_into_area(int area0, const fs::path& dbf, const std::optional<fs::path>& index, string* err) {
+    try {
+        xbase::DbArea& A = get_area_0based(area0);
+        orderstate::clearOrder(A);
+        A.close();
+        const string dbfStr = s8(dbf);
+        A.open(dbfStr);
+        A.setFilename(dbfStr);
+        if (index && !index->empty()) {
+            fs::path ip = *index;
+            if (!ip.is_absolute()) ip = resolve_relative_to_root(ip);
+            if (fs::exists(ip)) {
+                orderstate::setOrder(A, s8(ip));
+            }
+        }
+        return true;
+    } catch (const std::exception& ex) {
+        if (err) *err = ex.what();
+        return false;
+    } catch (...) {
+        if (err) *err = "Unknown error";
+        return false;
+    }
+}
+
+// --------- Printing ---------------------------------------------------------
+static void print_open_results(const std::vector<OpenResult>& results) {
+    int openedCount = 0, first = -1, last = -1;
+    for (const auto& r : results) {
+        if (r.area < 0 && !r.error.empty()) {
+            std::cout << " ! " << r.error << "\n";
+            continue;
+        }
+        std::cout << " Area " << r.area << ": ";
+        if (!r.opened) {
+            std::cout << "FAILED to open '" << s8(r.dbf.filename()) << "'";
+            if (!r.error.empty()) std::cout << " (" << r.error << ")";
+            std::cout << "\n";
+            continue;
+        }
+        if (first < 0) first = r.area;
+        last = r.area;
+        ++openedCount;
+        std::cout << "opened '" << s8(r.dbf.filename()) << "'";
+        if (r.indexFile) {
+            std::cout << " [index: " << s8(r.indexFile->filename())
+                      << (r.indexAttached ? ", attached" : ", found but not attached") << "]";
+        }
+        std::cout << "\n";
+    }
+    std::cout << "SCHEMAS: " << openedCount << " table(s) opened";
+    if (openedCount > 0) std::cout << " into area(s) " << first << ".." << last;
+    if (openedCount >= xbase::MAX_AREA) std::cout << " (capped at MAX_AREA)";
+    std::cout << ".\n";
+}
+
+static void schema_list_open() {
+    std::cout << "SCHEMAS: Listing open work areas...\n";
+    int open_count = 0;
+    for (int area0 = 0; area0 < xbase::MAX_AREA; ++area0) {
+        std::cout << " Area " << area0 << ": ";
+        try {
+            xbase::DbArea& A = get_area_0based(area0);
+            string fname = A.filename();
+            if (!fname.empty()) {
+                ++open_count;
+                string dbf_name = s8(fs::path(fname).filename());
+                string idx_name;
+                try { idx_name = orderstate::orderName(A); } catch (...) {}
+                std::cout << "opened '" << dbf_name << "'";
+                if (!idx_name.empty()) {
+                    std::cout << " [index: " << s8(fs::path(idx_name).filename()) << ", attached]";
+                }
+                std::cout << "\n";
+            } else {
+                std::cout << "--- closed ---\n";
+            }
+        } catch (...) {
+            std::cout << "Error checking area\n";
+        }
+    }
+    std::cout << "SCHEMAS: " << open_count << " of " << xbase::MAX_AREA << " area(s) in use.\n";
+}
+
+// --------- SAVE / LOAD ------------------------------------------------------
+static void schema_save_to_file(const fs::path& file) {
+    fs::path outPath = file;
+#if HAVE_PATHS
+    const fs::path schemasRoot = paths::get_slot(paths::Slot::SCHEMAS);
+    if (outPath.is_relative()) outPath = schemasRoot / outPath;
+#endif
+    if (!outPath.has_extension()) outPath.replace_extension(".dtschema");
+
+    fs::create_directories(outPath.parent_path(), std::error_code{});
+
+    std::ofstream out(outPath, std::ios::binary);
+    if (!out) {
+        std::cout << "SCHEMAS SAVE: cannot write " << s8(outPath) << "\n";
+        return;
+    }
+
+    out << "DTSHEMA 1\n";
+
+    for (int area0 = 0; area0 < xbase::MAX_AREA; ++area0) {
+        try {
+            xbase::DbArea& A = get_area_0based(area0);
+            if (!area_open(A)) continue;
+
+            fs::path dbfPath = A.filename();
+            string indexPath;
+            try { indexPath = orderstate::orderName(A); } catch (...) {}
+            string alias = getNameIf(A, 0);
+
+            string dbfOut = s8(dbfPath);
+            string idxOut = indexPath.empty() ? "none" : s8(fs::path(indexPath));
+
+#if HAVE_PATHS
+            // Make paths relative if under DBF/INDEXES roots
+            auto rel = [&](const fs::path& p, const fs::path& root) -> string {
+                if (p.is_relative()) return s8(p);
+                fs::path absP = fs::absolute(p);
+                if (absP.string().find(root.string()) == 0) {
+                    return s8(fs::relative(absP, root));
+                }
+                return s8(absP);
+            };
+            dbfOut = rel(dbfPath, dbf_root());
+            idxOut = (idxOut == "none") ? "none" : rel(fs::path(indexPath), idx_root());
+#endif
+
+            out << "AREA " << area0 << " | dbf=" << dbfOut << " | index=" << idxOut;
+            if (!alias.empty()) out << " | alias=" << alias;
+            out << "\n";
+        } catch (...) {}
+    }
+
+#if HAVE_RELATIONS
+    for (const auto& rel : relations_api::export_relations()) {
+        out << "RELATION " << rel.parent << " " << rel.child << " ON ";
+        for (size_t i = 0; i < rel.fields.size(); ++i) {
+            if (i > 0) out << ",";
+            out << rel.fields[i];
+        }
+        out << "\n";
+    }
+#endif
+
+    out.flush();
+    std::cout << "SCHEMAS SAVE: wrote " << s8(outPath) << "\n";
+}
+
+static void schema_load_from_file(const fs::path& file) {
+    fs::path inPath = file;
+#if HAVE_PATHS
+    const fs::path schemasRoot = paths::get_slot(paths::Slot::SCHEMAS);
+    if (inPath.is_relative()) {
+        fs::path cand = schemasRoot / inPath;
+        if (fs::exists(cand)) inPath = cand;
+    }
+#endif
+    if (!inPath.has_extension()) inPath.replace_extension(".dtschema");
+
+    std::ifstream in(inPath, std::ios::binary);
+    if (!in) {
+        std::cout << "SCHEMAS LOAD: cannot read " << s8(inPath) << "\n";
+        return;
+    }
+
+    string header;
+    std::getline(in, header);
+    if (to_lower(trim_copy(header)) != "dtshema 1") {
+        std::cout << "SCHEMAS LOAD: invalid header\n";
+        return;
+    }
+
+    schema_close_all();
+
+    int area_count = 0, rel_count = 0;
+    string line;
+    while (std::getline(in, line)) {
+        string t = trim_copy(line);
+        if (t.empty()) continue;
+
+        if (to_lower(t).rfind("area ", 0) == 0) {
+            std::istringstream iss(t.substr(5));
+            int n; iss >> n;
+            if (n < 0 || n >= xbase::MAX_AREA) {
+                std::cout << " ! AREA " << n << " out of range, skipped\n";
+                continue;
+            }
+
+            string part;
+            fs::path dbf, idx;
+            string alias;
+            while (std::getline(iss, part, '|')) {
+                part = trim_copy(part);
+                if (part.rfind("dbf=", 0) == 0) dbf = fs::path(part.substr(4));
+                else if (part.rfind("index=", 0) == 0) {
+                    string v = part.substr(6);
+                    if (v != "none") idx = fs::path(v);
+                }
+                else if (part.rfind("alias=", 0) == 0) alias = part.substr(6);
+            }
+
+            if (dbf.empty()) continue;
+
+            fs::path dbf_res = resolve_relative_to_root(dbf);
+            std::optional<fs::path> idx_res;
+            if (!idx.empty()) idx_res = resolve_relative_to_root(idx);
+
+            string err;
+            if (open_into_area(n, dbf_res, idx_res, &err)) {
+                if (!alias.empty()) {
+                    try {
+                        auto& A = get_area_0based(n);
+                        if constexpr (decltype(has_setLogicalName_t<xbase::DbArea>{})::value)
+                            A.setLogicalName(alias);
+                    } catch (...) {}
+                }
+                ++area_count;
+            } else {
+                std::cout << " ! AREA " << n << ": " << err << "\n";
+            }
+        }
+        else if (to_lower(t).rfind("relation ", 0) == 0) {
+#if HAVE_RELATIONS
+            string body = trim_copy(t.substr(9));
+            // Simple parse: parent child ON field1,field2,...
+            std::istringstream iss(body);
+            string parent, child, on;
+            iss >> parent >> child >> on;
+            if (on != "ON") continue;
+
+            string fields_str;
+            std::getline(iss, fields_str);
+            fields_str = trim_copy(fields_str);
+
+            std::vector<string> fields;
+            std::istringstream fss(fields_str);
+            string f;
+            while (std::getline(fss, f, ',')) {
+                f = trim_copy(f);
+                if (!f.empty()) fields.push_back(f);
+            }
+
+            if (!fields.empty() && relations_api::add_relation(parent, child, fields)) {
+                ++rel_count;
+            }
+#else
+            ++rel_count; // count but ignore
+#endif
+        }
+    }
+
+    std::cout << "SCHEMAS LOAD: restored " << area_count << " area(s)"
+#if HAVE_RELATIONS
+              << " and " << rel_count << " relation(s)"
+#else
+              << " (relations ignored)"
+#endif
+              << ".\n";
+}
+
+// --------- Command Entry ----------------------------------------------------
+void cmd_SCHEMAS(xbase::DbArea& current, std::istringstream& in) {
+    string arg_line; std::getline(in, arg_line);
+    string args = trim_copy(arg_line);
+    string sub_command, rest_of_args;
+    auto first_space = args.find_first_of(" \t");
+    if (first_space == string::npos) { sub_command = args; rest_of_args = ""; }
+    else { sub_command = args.substr(0, first_space); rest_of_args = trim_copy(args.substr(first_space)); }
+    sub_command = to_lower(sub_command);
+
+    try {
+        if (sub_command == "open") {
+            auto toks = split_tokens(rest_of_args);
+            if (!toks.empty() && (ci_equal(toks[0], "cnx") || ci_equal(toks[0], "inx"))) {
+                std::cout << "SCHEMAS OPEN: target must come first.\n";
+                return;
+            }
+            fs::path spec = toks.empty() ? fs::current_path() : fs::path(toks[0]);
+            bool recursive = false, fallback = false, table = false;
+            IndexMode mode = IndexMode::None;
+            for (size_t i = 1; i < toks.size(); ++i) {
+                const string& tok = toks[i];
+                if (parse_recursive_ci(tok)) recursive = true;
+                else if (parse_fallback_ci(tok)) fallback = true;
+                else if (parse_table_ci(tok)) table = true;
+                else if (auto m = parse_index_mode_ci(tok)) mode = *m;
+                else std::cout << "Unknown option: " << tok << " (ignored)\n";
+            }
+            if (fallback && mode == IndexMode::None) fallback = false;
+
+            try {
+                auto* eng = shell_engine();
+                if (eng && !dottalk::dirty::maybe_prompt_all(*eng, "SCHEMAS OPEN")) {
+                    std::cout << "Canceled.\n";
+                    return;
+                }
+            } catch (...) {}
+
+            schema_close_all();
+            spec = resolve_open_target(spec);
+
+            if (dir_exists(spec)) {
+                std::cout << "SCHEMAS OPEN: scanning " << s8(spec) << (recursive ? " (recursive stub)" : "") << "\n";
+                auto results = recursive ? schema_open_directory_recursive(spec, mode, fallback)
+                                         : schema_open_directory(spec, mode, fallback);
+                print_open_results(results);
+#if HAVE_TABLE
+                if (table) {
+                    int n = table_enable_for_results(results);
+                    std::cout << "TABLE enabled for " << n << " area(s).\n";
+                }
+#endif
+            } else if (file_exists(spec) && ieq_ext(spec, ".dbf")) {
+                std::cout << "SCHEMAS OPEN: single table " << s8(spec) << "\n";
+                auto r = schema_open_single_into_current(current, spec, mode, fallback);
+                print_open_results({r});
+#if HAVE_TABLE
+                if (table && r.opened && r.area >= 0) {
+                    table_enable_for_area_if_open(r.area);
+                    std::cout << "TABLE enabled for area " << r.area << ".\n";
+                }
+#endif
+            } else {
+                std::cout << "Path not found: " << s8(spec) << "\n";
+            }
+        }
+        else if (sub_command == "close") {
+            try {
+                auto* eng = shell_engine();
+                if (eng && !dottalk::dirty::maybe_prompt_all(*eng, "SCHEMAS CLOSE")) {
+                    std::cout << "Canceled.\n";
+                    return;
+                }
+            } catch (...) {}
+
+            string tokline = trim_copy(rest_of_args);
+            if (tokline.empty()) {
+                schema_close_all();
+            } else {
+                auto tokens = split_tokens(tokline);
+                std::unordered_set<int> seen;
+                int total = 0;
+                for (const auto& tok : tokens) {
+                    int n;
+                    if (parse_int(tok, n)) {
+                        if (n >= 0 && n < xbase::MAX_AREA && !seen.count(n)) {
+                            if (close_area_if_open(n)) {
+                                ++total;
+                                seen.insert(n);
+                            }
+                        }
+                    } else {
+                        total += schema_close_matching_token(tok);
+                    }
+                }
+                std::cout << "SCHEMAS: " << total << " area(s) closed.\n";
+            }
+        }
+        else if (sub_command == "save") {
+            fs::path out = rest_of_args.empty() ? "session.dtschema" : rest_of_args;
+            schema_save_to_file(out);
+        }
+        else if (sub_command == "load") {
+            if (rest_of_args.empty()) {
+                std::cout << "Missing file path.\n";
+                return;
+            }
+            try {
+                auto* eng = shell_engine();
+                if (eng && !dottalk::dirty::maybe_prompt_all(*eng, "SCHEMAS LOAD")) {
+                    std::cout << "Canceled.\n";
+                    return;
+                }
+            } catch (...) {}
+            schema_load_from_file(rest_of_args);
+        }
+        else if (sub_command.empty()) {
+            schema_list_open();
+        }
+        else {
+            std::cout << "Unknown subcommand: " << sub_command << "\n";
+        }
+    } catch (const std::exception& ex) {
+        std::cout << "SCHEMAS: " << ex.what() << "\n";
+    } catch (...) {
+        std::cout << "SCHEMAS: unknown error\n";
+    }
+}

@@ -1,0 +1,6 @@
+ECHO [CHILD_OK] entered
+SET VAR cMsg = CHILD_VAR_OK
+ECHO &cMsg
+DATE
+TIME
+ECHO [CHILD_OK] leaving

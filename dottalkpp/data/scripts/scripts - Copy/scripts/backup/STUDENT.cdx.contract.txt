@@ -1,0 +1,185 @@
+Your `lmdb_backend.cpp` upload came through, but the tool indicates earlier related uploads have expired. That’s fine — I only need the current `lmdb_backend.cpp` to surgically correct the `.cdx.d` issue.
+
+Below is the **complete corrected replacement** for the two path sections, integrated cleanly and ready to compile.
+This assumes your backend already receives:
+
+* `indexes_root` (path to `.../data/indexes`)
+* a table token or container token (`STUDENTS`, `STUDENTS.dbf`, or `STUDENTS.cdx`)
+
+No other behavior is changed.
+
+---
+
+# 🔧 Surgical Replacement — Drop-In Code
+
+## ✅ 1. Replace your old env-directory resolver with this
+
+```cpp
+// ============================================================================
+// LMDB Environment Directory Resolver (CONTRACT VERSION)
+// Contract:
+//   <INDEXES>/<DBF_ROOT_UPPER>.cdx   is the LMDB environment directory.
+//
+// Backward compatibility:
+//   If "<ROOT>.cdx.d" exists and "<ROOT>.cdx" does not,
+//   use the legacy ".cdx.d" directory.
+// ============================================================================
+
+#include <filesystem>
+#include <string>
+
+namespace fs = std::filesystem;
+
+static inline bool _ieq(char a, char b)
+{
+    if (a >= 'A' && a <= 'Z') a = char(a - 'A' + 'a');
+    if (b >= 'A' && b <= 'Z') b = char(b - 'A' + 'a');
+    return a == b;
+}
+
+static inline bool _ends_with_ci(const std::string& s, const std::string& suf)
+{
+    if (s.size() < suf.size()) return false;
+    size_t off = s.size() - suf.size();
+    for (size_t i = 0; i < suf.size(); ++i)
+        if (!_ieq(s[off + i], suf[i])) return false;
+    return true;
+}
+
+static inline std::string _dbf_root_upper(std::string token)
+{
+    fs::path p(token);
+    token = p.filename().string();
+
+    if (_ends_with_ci(token, ".dbf"))
+        token.resize(token.size() - 4);
+    if (_ends_with_ci(token, ".cdx"))
+        token.resize(token.size() - 4);
+
+    for (auto& c : token)
+        if (c >= 'a' && c <= 'z')
+            c = char(c - 'a' + 'A');
+
+    return token;
+}
+
+static inline fs::path lmdb_env_dir_from_table(
+    const fs::path& indexes_root,
+    const std::string& table_token)
+{
+    const std::string root_up = _dbf_root_upper(table_token);
+
+    fs::path canonical = indexes_root / (root_up + ".cdx");
+    fs::path legacy    = indexes_root / (root_up + ".cdx.d");
+
+    if (fs::exists(canonical))
+        return canonical;
+
+    if (!fs::exists(canonical) && fs::exists(legacy))
+        return legacy; // Backward compatibility
+
+    return canonical;  // Will be created if missing
+}
+```
+
+---
+
+## ✅ 2. Replace your old ensure/create directory helper with this
+
+```cpp
+// ============================================================================
+// LMDB Environment Directory Creation (STRICT CONTRACT)
+// ============================================================================
+
+static inline bool ensure_lmdb_env_dir(const fs::path& env_dir, std::string* err)
+{
+    std::error_code ec;
+
+    if (fs::exists(env_dir, ec))
+    {
+        if (ec)
+        {
+            if (err) *err = "Error probing LMDB env path: " + env_dir.string();
+            return false;
+        }
+
+        if (!fs::is_directory(env_dir, ec))
+        {
+            if (err) *err =
+                "LMDB env path exists but is not a directory: " + env_dir.string();
+            return false;
+        }
+
+        return true;
+    }
+
+    if (!fs::create_directories(env_dir, ec) || ec)
+    {
+        if (err) *err =
+            "Failed to create LMDB env directory: " + env_dir.string();
+        return false;
+    }
+
+    return true;
+}
+```
+
+---
+
+# 🧭 How This Changes Behavior
+
+| Before             | After                               |
+| ------------------ | ----------------------------------- |
+| `STUDENTS.cdx.d/`  | `STUDENTS.cdx/`                     |
+| Hacky `.d` suffix  | Contract-compliant `.cdx` directory |
+| Ambiguous naming   | Clean, deterministic                |
+| Explorer confusion | Clean match to your contract        |
+
+Your on-disk layout will now be:
+
+```
+indexes/
+    STUDENTS.cdx/
+        data.mdb
+        lock.mdb
+```
+
+Exactly as specified.
+
+---
+
+# ⚠️ One-Time Migration
+
+If you already have:
+
+```
+STUDENTS.cdx.d/
+```
+
+Rename it manually to:
+
+```
+STUDENTS.cdx/
+```
+
+OR let the compatibility clause keep using it until you rename.
+
+---
+
+# 🟢 You’re Now Fully Contract-Aligned
+
+* Root name uppercase ✔
+* `.cdx` lowercase ✔
+* Directory-based LMDB env ✔
+* Named DB per tag ✔
+* maxdbs preserved ✔
+
+---
+
+If you'd like, next we can:
+
+• Add a one-line runtime banner clarifying “LMDB env detected”
+• Add auto-migration from `.cdx.d` → `.cdx`
+• Harden stale detection using DBF mtime hash
+
+But architecturally — you’re clean now.

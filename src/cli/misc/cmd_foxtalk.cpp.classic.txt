@@ -1,0 +1,855 @@
+// ============================================================================
+// File: src/cli/cmd_foxtalk.cpp
+// Project: DotTalk++ / Foxtalk (TVision mini-shell)
+// ----------------------------------------------------------------------------
+// OVERVIEW
+//  Foxtalk is a small TVision-based TUI that wraps the existing DotTalk++
+//  engine/registry. It provides:
+//    • "Foxtalk Output" window: buffered, scrollable log (captures cout/cerr/printf)
+//    • "Command" bar: input line + Run button + one-line message area
+//    • Keyboard: Enter runs; F2=Output; Ctrl-Q=Command; ↑/↓ history;
+//      PgUp/PgDn/Home/End scroll output; Alt-Z/Ctrl-F5 zoom/restore Command;
+//      Alt-O/Ctrl-F6 zoom/restore Output; F3=RECORDVIEW; Alt-X=exit.
+//    • Persistence: history, last input, geometry, zoom → foxtalk.ini
+//    • New command: `WIN SAVE|RESTORE|DEFAULTS` to persist/recall layouts.
+//
+//  Data flow
+//     [TV events] → [Command input] → executeCommandLine()
+//        → dli::registry().run(DbArea, COMMAND, istream)
+//        → cout/cerr/printf → redirection buffers → app.enqueueChunk()
+//        → pending queue → (cmFlushLog/idle) → Output.appendBatch().
+//
+//  NOTE (shell linkage): keep these externs available:
+//    extern "C" xbase::XBaseEngine* shell_engine();
+//    extern "C" void register_shell_commands(xbase::XBaseEngine& eng, bool include_ui_cmds);
+//
+//  Debug tip: set FOXTALK_DEBUG=1 to echo the parsed "args" tail.
+// ----------------------------------------------------------------------------
+
+#include <iostream>
+#include <sstream>
+#include <streambuf>
+#include <vector>
+#include <deque>
+#include <string>
+#include <memory>
+#include <algorithm>
+#include <cstdint>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <chrono>
+#include <cctype>
+#include <cstdio>
+#include <fstream>
+#include <filesystem>
+#include <cstdlib>
+
+#ifdef _WIN32
+  #include <io.h>
+  #include <fcntl.h>
+  #include <windows.h>
+#endif
+
+#include "xbase.hpp"
+#include "command_registry.hpp"
+#include "textio.hpp"
+
+// ---------- external shell bindings (required for registry hookup) ----------
+extern "C" xbase::XBaseEngine* shell_engine();
+extern "C" void register_shell_commands(xbase::XBaseEngine& eng, bool include_ui_cmds);
+
+// ---- TVision uses (explicit so readers see which widgets are used) ----
+#define Uses_TApplication
+#define Uses_TRect
+#define Uses_TEvent
+#define Uses_TMenu
+#define Uses_TMenuBar
+#define Uses_TSubMenu
+#define Uses_TMenuItem
+#define Uses_TStatusLine
+#define Uses_TStatusItem
+#define Uses_TStatusDef
+#define Uses_TDeskTop
+#define Uses_TInputLine
+#define Uses_TButton
+#define Uses_TKeys
+#define Uses_TWindow
+#define Uses_TScroller
+#define Uses_TScrollBar
+#define Uses_TDrawBuffer
+#define Uses_TBackground
+#define Uses_MsgBox
+#define Uses_TProgram
+#define Uses_TScreen
+#define Uses_TDialog          // <-- added so any dialog usage compiles
+#include <tvision/tv.h>
+
+namespace foxtalk {
+
+// ============================================================================
+// 1) Utilities & command IDs
+// ----------------------------------------------------------------------------
+static inline short S(int v) { return static_cast<short>(v); }
+
+static inline std::string trim(std::string s) {
+    auto notsp = [](int ch){ return !std::isspace(ch); };
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), notsp));
+    s.erase(std::find_if(s.rbegin(), s.rend(), notsp).base(), s.end());
+    return s;
+}
+
+static inline std::string upcopy(std::string s) {
+    for (auto &c : s) c = (char)std::toupper((unsigned char)c);
+    return s;
+}
+
+static std::filesystem::path iniPath() {
+#ifdef _WIN32
+    char* app = std::getenv("APPDATA");
+    std::filesystem::path base = app ? app : ".";
+    base /= "Foxtalk";
+#else
+    char* home = std::getenv("HOME");
+    std::filesystem::path base = home ? home : ".";
+    base /= ".foxtalk";
+#endif
+    std::filesystem::create_directories(base);
+    return base / "foxtalk.ini";
+}
+
+// Private command IDs (don’t overlap with TVision’s built-ins).
+enum : int {
+    cmTalkExit     = cmQuit,
+    cmShowOutput   = 9001,
+    cmRunCmd       = 9002,
+    cmFocusCmd     = 9003,
+    cmFlushLog     = 9004, // posted to deliver queued output
+    cmZoomCmd      = 9005,
+    cmResetCmdWin  = 9006,
+    cmZoomOut      = 9007,
+    cmResetOutWin  = 9008
+};
+
+// ============================================================================
+// 2) FoxtalkLogView — scrollable output area
+// ----------------------------------------------------------------------------
+class FoxtalkLogView : public TScroller {
+public:
+    explicit FoxtalkLogView(const TRect& r, TScrollBar* h, TScrollBar* v)
+        : TScroller(r, h, v) {
+        options |= ofFramed | ofSelectable;
+        growMode = gfGrowHiX | gfGrowHiY;
+        setLimit(S(1), S(1));
+    }
+
+    void setMaxLines(size_t n) { maxLines_ = std::max<size_t>(4096, n); }
+
+    // Append chunks then update limits once to reduce flicker/layout churn.
+    void appendBatch(const std::vector<std::string>& chunks) {
+        for (const auto& s : chunks) appendInternal(s);
+        finalizeAppend();
+    }
+
+    void clearAll() {
+        lines_.clear(); maxWidth_ = 0;
+        setLimit(S(1), S(1));
+        scrollTo(S(0), S(0));
+        drawView();
+    }
+
+    void draw() override {
+        TDrawBuffer b;
+        const ushort color = getColor(0x0301);
+        for (short row = 0; row < size.y; ++row) {
+            const int idx = delta.y + row;
+            std::string text = (idx >= 0 && idx < (int)lines_.size()) ? lines_[(size_t)idx] : std::string();
+            const int sx = (int)size.x;
+            if ((int)text.size() < sx) text.append((size_t)(sx - (int)text.size()), ' ');
+            else if ((int)text.size() > sx) text.resize((size_t)sx);
+            b.moveStr(0, text.c_str(), color);
+            writeLine(S(0), row, size.x, S(1), b);
+        }
+    }
+
+    void handleEvent(TEvent& ev) override {
+        TScroller::handleEvent(ev);
+        if (ev.what == evKeyDown) {
+            // Classic keyboard navigation; mouse-wheel support differs by TV version.
+            switch (ev.keyDown.keyCode) {
+                case kbPgUp:  scrollTo(delta.x, S(std::max<int>(0, delta.y - (size.y > 1 ? size.y - 1 : 1)))); clearEvent(ev); break;
+                case kbPgDn:  scrollTo(delta.x, S(std::min<int>(limit.y - size.y, delta.y + (size.y > 1 ? size.y - 1 : 1)))); clearEvent(ev); break;
+                case kbHome:  scrollTo(delta.x, S(0)); clearEvent(ev); break;
+                case kbEnd:   scrollTo(delta.x, S(std::max<int>(0, limit.y - size.y))); clearEvent(ev); break;
+                default: break;
+            }
+        }
+    }
+
+private:
+    // Split on '\n' without losing final empty line semantics.
+    void appendInternal(const std::string& s) {
+        size_t start = 0;
+        while (start <= s.size()) {
+            size_t nl = s.find('\n', start);
+            std::string line = (nl == std::string::npos) ? s.substr(start) : s.substr(start, nl - start);
+            if (!line.empty() || nl != std::string::npos) {
+                lines_.push_back(line);
+                while (lines_.size() > maxLines_) lines_.pop_front();
+                const short w = (short)line.size();
+                if (w > maxWidth_) maxWidth_ = w;
+            }
+            if (nl == std::string::npos) break;
+            start = nl + 1;
+        }
+    }
+
+    // Recompute limits and keep view pinned to bottom (tail follower).
+    void finalizeAppend() {
+        const short limX = std::max<short>(S(1), maxWidth_);
+        const short limY = std::max<short>(S(1), (short)lines_.size());
+        setLimit(limX, limY);
+        scrollTo(S(0), S(std::max<int>(0, (int)lines_.size() - size.y)));
+        drawView();
+    }
+
+    std::deque<std::string> lines_;
+    size_t maxLines_{100000};
+    short  maxWidth_{0};
+};
+
+// ============================================================================
+// 3) Windows & widgets
+// ----------------------------------------------------------------------------
+class TFoxtalkApp; // fwd
+
+class FoxtalkOutputWindow : public TWindow {
+public:
+    FoxtalkOutputWindow(const TRect& r, const char* title, ushort n, TFoxtalkApp* owner)
+        : TWindow(r, title, n), TWindowInit(&TWindow::initFrame), owner_(owner) {}
+    void close() override;
+private:
+    TFoxtalkApp* owner_{};
+};
+
+class TMsgLine : public TView {
+public:
+    explicit TMsgLine(const TRect& r) : TView(r) { growMode = gfGrowHiX; options &= ~ofFramed; }
+    void set(const std::string& s) { text_ = s; drawView(); }
+    void clear() { text_.clear(); drawView(); }
+    void draw() override {
+        TDrawBuffer b; const ushort color = getColor(0x0303);
+        std::string line = text_; const int sx = (int)size.x;
+        if ((int)line.size() < sx) line.append((size_t)(sx - (int)line.size()), ' ');
+        else if ((int)line.size() > sx) line.resize((size_t)sx);
+        b.moveStr(0, line.c_str(), color);
+        writeLine(S(0), S(0), size.x, S(1), b);
+    }
+private:
+    std::string text_;
+};
+
+// Input line with: Enter=Run, Esc=clear, Ctrl-U/K delete regions.
+class TCmdInput : public TInputLine {
+public:
+    TCmdInput(const TRect& r, ushort maxLen) : TInputLine(r, maxLen) {}
+    void prefill(const std::string& s) { setData((void*)s.c_str()); selectAll(True); }
+    void handleEvent(TEvent& ev) override {
+        TInputLine::handleEvent(ev);
+        if (ev.what == evKeyDown) {
+            if (ev.keyDown.keyCode == kbEnter) { message(TProgram::application, evCommand, cmRunCmd, this); clearEvent(ev); return; }
+            if (ev.keyDown.keyCode == kbEsc)   { clearAll(); clearEvent(ev); return; }
+            if (ev.keyDown.keyCode == kbCtrlU) { killToStart(); clearEvent(ev); return; }
+            if (ev.keyDown.keyCode == kbCtrlK) { killToEnd(); clearEvent(ev); return; }
+        }
+    }
+private:
+    void clearAll() { static const char* empty = ""; setData((void*)empty); selectAll(True); focus(); }
+    void killToStart() { if (!data) return; std::string s = data; if (curPos > 0 && curPos <= (int)s.size()) s = s.substr((size_t)curPos); setData((void*)s.c_str()); selectAll(False); focus(); }
+    void killToEnd() { if (!data) return; std::string s = data; if (curPos >= 0 && curPos <= (int)s.size()) s.resize((size_t)curPos); setData((void*)s.c_str()); selectAll(False); focus(); }
+};
+
+// ============================================================================
+// 4) Stream redirection
+// ----------------------------------------------------------------------------
+enum class OutputMode { ToWindow, ToConsole, ToBoth };
+
+class FoxtalkCoutRedirectBuf : public std::streambuf {
+public:
+    FoxtalkCoutRedirectBuf(class TFoxtalkApp* app, std::streambuf* original, OutputMode mode)
+        : app_(app), original_(original), mode_(mode) { setp(buf_, buf_ + sizeof(buf_) - 1); }
+    void setMode(OutputMode m) { mode_ = m; }
+protected:
+    int sync() override { flushBuffer(); return 0; }
+    int overflow(int ch) override {
+        if (ch != EOF) { *pptr() = (char)ch; pbump(1); }
+        if (ch == '\n') { flushBuffer(); return ch; }
+        if (pptr() >= epptr()) flushBuffer();
+        return ch;
+    }
+private:
+    void flushBuffer();
+    class TFoxtalkApp* app_{};
+    std::streambuf* original_{};
+    OutputMode mode_{OutputMode::ToWindow};
+    char buf_[64 * 1024]{};
+};
+
+// ============================================================================
+// 5) TFoxtalkApp — the TVision application
+// ----------------------------------------------------------------------------
+class TFoxtalkApp : public TApplication {
+public:
+    TFoxtalkApp()
+        : TProgInit(&TFoxtalkApp::initStatusLine,
+                    &TFoxtalkApp::initMenuBar,
+                    &TFoxtalkApp::initDeskTop) {
+        loadState();               // read INI (history, geometry, zoom flags)
+        createBackground();        // desktop backdrop
+        createOutputWindow();      // main log window
+        createCommandBar();        // bottom command bar
+
+        // Register shell commands once per process (avoids dupes if reopened).
+        static bool s_gui_registered = false;
+        if (!s_gui_registered) {
+            if (auto* eng = shell_engine()) register_shell_commands(*eng, /*include_ui_cmds=*/false);
+            s_gui_registered = true;
+        }
+
+        installRedirection();      // hook cout/cerr (+ C stdio on Windows)
+        setOutputMode(OutputMode::ToWindow);
+
+        // Apply saved zoom after insertion to avoid locked full-screen start.
+        if (outZoomSaved_ && outWin_)  message(outWin_, evCommand, cmZoom, outWin_);
+        if (cmdZoomSaved_ && cmdWin_) { message(cmdWin_, evCommand, cmZoom, cmdWin_); if (cmdInput_) cmdInput_->focus(); }
+
+        // Start with command bar focused.
+        if (cmdWin_) { cmdWin_->show(); cmdWin_->select(); if (cmdInput_) cmdInput_->select(); }
+        showMessage("Alt-Z Cmd zoom | Ctrl-F5 Cmd restore | Alt-O Out zoom | Ctrl-F6 Out restore");
+    }
+
+    ~TFoxtalkApp() override {
+        restoreRedirection();
+        saveState();               // persist geometry/history/zoom on exit
+    }
+
+    // ---- TVision factories (menus/status/desktop) ----
+    static TMenuBar* initMenuBar(TRect r) {
+        r.b.y = S(r.a.y + 1);
+        return new TMenuBar(
+            r,
+            *new TSubMenu("~F~ile", kbAltF) +
+                *new TMenuItem("E~x~it", cmTalkExit, kbAltX, hcNoContext, "Alt-X") +
+            *new TSubMenu("~W~indow", kbAltW) +
+                *new TMenuItem("~O~utput",   cmShowOutput, kbF2,   hcNoContext, "F2") +
+                *new TMenuItem("~C~ommand",  cmFocusCmd,   kbCtrlQ, hcNoContext, "Ctrl-Q") +
+            *new TSubMenu("~H~elp", kbAltH) +
+                *new TMenuItem("~C~ommand Bar", cmFocusCmd, kbCtrlQ, hcNoContext, "Ctrl-Q")
+        );
+    }
+
+    static TStatusLine* initStatusLine(TRect r) {
+        r.a.y = S(r.b.y - 1);
+        return new TStatusLine(
+            r,
+            *new TStatusDef(0, 0xFFFF) +
+                *new TStatusItem("~F10~ Menu",       kbF10,  cmMenu) +
+                *new TStatusItem("~Ctrl-Q~ Command", kbCtrlQ, cmFocusCmd) +
+                *new TStatusItem("~F2~ Output",      kbF2,   cmShowOutput) +
+                *new TStatusItem("~F3~ Record",      kbF3,   0) +
+                *new TStatusItem("~Alt-Z~ Zoom Cmd", kbAltZ, cmZoomCmd) +
+                *new TStatusItem("~Ctrl-F5~ Restore Cmd", kbCtrlF5, cmResetCmdWin) +
+                *new TStatusItem("~Alt-O~ Zoom Out", kbAltO, cmZoomOut) +
+                *new TStatusItem("~Ctrl-F6~ Restore Out", kbCtrlF6, cmResetOutWin) +
+                *new TStatusItem("~PgUp/Dn/Home/End~", kbPgDn, 0) +
+                *new TStatusItem("~Esc/Ctrl-U/K~",   kbEsc,  0) +
+                *new TStatusItem("~Alt-X~ Exit",     kbAltX, cmTalkExit)
+        );
+    }
+    static TDeskTop* initDeskTop(TRect r) { return new TDeskTop(r); }
+
+    // ---- Event loop ----
+    void handleEvent(TEvent& event) override {
+        TApplication::handleEvent(event);
+
+        // Postback for output flush from queue (thread-safe).
+        if (event.what == evCommand && event.message.command == cmFlushLog) {
+            flushPending();
+            clearEvent(event);
+            return;
+        }
+
+        if (event.what == evKeyDown) {
+            // Global accelerators (work regardless of focus).
+            if (event.keyDown.keyCode == kbCtrlQ) { if (cmdWin_) { cmdWin_->show(); cmdWin_->select(); if (cmdInput_) cmdInput_->select(); } clearEvent(event); return; }
+            if (event.keyDown.keyCode == kbF2)    { showOutputWindow(); if (outView_) { outView_->select(); outView_->focus(); } clearEvent(event); return; }
+            if (event.keyDown.keyCode == kbF3)    { runImmediate("RECORDVIEW"); clearEvent(event); return; }
+            if (event.keyDown.keyCode == kbAltR)  { event.what = evCommand; event.message.command = cmRunCmd; }
+            if (event.keyDown.keyCode == kbAltX)  { event.what = evCommand; event.message.command = cmTalkExit; }
+            if (event.keyDown.keyCode == kbAltZ)  { event.what = evCommand; event.message.command = cmZoomCmd; }
+            if (event.keyDown.keyCode == kbCtrlF5){ event.what = evCommand; event.message.command = cmResetCmdWin; }
+            if (event.keyDown.keyCode == kbAltO)  { event.what = evCommand; event.message.command = cmZoomOut; }
+            if (event.keyDown.keyCode == kbCtrlF6){ event.what = evCommand; event.message.command = cmResetOutWin; }
+
+            // History navigation only when the input has focus.
+            if (cmdInput_ && cmdInput_->getState(sfFocused)) {
+                if (event.keyDown.keyCode == kbUp)   { historyPrev(); clearEvent(event); return; }
+                if (event.keyDown.keyCode == kbDown) { historyNext(); clearEvent(event); return; }
+            }
+        }
+
+        if (event.what == evCommand) {
+            switch (event.message.command) {
+                case cmShowOutput: { showOutputWindow(); if (outView_) { outView_->select(); outView_->focus(); } break; }
+                case cmRunCmd: {
+                    // CRUCIAL: read the *full* logical input, not just visible text.
+                    if (!cmdInput_) break;
+                    char buf[2048]{};                 // supports our 1024-char input comfortably
+                    cmdInput_->getData(buf);          // guarantees NUL-terminated string
+                    std::string s = trim(std::string(buf));
+                    if (!s.empty()) executeCommandLine(s);
+                    if (cmdInput_) { cmdInput_->selectAll(True); cmdInput_->focus(); }
+                    break;
+                }
+                case cmFocusCmd:    { if (cmdWin_) { cmdWin_->show(); cmdWin_->select(); if (cmdInput_) cmdInput_->select(); } break; }
+                case cmZoomCmd:     { toggleZoomCommandWindow(); break; }
+                case cmResetCmdWin: { resetCommandWindow(); break; }
+                case cmZoomOut:     { toggleZoomOutputWindow(); break; }
+                case cmResetOutWin: { resetOutputWindow(); break; }
+                default: break;
+            }
+            clearEvent(event);
+            return;
+        }
+    }
+
+    // Idle drains output incrementally; prevents reentrancy from streams.
+    void idle() override {
+        TApplication::idle();
+        std::cout.flush(); std::cerr.flush();
+        flushPending();
+    }
+
+    // ---- UI creation ----
+    void createBackground() {
+        const int sw = TScreen::screenWidth, sh = TScreen::screenHeight;
+        deskTop->insert(new TBackground(TRect(S(0), S(0), S(sw), S(sh)), 0x20));
+    }
+
+    // Output window starts in a sensible rectangle (not full-screen locked).
+    void createOutputWindow() {
+        const int sw = TScreen::screenWidth, sh = TScreen::screenHeight;
+        TRect r(S(2), S(2), S(sw - 2), S(sh - 7));
+        if (geomOutW_ > 0 && geomOutH_ > 0 && !(geomOutW_ >= sw - 1 && geomOutH_ >= sh - 1))
+            r = TRect(S(geomOutX_), S(geomOutY_), S(geomOutX_ + geomOutW_), S(geomOutY_ + geomOutH_));
+        outWin_ = new FoxtalkOutputWindow(r, "Foxtalk Output", 0, this);
+        outWin_->flags |= (wfMove | wfGrow | wfZoom);
+        outWin_->growMode = gfGrowAll;
+
+        const int ww = (int)(r.b.x - r.a.x), wh = (int)(r.b.y - r.a.y);
+        auto* h = new TScrollBar(TRect(S(1), S(wh - 2), S(ww - 2), S(wh - 1)));
+        auto* v = new TScrollBar(TRect(S(ww - 2), S(1), S(ww - 1), S(wh - 2)));
+        outWin_->insert(h); outWin_->insert(v);
+
+        outView_ = new FoxtalkLogView(TRect(S(1), S(1), S(ww - 2), S(wh - 2)), h, v);
+        outView_->setMaxLines(100000);
+        outWin_->insert(outView_);
+
+        deskTop->insert(outWin_);
+    }
+
+    // Command bar spans the bottom; input length set to 1024 for long expressions.
+    void createCommandBar() {
+        const int sw = TScreen::screenWidth, sh = TScreen::screenHeight;
+        int left = 1, height = 4, width = sw - 2, top = sh - height - 1;
+
+        if (geomCmdW_ > 0 && geomCmdH_ > 0 && !(geomCmdW_ >= sw - 1 && geomCmdH_ >= sh - 1)) {
+            left = geomCmdX_; top = geomCmdY_; width = geomCmdW_; height = geomCmdH_;
+        }
+
+        cmdWin_ = new TWindow(TRect(S(left), S(top), S(left + width), S(top + height)), "Command", 0);
+        cmdWin_->flags |= (wfMove | wfGrow | wfZoom);
+        cmdWin_->growMode = gfGrowHiX | gfGrowHiY;
+
+        TRect ir(S(2), S(1), S(width - 14), S(2));
+        cmdInput_ = new TCmdInput(ir, 1024);
+        if (!lastInput_.empty()) cmdInput_->prefill(lastInput_);
+        cmdWin_->insert(cmdInput_);
+
+        // Default button means Enter on window triggers Run as well.
+        cmdWin_->insert(new TButton(TRect(S(width - 12), S(1), S(width - 2), S(3)), "~R~un", cmRunCmd, bfDefault));
+
+        // Single-line message strip for OK/errors/hints.
+        msgLine_ = new TMsgLine(TRect(S(2), S(2), S(width - 2), S(3)));
+        cmdWin_->insert(msgLine_);
+
+        deskTop->insert(cmdWin_);
+    }
+
+    // Bring Output to front and ready for scrolling.
+    void showOutputWindow() {
+        if (!outWin_) createOutputWindow();
+        if (outWin_) { outWin_->show(); outWin_->select(); }
+    }
+
+    // ---- zoom/reset helpers (also used by WIN DEFAULTS) ----
+    void toggleZoomCommandWindow() {
+        if (!cmdWin_) return;
+        message(cmdWin_, evCommand, cmZoom, cmdWin_);
+        cmdZoomSaved_ = !cmdZoomSaved_; // persisted on exit or WIN SAVE
+        if (cmdInput_) cmdInput_->focus();
+    }
+    void resetCommandWindow() {
+        if (!cmdWin_) return;
+        if (cmdZoomSaved_) { message(cmdWin_, evCommand, cmZoom, cmdWin_); cmdZoomSaved_ = false; }
+        const int sw = TScreen::screenWidth, sh = TScreen::screenHeight;
+        TRect r(S(1), S(sh - 5), S(sw - 1), S(sh - 1)); // 4-row default bottom bar
+        cmdWin_->locate(r);
+        cmdWin_->flags |= (wfMove | wfGrow | wfZoom);
+        cmdWin_->select(); if (cmdInput_) cmdInput_->focus();
+        showMessage("Command window restored.");
+    }
+    void toggleZoomOutputWindow() {
+        if (!outWin_) return;
+        message(outWin_, evCommand, cmZoom, outWin_);
+        outZoomSaved_ = !outZoomSaved_;
+        if (outView_) { outView_->select(); outView_->focus(); }
+    }
+    void resetOutputWindow() {
+        if (!outWin_) return;
+        if (outZoomSaved_) { message(outWin_, evCommand, cmZoom, outWin_); outZoomSaved_ = false; }
+        const int sw = TScreen::screenWidth, sh = TScreen::screenHeight;
+        TRect r(S(2), S(2), S(sw - 2), S(sh - 7));
+        outWin_->locate(r);
+        outWin_->flags |= (wfMove | wfGrow | wfZoom);
+        outWin_->select(); if (outView_) { outView_->select(); outView_->focus(); }
+        showMessage("Output window restored.");
+    }
+
+    // ---- redirection (cout/cerr + optional Windows C stdio) ----
+    void installRedirection() {
+        oldCout_ = std::cout.rdbuf();
+        oldCerr_ = std::cerr.rdbuf();
+        coutBuf_ = std::make_unique<FoxtalkCoutRedirectBuf>(this, oldCout_, mode_);
+        cerrBuf_ = std::make_unique<FoxtalkCoutRedirectBuf>(this, oldCerr_, mode_);
+        std::cout.rdbuf(coutBuf_.get());
+        std::cerr.rdbuf(cerrBuf_.get());
+        std::cout << "Foxtalk ready. Output redirected to 'Foxtalk Output'.\n" << std::flush;
+    #ifdef _WIN32
+        startCStdCapture();
+    #endif
+    }
+    void restoreRedirection() {
+    #ifdef _WIN32
+        stopCStdCapture();
+    #endif
+        if (oldCout_) std::cout.rdbuf(oldCout_);
+        if (oldCerr_) std::cerr.rdbuf(oldCerr_);
+    }
+    void setOutputMode(OutputMode m) {
+        mode_ = m;
+        if (coutBuf_) coutBuf_->setMode(m);
+        if (cerrBuf_) cerrBuf_->setMode(m);
+    }
+
+    // ---- output queue (thread-safe) → UI drain ----
+    void enqueueChunk(const std::string& s) {
+        std::lock_guard<std::mutex> lk(qMutex_);
+        pending_.push_back(s);
+        if (!flushPosted_) {
+            flushPosted_ = true;
+            TEvent ev; ev.what = evCommand; ev.message.command = cmFlushLog; putEvent(ev);
+        }
+    }
+    void flushPending() {
+        std::vector<std::string> chunks;
+        { std::lock_guard<std::mutex> lk(qMutex_); if (pending_.empty()) return; chunks.swap(pending_); flushPosted_ = false; }
+        if (outView_) outView_->appendBatch(chunks);
+    }
+    void detachOutputWindow(FoxtalkOutputWindow* win) { if (outWin_ == win) { outWin_ = nullptr; outView_ = nullptr; } }
+
+    // ---- message line convenience ----
+    void showMessage(const std::string& m) { if (msgLine_) msgLine_->set(m); }
+
+    // ---- command execution & help ----
+    static std::string resolveShortcuts(const std::string& s) {
+        // `? X` → `HELP X` convenience.
+        if (s.empty()) return s;
+        if (s[0] == '?') { std::string rest = trim(s.substr(1)); return rest.empty() ? "HELP" : "HELP " + rest; }
+        return s;
+    }
+    void runImmediate(const std::string& line) {
+        if (cmdInput_) { cmdInput_->setData((void*)line.c_str()); message(this, evCommand, cmRunCmd, this); }
+    }
+
+    void executeCommandLine(const std::string& line) {
+        const std::string trimmed = trim(line);
+        if (trimmed.empty() || !dbArea_) return;
+
+        pushHistory(trimmed);
+        lastInput_ = trimmed;
+        std::string resolved = resolveShortcuts(trimmed);
+
+        // Echo what we run (copy/paste friendly).
+        std::cout << "> " << resolved << "\n";
+
+        // Split first token as COMMAND; keep rest as args stream for registry.
+        std::istringstream tok(resolved);
+        std::string cmdToken; tok >> cmdToken;
+        std::string U = upcopy(cmdToken);
+
+        if (std::getenv("FOXTALK_DEBUG")) {
+            std::streampos pos = tok.tellg();
+            if (pos != std::streampos(-1)) {
+                std::string args = resolved.substr((size_t)pos);
+                std::cout << "[DEBUG args] {" << args << "}\n";
+            }
+        }
+
+        // Built-ins
+        if (U == "/SELFTEST" || U == "SELFTEST") { size_t n = 500; if (tok.good()) tok >> n; doSelfTest(n); showMessage("Selftest complete."); return; }
+        if (U == "HELP") { handleHelp(tok); return; }
+
+        // Window layout control: WIN SAVE | WIN RESTORE | WIN DEFAULTS
+        if (U == "WIN") {
+            std::string sub; tok >> sub; sub = upcopy(trim(sub));
+            if (sub == "SAVE")        { saveState();                       std::cout << "Window layout saved.\n";     showMessage("WIN SAVE done.");      return; }
+            if (sub == "RESTORE")     { loadState(); applyStateToWindows(); std::cout << "Window layout restored.\n"; showMessage("WIN RESTORE done.");   return; }
+            if (sub == "DEFAULTS" || sub == "RESET") {
+                resetCommandWindow(); resetOutputWindow(); saveState();
+                std::cout << "Window layout reset to defaults.\n"; showMessage("WIN DEFAULTS done."); return;
+            }
+            std::cout << "Usage: WIN SAVE | WIN RESTORE | WIN DEFAULTS\n"; showMessage("WIN usage shown."); return;
+        }
+
+        // Hand off to DotTalk++ registry
+        if (!dli::registry().run(*dbArea_, U, tok)) {
+            std::string msg = "Unknown or failed command: " + cmdToken;
+            std::cerr << msg << "\n"; showMessage(msg);
+        } else {
+            showMessage("OK: " + resolved);
+        }
+    }
+
+    void handleHelp(std::istringstream& tok) {
+        std::string topic; std::getline(tok, topic); topic = trim(topic);
+        if (topic.empty()) {
+            std::cout <<
+                "Foxtalk help\n"
+                "  Enter runs (or Alt-R). F2 Output; PgUp/PgDn/Home/End scroll.\n"
+                "  Windows: Alt-Z/Ctrl-F5 (Command), Alt-O/Ctrl-F6 (Output).\n"
+                "  Shortcuts: '? <cmd>' = HELP <cmd>, F3=RECORDVIEW.\n"
+                "  Window mgmt: WIN SAVE | WIN RESTORE | WIN DEFAULTS\n";
+            showMessage("HELP shown."); return;
+        }
+        std::string U = upcopy(topic);
+        if (U == "BROWSE") { std::cout << "BROWSE [EDIT] [FOR <expr>] [FIELDS <list>] [ORDER <tag>]\n"; showMessage("HELP BROWSE."); return; }
+        if (U == "RECORDVIEW" || U == "RECORD_VIEW") { std::cout << "RECORDVIEW — single-record CRUD dialog.\n"; showMessage("HELP RECORDVIEW."); return; }
+        if (U == "USE") { std::cout << "USE <dbf> [ALIAS <name>] [EXCLUSIVE]\n"; showMessage("HELP USE."); return; }
+        if (U == "WIN") { std::cout << "WIN SAVE | WIN RESTORE | WIN DEFAULTS\n"; showMessage("HELP WIN."); return; }
+        std::cout << "No inline help for '" << topic << "'. Try: FOXREF " << topic << "\n"; showMessage("No inline help for '"+topic+"'.");
+    }
+
+    // Generate lots of text to validate scroller + redirection.
+    void doSelfTest(size_t n) {
+        std::cout << "[SELFTEST] Generating " << n << " lines..." << std::endl;
+        for (size_t i = 1; i <= n; ++i) {
+            std::cout << "cout line " << i << "\n";
+        #ifdef _WIN32
+            std::printf("printf line %zu\n", i);
+        #else
+            printf("printf line %zu\n", i);
+        #endif
+            if ((i % 50) == 0) std::cout.flush();
+        }
+        std::cerr << "[SELFTEST] Done.\n";
+    }
+
+    // ---- history (bounded, persisted) ----
+    void pushHistory(const std::string& s) {
+        if (history_.empty() || history_.back() != s) history_.push_back(s);
+        if (history_.size() > maxHistory_) history_.erase(history_.begin(), history_.begin() + (history_.size() - maxHistory_));
+        histPos_ = (int)history_.size();
+    }
+    void historyPrev() { if (history_.empty()) return; if (histPos_ > 0) --histPos_; setInputFromHistory(); }
+    void historyNext() { if (history_.empty()) return; if (histPos_ < (int)history_.size()) ++histPos_; setInputFromHistory(); }
+    void setInputFromHistory() {
+        if (!cmdInput_) return;
+        std::string txt; if (histPos_ >= 0 && histPos_ < (int)history_.size()) txt = history_[(size_t)histPos_];
+        cmdInput_->setData((void*)txt.c_str()); cmdInput_->selectAll(True); cmdInput_->focus();
+        showMessage(histPos_ >= 0 && histPos_ < (int)history_.size() ? ("History: " + txt) : "History end.");
+    }
+
+    // ---- persistence: minimal key=value INI ----
+    void loadState() {
+        std::ifstream in(iniPath()); if (!in) return;
+        std::string line;
+        while (std::getline(in, line)) {
+            auto pos = line.find('='); if (pos == std::string::npos) continue;
+            std::string k = trim(line.substr(0, pos)), v = trim(line.substr(pos + 1));
+            if (k == "lastInput") lastInput_ = v;
+            else if (k.rfind("hist.", 0) == 0) history_.push_back(v);
+            else if (k == "out.x") geomOutX_ = std::stoi(v);
+            else if (k == "out.y") geomOutY_ = std::stoi(v);
+            else if (k == "out.w") geomOutW_ = std::stoi(v);
+            else if (k == "out.h") geomOutH_ = std::stoi(v);
+            else if (k == "cmd.x") geomCmdX_ = std::stoi(v);
+            else if (k == "cmd.y") geomCmdY_ = std::stoi(v);
+            else if (k == "cmd.w") geomCmdW_ = std::stoi(v);
+            else if (k == "cmd.h") geomCmdH_ = std::stoi(v);
+            else if (k == "cmd.zoom") cmdZoomSaved_ = (v == "1");
+            else if (k == "out.zoom") outZoomSaved_ = (v == "1");
+        }
+        if ((int)history_.size() > maxHistory_) history_.erase(history_.begin(), history_.begin() + ((int)history_.size() - maxHistory_));
+        histPos_ = (int)history_.size();
+    }
+
+    void saveState() {
+        if (outWin_) { geomOutX_ = outWin_->origin.x; geomOutY_ = outWin_->origin.y; geomOutW_ = outWin_->size.x; geomOutH_ = outWin_->size.y; }
+        if (cmdWin_) { geomCmdX_ = cmdWin_->origin.x; geomCmdY_ = cmdWin_->origin.y; geomCmdW_ = cmdWin_->size.x; geomCmdH_ = cmdWin_->size.y; }
+        std::ofstream out(iniPath(), std::ios::trunc); if (!out) return;
+        out << "lastInput=" << lastInput_ << "\n";
+        for (size_t i = 0; i < history_.size(); ++i) out << "hist." << i << "=" << history_[i] << "\n";
+        out << "out.x=" << geomOutX_ << "\n" << "out.y=" << geomOutY_ << "\n" << "out.w=" << geomOutW_ << "\n" << "out.h=" << geomOutH_ << "\n";
+        out << "cmd.x=" << geomCmdX_ << "\n" << "cmd.y=" << geomCmdY_ << "\n" << "cmd.w=" << geomCmdW_ << "\n" << "cmd.h=" << geomCmdH_ << "\n";
+        out << "cmd.zoom=" << (cmdZoomSaved_ ? 1 : 0) << "\n";
+        out << "out.zoom=" << (outZoomSaved_ ? 1 : 0) << "\n";
+    }
+
+    // Apply already-loaded state to existing windows (used by WIN RESTORE).
+    void applyStateToWindows() {
+        const int sw = TScreen::screenWidth, sh = TScreen::screenHeight;
+
+        if (outWin_) {
+            if (geomOutW_ > 0 && geomOutH_ > 0 && !(geomOutW_ >= sw - 1 && geomOutH_ >= sh - 1)) {
+                TRect r(S(geomOutX_), S(geomOutY_), S(geomOutX_ + geomOutW_), S(geomOutY_ + geomOutH_));
+                outWin_->locate(r);
+            }
+            if (outZoomSaved_) message(outWin_, evCommand, cmZoom, outWin_);
+        }
+
+        if (cmdWin_) {
+            if (geomCmdW_ > 0 && geomCmdH_ > 0 && !(geomCmdW_ >= sw - 1 && geomCmdH_ >= sh - 1)) {
+                TRect r(S(geomCmdX_), S(geomCmdY_), S(geomCmdX_ + geomCmdW_), S(geomCmdY_ + geomCmdH_));
+                cmdWin_->locate(r);
+            }
+            if (cmdZoomSaved_) message(cmdWin_, evCommand, cmZoom, cmdWin_);
+            if (cmdInput_) cmdInput_->focus();
+        }
+        showMessage("Layout applied.");
+    }
+
+#ifdef _WIN32
+    // ---- Windows-only: capture C stdio via pipes → background readers ----
+    static void readerThreadLoop(TFoxtalkApp* app, int fd) {
+        char buf[64 * 1024];
+        while (app->running_.load(std::memory_order_relaxed)) {
+            int n = _read(fd, buf, (unsigned)sizeof(buf));
+            if (n <= 0) { std::this_thread::sleep_for(std::chrono::milliseconds(3)); continue; }
+            app->enqueueChunk(std::string(buf, buf + n));
+        }
+    }
+    void startCStdCapture() {
+        running_.store(true, std::memory_order_relaxed);
+        oldStdout_ = _dup(1);
+        oldStderr_ = _dup(2);
+        if (_pipe(pipeOut_, 64 * 1024, _O_TEXT) == 0) { _dup2(pipeOut_[1], 1); tOut_ = std::thread(&TFoxtalkApp::readerThreadLoop, this, pipeOut_[0]); }
+        if (_pipe(pipeErr_, 64 * 1024, _O_TEXT) == 0) { _dup2(pipeErr_[1], 2); tErr_ = std::thread(&TFoxtalkApp::readerThreadLoop, this, pipeErr_[0]); }
+    }
+    void stopCStdCapture() {
+        running_.store(false, std::memory_order_relaxed);
+        if (oldStdout_ != -1) { _dup2(oldStdout_, 1); _close(oldStdout_); oldStdout_ = -1; }
+        if (oldStderr_ != -1) { _dup2(oldStderr_, 2); _close(oldStderr_); oldStderr_ = -1; }
+        if (pipeOut_[1] != -1) { _close(pipeOut_[1]); pipeOut_[1] = -1; }
+        if (pipeErr_[1] != -1) { _close(pipeErr_[1]); pipeErr_[1] = -1; }
+        if (tOut_.joinable()) tOut_.join();
+        if (tErr_.joinable()) tErr_.join();
+        if (pipeOut_[0] != -1) { _close(pipeOut_[0]); pipeOut_[0] = -1; }
+        if (pipeErr_[0] != -1) { _close(pipeErr_[0]); pipeErr_[0] = -1; }
+    }
+#endif
+
+private:
+    // ---- model pointers ----
+    xbase::DbArea* dbArea_{nullptr};
+
+    // ---- Output window & scroller ----
+    FoxtalkOutputWindow* outWin_{nullptr};
+    FoxtalkLogView*      outView_{nullptr};
+
+    // ---- Command bar ----
+    TWindow*   cmdWin_{nullptr};
+    TCmdInput* cmdInput_{nullptr};
+    TMsgLine*  msgLine_{nullptr};
+
+    // ---- C++ stream redirection ----
+    std::unique_ptr<FoxtalkCoutRedirectBuf> coutBuf_;
+    std::unique_ptr<FoxtalkCoutRedirectBuf> cerrBuf_;
+    std::streambuf* oldCout_{nullptr};
+    std::streambuf* oldCerr_{nullptr};
+    OutputMode mode_{OutputMode::ToWindow};
+
+    // ---- output queue ----
+    std::mutex qMutex_;
+    std::vector<std::string> pending_;
+    bool flushPosted_{false};
+
+    // ---- input persistence ----
+    std::string lastInput_;
+
+    // ---- history ----
+    std::vector<std::string> history_;
+    int histPos_{0};
+    const int maxHistory_{200};
+
+    // ---- geometry persistence (+ zoom flags) ----
+    int  geomOutX_{-1}, geomOutY_{-1}, geomOutW_{-1}, geomOutH_{-1};
+    int  geomCmdX_{-1}, geomCmdY_{-1}, geomCmdW_{-1}, geomCmdH_{-1};
+    bool cmdZoomSaved_{false};
+    bool outZoomSaved_{false};
+
+#ifdef _WIN32
+    // ---- C stdio capture state ----
+    int oldStdout_{-1}, oldStderr_{-1};
+    int pipeOut_[2]{-1,-1}, pipeErr_[2]{-1,-1};
+    std::thread tOut_, tErr_;
+    std::atomic<bool> running_{false};
+#endif
+
+public:
+    void setDbArea(xbase::DbArea* a) { dbArea_ = a; }
+};
+
+// Output window close detaches pointers to avoid dangling access.
+void FoxtalkOutputWindow::close() {
+    if (owner_) owner_->detachOutputWindow(this);
+    TWindow::close();
+}
+
+// Stream buffer flush: pump into UI (and optionally to original console).
+void FoxtalkCoutRedirectBuf::flushBuffer() {
+    if (pptr() == pbase()) return;
+    std::string s(pbase(), pptr());
+    pbump(-(int)(pptr() - pbase()));
+    if (mode_ == OutputMode::ToWindow || mode_ == OutputMode::ToBoth) { if (app_) app_->enqueueChunk(s); }
+    if ((mode_ == OutputMode::ToConsole || mode_ == OutputMode::ToBoth) && original_) {
+        original_->sputn(s.data(), (std::streamsize)s.size());
+        original_->pubsync();
+    }
+}
+
+} // namespace foxtalk
+
+// ============================================================================
+// 6) Shell entrypoint — launched from the DotTalk++ command dispatcher
+// ----------------------------------------------------------------------------
+void cmd_FOXTALK(xbase::DbArea& area, std::istringstream& /*args*/) {
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
+    foxtalk::TFoxtalkApp app;
+    app.setDbArea(&area);
+    std::cout << "Launching Foxtalk UI...\n";
+    app.run();
+#else
+    std::cout << "TVISION is not available in this build.\n";
+#endif
+}

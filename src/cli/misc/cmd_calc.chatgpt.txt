@@ -1,0 +1,930 @@
+// src/cli/cmd_calc.cpp
+// In every place you build YYYYMMDD / dt14 using an ostringstream, add:
+// oss.imbue(std::locale::classic());
+
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <ctime>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "xbase.hpp"
+#include "cli/expr/api.hpp"
+#include "cli/expr/fn_string.hpp"
+#include "cli/expr/ast.hpp"
+#include "cli/expr/glue_xbase.hpp"
+#include "value_normalize.hpp"
+#include "parse.hpp"
+#include "predicate.hpp"
+#include "predicate_chain.hpp"
+#include "cli/cmd_calc.hpp"
+
+void cmd_REPLACE(xbase::DbArea& A, std::istringstream& in);
+void cmd_CALCWRITE(xbase::DbArea& A, std::istringstream& in);
+
+using dottalk::expr::Arith;
+using dottalk::expr::CompileResult;
+using dottalk::expr::Expr;
+using dottalk::expr::LitNumber;
+using dottalk::expr::LitString;
+using dottalk::expr::RecordView;
+
+namespace {
+
+// ----- Value-expression evaluator (string-centric, FoxPro-ish) -------------
+// Supports:
+//   - Field references: lname, FNAME, etc.  (current record)
+//   - String literals: 'abc' or "abc"  (no escape processing beyond doubling quotes)
+//   - Number literals:  123, 3.14  (passed through as text to builtins)
+//   - Function calls:   LEFT(lname,3), RTRIM(fname), PROPER(upper(lname)), ...
+//
+// Uses the registered string builtins from dottalk::expr::string_fn_specs().
+
+struct Tok {
+    enum Kind { Ident, Number, String, LParen, RParen, Comma, End } kind{};
+    std::string text;
+};
+
+static std::string up_copy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return s;
+}
+
+static std::string trim_copy(std::string s) {
+    auto is_ws = [](unsigned char c) { return std::isspace(c) != 0; };
+    while (!s.empty() && is_ws((unsigned char)s.front())) s.erase(s.begin());
+    while (!s.empty() && is_ws((unsigned char)s.back())) s.pop_back();
+    return s;
+}
+
+static std::string digits_only(std::string s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) if (std::isdigit((unsigned char)c)) out.push_back(c);
+    return out;
+}
+
+static int field_index_ci(const xbase::DbArea& A, const std::string& name) {
+    std::string want = up_copy(trim_copy(name));
+    if (want.empty()) return -1;
+    try {
+        const auto defs = A.fields();
+        for (size_t i = 0; i < defs.size(); ++i) {
+            if (up_copy(defs[i].name) == want) return (int)i + 1;
+        }
+    } catch (...) {
+        return -1;
+    }
+    return -1;
+}
+
+struct ClockSnap {
+    std::string date8;   // YYYYMMDD
+    std::string time6;   // HHMMSS
+    std::string dt14;    // YYYYMMDDHHMMSS
+};
+
+static ClockSnap clock_snapshot_local() {
+    std::time_t t = std::time(nullptr);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    ClockSnap cs;
+    std::ostringstream d, ti, dt;
+    d << std::setfill('0') << std::setw(4) << (tm.tm_year + 1900)
+      << std::setw(2) << (tm.tm_mon + 1)
+      << std::setw(2) << tm.tm_mday;
+    ti << std::setfill('0') << std::setw(2) << tm.tm_hour
+       << std::setw(2) << tm.tm_min
+       << std::setw(2) << tm.tm_sec;
+    cs.date8 = d.str();
+    cs.time6 = ti.str();
+    dt << cs.date8 << cs.time6;
+    cs.dt14 = dt.str();
+    return cs;
+}
+
+static bool is_leap_year(int y) {
+    if ((y % 400) == 0) return true;
+    if ((y % 100) == 0) return false;
+    return (y % 4) == 0;
+}
+
+static int days_in_month(int y, int m) {
+    static const int mdays[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    if (m < 1 || m > 12) return 0;
+    if (m == 2) return mdays[m - 1] + (is_leap_year(y) ? 1 : 0);
+    return mdays[m - 1];
+}
+
+static bool validate_ymd(int y, int m, int d, std::string* err) {
+    if (y < 1 || y > 9999) { if (err) *err = "year out of range"; return false; }
+    if (m < 1 || m > 12)   { if (err) *err = "month out of range"; return false; }
+    int dim = days_in_month(y, m);
+    if (d < 1 || d > dim)  { if (err) *err = "day out of range"; return false; }
+    return true;
+}
+
+static bool parse_dbf_date8(const std::string& s, bool& blank, int& y, unsigned& m, unsigned& d, std::string* err) {
+    blank = false;
+    std::string t = trim_copy(s);
+    if (t.empty()) { blank = true; return true; }
+    if (t.size() == 8) {
+        bool all_space = true;
+        for (char c : t) if (!std::isspace((unsigned char)c)) { all_space = false; break; }
+        if (all_space) { blank = true; return true; }
+    }
+    std::string digits = digits_only(t);
+    if (digits.empty()) { blank = true; return true; }
+    if (digits.size() < 8) { if (err) *err = "need YYYYMMDD (8 digits)"; return false; }
+    if (digits.size() > 8) digits.resize(8);
+
+    try {
+        y = std::stoi(digits.substr(0, 4));
+        m = (unsigned)std::stoi(digits.substr(4, 2));
+        d = (unsigned)std::stoi(digits.substr(6, 2));
+    } catch (...) {
+        if (err) *err = "invalid YYYYMMDD";
+        return false;
+    }
+    return validate_ymd(y, (int)m, (int)d, err);
+}
+
+static int64_t days_from_civil(int y, unsigned m, unsigned d) noexcept {
+    y -= (m <= 2);
+    const int era = (y >= 0 ? y : y - 399) / 400;
+    const unsigned yoe = (unsigned)(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (int64_t)era * 146097 + (int64_t)doe - 719468;
+}
+
+static void civil_from_days(int64_t z, int& y, unsigned& m, unsigned& d) noexcept {
+    z += 719468;
+    const int64_t era = (z >= 0 ? z : z - 146096) / 146097;   // (fix warning: keep 64-bit)
+    const unsigned doe = (unsigned)(z - era * 146097);
+    const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    y = (int)yoe + (int)(era * 400);
+    const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    const unsigned mp = (5 * doy + 2) / 153;
+    d = doy - (153 * mp + 2) / 5 + 1;
+    m = mp + (mp < 10 ? 3 : -9);
+    y += (m <= 2);
+}
+
+static bool add_days_to_date8(const std::string& date8, int delta, std::string& out, std::string* err) {
+    bool blank = false; int y = 0; unsigned m = 0, d = 0;
+    if (!parse_dbf_date8(date8, blank, y, m, d, err)) return false;
+    if (blank) { out = "        "; return true; }
+    int64_t z = days_from_civil(y, m, d);
+    z += (int64_t)delta;
+    int yy = 0; unsigned mm = 0, dd = 0;
+    civil_from_days(z, yy, mm, dd);
+    if (!validate_ymd(yy, (int)mm, (int)dd, err)) return false;
+    std::ostringstream oss;
+    oss << std::setfill('0') << std::setw(4) << yy
+        << std::setw(2) << mm
+        << std::setw(2) << dd;
+    out = oss.str();
+    return true;
+}
+
+static bool diff_days_date8(const std::string& a, const std::string& b, int& out_days, std::string* err) {
+    bool ba = false, bb = false; int ya = 0, yb = 0; unsigned ma = 0, da = 0, mb = 0, db = 0;
+    if (!parse_dbf_date8(a, ba, ya, ma, da, err)) return false;
+    if (!parse_dbf_date8(b, bb, yb, mb, db, err)) return false;
+    if (ba || bb) { if (err) *err = "blank date in DATEDIFF"; return false; }
+    int64_t za = days_from_civil(ya, ma, da);
+    int64_t zb = days_from_civil(yb, mb, db);
+    out_days = (int)(za - zb);
+    return true;
+}
+
+static bool try_parse_int32(const std::string& s, int& out) {
+    std::string t = trim_copy(s);
+    if (t.empty()) return false;
+    size_t i = 0;
+    if (t[0] == '+' || t[0] == '-') i = 1;
+    for (; i < t.size(); ++i) if (!std::isdigit((unsigned char)t[i])) return false;
+    try { long long v = std::stoll(t); out = (int)v; return true; }
+    catch (...) { return false; }
+}
+
+static std::string strip_outer_quotes(std::string s) {
+    s = trim_copy(std::move(s));
+    if (s.size() >= 2) {
+        char q = s.front();
+        if ((q == '"' || q == '\'') && s.back() == q) return s.substr(1, s.size() - 2);
+    }
+    return s;
+}
+
+static std::string canonical_dbf_date8_from_text(std::string s, std::string* err) {
+    s = strip_outer_quotes(std::move(s));
+    s = trim_copy(std::move(s));
+    if (s.empty()) return "        ";
+    std::string digits = digits_only(s);
+    if (digits.empty()) return "        ";
+    if (digits.size() < 8) { if (err) *err = "need YYYYMMDD (8 digits)"; return {}; }
+    if (digits.size() > 8) digits.resize(8);
+
+    bool blank = false; int y = 0; unsigned m = 0, d = 0;
+    if (!parse_dbf_date8(digits, blank, y, m, d, err)) return {};
+    if (blank) return "        ";
+    return digits;
+}
+
+static bool split_top_level_binary(const std::string& src, char op, std::string& left, std::string& right) {
+    bool in_s = false, in_d = false;
+    int depth = 0;
+    bool have_left_nonws = false;
+    for (size_t i = 0; i < src.size(); ++i) {
+        char c = src[i];
+        if (c == '"' && !in_s) { in_d = !in_d; continue; }
+        if (c == '\'' && !in_d) { in_s = !in_s; continue; }
+        if (in_s || in_d) continue;
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { if (depth > 0) --depth; continue; }
+        if (depth != 0) continue;
+        if (!std::isspace((unsigned char)c)) have_left_nonws = true;
+        if (c == op) {
+            if (op == '-' && !have_left_nonws) continue; // unary minus
+            left = trim_copy(src.substr(0, i));
+            right = trim_copy(src.substr(i + 1));
+            return !left.empty() && !right.empty();
+        }
+    }
+    return false;
+}
+
+static bool split_args_2(const std::string& inside, std::string& a, std::string& b) {
+    bool in_s = false, in_d = false;
+    int depth = 0;
+    for (size_t i = 0; i < inside.size(); ++i) {
+        char c = inside[i];
+        if (c == '"' && !in_s) { in_d = !in_d; continue; }
+        if (c == '\'' && !in_d) { in_s = !in_s; continue; }
+        if (in_s || in_d) continue;
+        if (c == '(') { ++depth; continue; }
+        if (c == ')') { if (depth > 0) --depth; continue; }
+        if (depth != 0) continue;
+        if (c == ',') {
+            a = trim_copy(inside.substr(0, i));
+            b = trim_copy(inside.substr(i + 1));
+            return !a.empty() && !b.empty();
+        }
+    }
+    return false;
+}
+
+static bool eval_date_atom(xbase::DbArea& A, const ClockSnap& cs, const std::string& text,
+                           std::string& out_date8, std::string* err) {
+    std::string t = trim_copy(text);
+    if (t.empty()) { out_date8 = "        "; return true; }
+
+    std::string uq = strip_outer_quotes(t);
+    std::string U = up_copy(uq);
+
+    if (U == "DATE()" || U == "TODAY()") { out_date8 = cs.date8; return true; }
+    if (U == "NOW()" || U == "DATETIME()") { out_date8 = cs.date8; return true; }
+
+    if (U.rfind("DATEADD(", 0) == 0 && uq.size() >= 9 && uq.back() == ')') {
+        std::string inside = uq.substr(8, uq.size() - 9);
+        std::string a, b;
+        if (!split_args_2(inside, a, b)) { if (err) *err = "DATEADD needs 2 args"; return false; }
+        std::string base;
+        if (!eval_date_atom(A, cs, a, base, err)) return false;
+        int delta = 0;
+        if (!try_parse_int32(b, delta)) { if (err) *err = "DATEADD days must be integer"; return false; }
+        return add_days_to_date8(base, delta, out_date8, err);
+    }
+
+    if (U.rfind("CTOD(", 0) == 0 && uq.size() >= 6 && uq.back() == ')') {
+        std::string inside = uq.substr(5, uq.size() - 6);
+        std::string base = strip_outer_quotes(inside);
+        std::string e;
+        std::string d8 = canonical_dbf_date8_from_text(base, &e);
+        if (d8.empty()) { if (err) *err = e; return false; }
+        out_date8 = d8;
+        return true;
+    }
+
+    int fld = field_index_ci(A, uq);
+    if (fld > 0) {
+        const auto& def = A.fields()[(size_t)(fld - 1)];
+        char ft = (char)std::toupper((unsigned char)def.type);
+        if (ft != 'D') { if (err) *err = "field is not a DATE"; return false; }
+        std::string raw;
+        try { raw = A.get(fld); } catch (...) { raw.clear(); }
+        std::string e;
+        std::string d8 = canonical_dbf_date8_from_text(raw, &e);
+        if (d8.empty()) { if (err) *err = e; return false; }
+        out_date8 = d8;
+        return true;
+    }
+
+    std::string e;
+    std::string d8 = canonical_dbf_date8_from_text(uq, &e);
+    if (d8.empty()) { if (err) *err = e; return false; }
+    out_date8 = d8;
+    return true;
+}
+
+static bool try_eval_date_expr(xbase::DbArea& A, const ClockSnap& cs, const std::string& expr,
+                               std::string& out_date8, std::string* err) {
+    std::string s = trim_copy(expr);
+    if (s.empty()) { out_date8 = "        "; return true; }
+
+    {
+        std::string d;
+        if (eval_date_atom(A, cs, s, d, err)) { out_date8 = d; return true; }
+    }
+
+    {
+        std::string L, R;
+        if (split_top_level_binary(s, '+', L, R)) {
+            std::string base;
+            if (!eval_date_atom(A, cs, L, base, err)) return false;
+            int delta = 0;
+            if (!try_parse_int32(R, delta)) { if (err) *err = "days must be integer"; return false; }
+            return add_days_to_date8(base, delta, out_date8, err);
+        }
+    }
+
+    {
+        std::string L, R;
+        if (split_top_level_binary(s, '-', L, R)) {
+            int delta = 0;
+            if (try_parse_int32(R, delta)) {
+                std::string base;
+                if (!eval_date_atom(A, cs, L, base, err)) return false;
+                return add_days_to_date8(base, -delta, out_date8, err);
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool try_eval_date_diff(xbase::DbArea& A, const ClockSnap& cs, const std::string& expr,
+                               int& out_days, std::string* err) {
+    std::string s = trim_copy(expr);
+    if (s.empty()) return false;
+
+    {
+        std::string uq = strip_outer_quotes(s);
+        std::string U = up_copy(uq);
+        if (U.rfind("DATEDIFF(", 0) == 0 && uq.size() >= 10 && uq.back() == ')') {
+            std::string inside = uq.substr(9, uq.size() - 10);
+            std::string a, b;
+            if (!split_args_2(inside, a, b)) { if (err) *err = "DATEDIFF needs 2 args"; return false; }
+            std::string da, db;
+            if (!eval_date_atom(A, cs, a, da, err)) return false;
+            if (!eval_date_atom(A, cs, b, db, err)) return false;
+            return diff_days_date8(da, db, out_days, err);
+        }
+    }
+
+    std::string L, R;
+    if (split_top_level_binary(s, '-', L, R)) {
+        int delta = 0;
+        if (try_parse_int32(R, delta)) return false; // date - int handled by date_expr
+        std::string da, db;
+        if (!eval_date_atom(A, cs, L, da, err)) return false;
+        if (!eval_date_atom(A, cs, R, db, err)) return false;
+        return diff_days_date8(da, db, out_days, err);
+    }
+    return false;
+}
+
+static bool contains_date_syntax(const std::string& s) {
+    std::string U = up_copy(s);
+    return (U.find("DATE(") != std::string::npos) ||
+           (U.find("TODAY(") != std::string::npos) ||
+           (U.find("TIME(") != std::string::npos) ||
+           (U.find("NOW(") != std::string::npos) ||
+           (U.find("DATETIME(") != std::string::npos) ||
+           (U.find("CTOD(") != std::string::npos) ||
+           (U.find("DATEADD(") != std::string::npos) ||
+           (U.find("DATEDIFF(") != std::string::npos);
+}
+
+static void replace_all_ci(std::string& s, const std::string& needle_upper, const std::string& repl) {
+    std::string u = up_copy(s);
+    size_t pos = 0;
+    while ((pos = u.find(needle_upper, pos)) != std::string::npos) {
+        s.replace(pos, needle_upper.size(), repl);
+        u.replace(pos, needle_upper.size(), up_copy(repl));
+        pos += repl.size();
+    }
+}
+
+static std::string substitute_clock_calls(std::string src, const ClockSnap& cs) {
+    replace_all_ci(src, "DATE()",     "\"" + cs.date8 + "\"");
+    replace_all_ci(src, "TODAY()",    "\"" + cs.date8 + "\"");
+    replace_all_ci(src, "TIME()",     "\"" + cs.time6 + "\"");
+    replace_all_ci(src, "NOW()",      "\"" + cs.dt14 + "\"");
+    replace_all_ci(src, "DATETIME()", "\"" + cs.dt14 + "\"");
+    return src;
+}
+
+static bool is_ident_start(char c) {
+    return std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == '$';
+}
+static bool is_ident_char(char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '$';
+}
+
+static std::vector<Tok> lex(const std::string& src) {
+    std::vector<Tok> out;
+    std::size_t i = 0;
+    auto skip_ws = [&]() {
+        while (i < src.size() && std::isspace(static_cast<unsigned char>(src[i]))) ++i;
+    };
+    skip_ws();
+    while (i < src.size()) {
+        char c = src[i];
+        if (std::isspace(static_cast<unsigned char>(c))) { skip_ws(); continue; }
+        if (c == '(') { out.push_back({Tok::LParen, "("}); ++i; continue; }
+        if (c == ')') { out.push_back({Tok::RParen, ")"}); ++i; continue; }
+        if (c == ',') { out.push_back({Tok::Comma,  ","}); ++i; continue; }
+
+        if (c == '\'' || c == '"') {
+            const char q = c;
+            ++i;
+            std::string s;
+            while (i < src.size()) {
+                char d = src[i++];
+                if (d == q) {
+                    // doubled quote => literal quote
+                    if (i < src.size() && src[i] == q) { s.push_back(q); ++i; continue; }
+                    break;
+                }
+                s.push_back(d);
+            }
+            out.push_back({Tok::String, s});
+            continue;
+        }
+
+        if (std::isdigit(static_cast<unsigned char>(c)) ||
+            (c == '.' && i + 1 < src.size() && std::isdigit(static_cast<unsigned char>(src[i + 1])))) {
+            std::size_t j = i;
+            bool dot = false;
+            while (j < src.size()) {
+                char d = src[j];
+                if (std::isdigit(static_cast<unsigned char>(d))) { ++j; continue; }
+                if (d == '.' && !dot) { dot = true; ++j; continue; }
+                break;
+            }
+            out.push_back({Tok::Number, src.substr(i, j - i)});
+            i = j;
+            continue;
+        }
+
+        if (is_ident_start(c)) {
+            std::size_t j = i + 1;
+            while (j < src.size() && is_ident_char(src[j])) ++j;
+            out.push_back({Tok::Ident, src.substr(i, j - i)});
+            i = j;
+            continue;
+        }
+
+        // Unknown char => treat as end (we'll fail parse)
+        break;
+    }
+
+    out.push_back({Tok::End, ""});
+    return out;
+}
+
+static int resolve_field_index_by_name_ci(xbase::DbArea& A, const std::string& name) {
+    try {
+        const std::string want = up_copy(name);
+        const auto defs = A.fields(); // vector<FieldDef>
+        for (std::size_t i = 0; i < defs.size(); ++i) {
+            if (up_copy(defs[i].name) == want) return static_cast<int>(i) + 1; // 1-based
+        }
+    } catch (...) {}
+    return 0;
+}
+
+class Parser {
+public:
+    Parser(xbase::DbArea& A, const std::vector<Tok>& t) : area_(A), toks_(t) {}
+
+    bool parse_expr(std::string& out) {
+        return parse_primary(out);
+    }
+
+    bool at_end() const { return peek().kind == Tok::End; }
+
+private:
+    xbase::DbArea& area_;
+    const std::vector<Tok>& toks_;
+    std::size_t pos_ = 0;
+
+    const Tok& peek() const { return toks_[pos_]; }
+
+    bool accept(Tok::Kind k) {
+        if (peek().kind == k) { ++pos_; return true; }
+        return false;
+    }
+
+    bool expect(Tok::Kind k) {
+        return accept(k);
+    }
+
+    bool parse_primary(std::string& out) {
+        const Tok& t = peek();
+
+        if (t.kind == Tok::String) {
+            out = t.text;
+            ++pos_;
+            return true;
+        }
+        if (t.kind == Tok::Number) {
+            out = t.text;
+            ++pos_;
+            return true;
+        }
+        if (t.kind == Tok::Ident) {
+            std::string ident = t.text;
+            ++pos_;
+
+            // function call?
+            if (accept(Tok::LParen)) {
+                std::vector<std::string> args;
+                if (!accept(Tok::RParen)) {
+                    while (true) {
+                        std::string a;
+                        if (!parse_expr(a)) return false;
+                        args.push_back(a);
+                        if (accept(Tok::Comma)) continue;
+                        if (!expect(Tok::RParen)) return false;
+                        break;
+                    }
+                }
+
+                const std::string fn = up_copy(ident);
+                const auto* specs = dottalk::expr::string_fn_specs();
+                const std::size_t n = dottalk::expr::string_fn_specs_count();
+                for (std::size_t i = 0; i < n; ++i) {
+                    const auto& s = specs[i];
+                    if (fn == s.name) {
+                        const int argc = static_cast<int>(args.size());
+                        if (argc < s.minArgs || argc > s.maxArgs) return false;
+                        out = s.fn(args);
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // field reference (current record)
+            int fld = resolve_field_index_by_name_ci(area_, ident);
+            if (fld > 0) {
+                try { out = area_.get(fld); }
+                catch (...) { out.clear(); }
+                return true;
+            }
+
+            // bare identifier => literal text
+            out = ident;
+            return true;
+        }
+
+        return false;
+    }
+};
+
+static bool eval_value_expr_to_string(xbase::DbArea& A, const std::string& exprText, std::string& out) {
+    auto toks = lex(exprText);
+    Parser p(A, toks);
+    std::string v;
+    if (!p.parse_expr(v)) return false;
+    if (!p.at_end()) return false;
+    out = v;
+    return true;
+}
+
+} // namespace (value-expr + date helpers)
+
+namespace {
+
+static inline std::string ltrim(std::string s) {
+    size_t i = 0; while (i < s.size() && std::isspace((unsigned char)s[i])) ++i;
+    return s.substr(i);
+}
+static inline std::string rtrim(std::string s) {
+    if (s.empty()) return s;
+    size_t i = s.size(); while (i > 0 && std::isspace((unsigned char)s[i - 1])) --i;
+    s.resize(i); return s;
+}
+static inline std::string trim(std::string s) { return rtrim(ltrim(std::move(s))); }
+
+static bool begins_with_keyword(const std::string& s, const char* kw_upper) {
+    std::string t = ltrim(s);
+    std::string U = up_copy(t);
+    const std::string kw = kw_upper;
+    if (U.rfind(kw, 0) != 0) return false;
+    if (U.size() == kw.size()) return true;
+    char next = U[kw.size()];
+    return std::isspace((unsigned char)next) != 0;
+}
+
+static std::optional<bool> try_eval_predicate_chain_fast(const xbase::DbArea& A, const std::string& src) {
+    bool out = false;
+    std::string err;
+    if (!::try_eval_predicate_chain(A, src, out, &err)) return std::nullopt;
+    return out;
+}
+
+struct EvalResult {
+    enum Kind { K_None, K_Number, K_String, K_Bool } kind = K_None;
+    double number = 0.0;
+    std::string text;
+    bool tf = false;
+};
+
+static EvalResult eval_program(const Expr* prog, const RecordView& rv) {
+    EvalResult er;
+    if (auto ln = dynamic_cast<const LitNumber*>(prog)) { er.kind = EvalResult::K_Number; er.number = ln->v; return er; }
+    if (auto ls = dynamic_cast<const LitString*>(prog)) { er.kind = EvalResult::K_String; er.text = ls->v; return er; }
+    if (auto ar = dynamic_cast<const Arith*>(prog)) {
+        try { er.kind = EvalResult::K_Number; er.number = ar->evalNumber(rv); return er; }
+        catch (...) {}
+    }
+    try { er.kind = EvalResult::K_Bool; er.tf = prog->eval(rv); }
+    catch (...) { er.kind = EvalResult::K_None; }
+    return er;
+}
+
+static void print_eval_result(const EvalResult& er) {
+    if (er.kind == EvalResult::K_Bool)   { std::cout << (er.tf ? ".T." : ".F.") << "\n"; return; }
+    if (er.kind == EvalResult::K_Number) { std::cout << er.number << "\n"; return; }
+    if (er.kind == EvalResult::K_String) { std::cout << er.text << "\n"; return; }
+    std::cout << "\n";
+}
+
+static bool parse_assign_stub(const std::string& s, std::string& lhs, std::string& rhs) {
+    auto pos = s.find('=');
+    if (pos == std::string::npos) return false;
+    lhs = trim(s.substr(0, pos));
+    rhs = trim(s.substr(pos + 1));
+    return !lhs.empty() && !rhs.empty();
+}
+
+// very small "pure numeric" arithmetic evaluator (no fields)
+static inline bool is_arith_only(const std::string& s) {
+    bool has_digit = false;
+    for (char c : s) {
+        if (std::isspace((unsigned char)c)) continue;
+        if (std::isdigit((unsigned char)c)) { has_digit = true; continue; }
+        if (c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' || c == '.') continue;
+        return false;
+    }
+    return has_digit;
+}
+
+struct ArithReader {
+    const char* p; const char* e;
+    void skip() { while (p < e && std::isspace((unsigned char)*p)) ++p; }
+    bool eat(char c) { skip(); if (p < e && *p == c) { ++p; return true; } return false; }
+    bool end() { skip(); return p >= e; }
+
+    double number(bool& ok) {
+        skip();
+        const char* s = p;
+        if (p < e && (*p == '+' || *p == '-')) ++p;
+        bool any = false;
+        while (p < e && std::isdigit((unsigned char)*p)) { ++p; any = true; }
+        if (p < e && *p == '.') { ++p; while (p < e && std::isdigit((unsigned char)*p)) { ++p; any = true; } }
+        if (!any) { ok = false; return 0.0; }
+        double val = std::strtod(s, nullptr);
+        return val;
+    }
+
+    double parse_factor(bool& ok) {
+        skip();
+        if (eat('(')) {
+            double v = parse_expr(ok);
+            if (!eat(')')) ok = false;
+            return v;
+        }
+        if (p < e && (*p == '+' || *p == '-')) {
+            bool neg = (*p == '-'); ++p;
+            double v = parse_factor(ok);
+            return neg ? -v : v;
+        }
+        return number(ok);
+    }
+
+    double parse_term(bool& ok) {
+        double v = parse_factor(ok);
+        while (true) {
+            if (eat('*')) { double r = parse_factor(ok); v *= r; }
+            else if (eat('/')) { double r = parse_factor(ok); v /= r; }
+            else break;
+        }
+        return v;
+    }
+
+    double parse_expr(bool& ok) {
+        double v = parse_term(ok);
+        while (true) {
+            if (eat('+')) { double r = parse_term(ok); v += r; }
+            else if (eat('-')) { double r = parse_term(ok); v -= r; }
+            else break;
+        }
+        return v;
+    }
+};
+
+static bool try_eval_simple_arith(const std::string& src, double& out) {
+    if (!is_arith_only(src)) return false;
+    ArithReader rd{src.data(), src.data() + src.size()};
+    bool ok = true;
+    double v = rd.parse_expr(ok);
+    if (!ok || !rd.end()) return false;
+    out = v;
+    return true;
+}
+
+static std::string strip_line_comments(const std::string& in) {
+    std::string out;
+    out.reserve(in.size());
+    bool in_s = false, in_d = false;
+    for (size_t i = 0; i < in.size(); ++i) {
+        char c = in[i];
+        char n = (i + 1 < in.size() ? in[i + 1] : '\0');
+        if (!in_s && !in_d) {
+            if (c == '/' && n == '/') { break; }
+            if (c == '&' && n == '&') { break; }
+        }
+        if (c == '"' && !in_s) { in_d = !in_d; out.push_back(c); continue; }
+        if (c == '\'' && !in_d) { in_s = !in_s; out.push_back(c); continue; }
+        out.push_back(c);
+    }
+    while (!out.empty() && std::isspace((unsigned char)out.back())) out.pop_back();
+    size_t j = 0; while (j < out.size() && std::isspace((unsigned char)out[j])) ++j;
+    return out.substr(j);
+}
+
+} // namespace
+
+void cmd_CALC(xbase::DbArea& A, std::istringstream& args) {
+    ClockSnap cs = clock_snapshot_local();
+
+    // Join all remaining args into a single expression (preserve internal spaces).
+    std::ostringstream oss;
+    std::string chunk;
+    while (args >> chunk) {
+        if (!oss.str().empty()) oss << ' ';
+        oss << chunk;
+    }
+
+    // Use local comment-stripper (do NOT rely on dottalk::value_normalize::* here).
+    std::string src = strip_line_comments(trim(oss.str()));
+    if (src.empty()) {
+        std::cout << "Usage:\n  CALC <expr>\n  CALC <field> = <expr>   (delegates to CALCWRITE)\n";
+        return;
+    }
+
+    // Clock-only expressions can run even when no DBF is open.
+    {
+        std::string U = up_copy(src);
+        if (U == "DATE()" || U == "TODAY()") { std::cout << cs.date8 << "\n"; return; }
+        if (U == "TIME()") { std::cout << cs.time6 << "\n"; return; }
+        if (U == "NOW()" || U == "DATETIME()") { std::cout << cs.dt14 << "\n"; return; }
+    }
+
+    // Assignment stub => delegate to CALCWRITE (which performs locking + writeCurrent()).
+    // We intentionally do NOT substitute DATE()/TIME()/NOW() here; CALCWRITE handles them too.
+    std::string lhs, rhs;
+    if (parse_assign_stub(src, lhs, rhs)) {
+        std::istringstream pass(lhs + " = " + rhs);
+        cmd_CALCWRITE(A, pass);
+        return;
+    }
+
+    if (!A.isOpen()) {
+        std::cout << "CALC: no file open.\n";
+        std::cout << "Usage:\n  USE <table>\n  CALC <expr>\n";
+        return;
+    }
+
+    // Date algebra / date-diff fast paths:
+    //   CALC enroll_d + 7
+    //   CALC DATEADD(enroll_d, 30)
+    //   CALC DATE() - enroll_d
+    {
+        std::string derr;
+        std::string d8;
+        if (try_eval_date_expr(A, cs, src, d8, &derr)) {
+            std::cout << d8 << "\n";
+            return;
+        }
+        if (!derr.empty() && contains_date_syntax(src)) {
+            std::cout << "CALC: invalid date (" << derr << ").\n";
+            return;
+        }
+
+        int dd = 0;
+        derr.clear();
+        if (try_eval_date_diff(A, cs, src, dd, &derr)) {
+            std::cout << dd << "\n";
+            return;
+        }
+        if (!derr.empty() && contains_date_syntax(src)) {
+            std::cout << "CALC: invalid date diff (" << derr << ").\n";
+            return;
+        }
+    }
+
+    // Substitute clock calls for downstream engines (predicate compiler, expression compiler, etc.).
+    std::string src_eval = substitute_clock_calls(src, cs);
+
+    // CALC TUPLE <expr> => evaluate and pretty-print, like FoxPro's ? <expr>
+    if (begins_with_keyword(src_eval, "TUPLE")) {
+        auto rest = trim(src_eval.substr(5));
+
+        // 1) boolean chain (fast path)
+        {
+            auto b = try_eval_predicate_chain_fast(A, rest);
+            if (b.has_value()) {
+                std::cout << (b.value() ? ".T." : ".F.") << "\n";
+                return;
+            }
+        }
+
+        // 2) generic compiler (number/bool/string)
+        {
+            auto cr = dottalk::expr::compile_where(rest);
+            if (cr) {
+                auto rv = dottalk::expr::glue::make_record_view(A); // returns dottalk::expr::RecordView
+                auto er = eval_program(cr.program.get(), rv);
+                print_eval_result(er);
+                return;
+            }
+        }
+
+        // 3) fallback: value-expression-to-string (string builtins + field refs)
+        {
+            std::string out;
+            if (eval_value_expr_to_string(A, rest, out)) {
+                std::cout << out << "\n";
+                return;
+            }
+        }
+    }
+
+    // Predicate chain: "A=B AND C=D AND ..." (fast)
+    {
+        auto b = try_eval_predicate_chain_fast(A, src_eval);
+        if (b.has_value()) {
+            std::cout << (b.value() ? ".T." : ".F.") << "\n";
+            return;
+        }
+    }
+
+    // Pure numeric arithmetic (no fields) - quick path
+    {
+        double v = 0.0;
+        if (try_eval_simple_arith(src_eval, v)) {
+            std::cout << v << "\n";
+            return;
+        }
+    }
+
+    // Expression compiler
+    auto cr = dottalk::expr::compile_where(src_eval);
+    if (!cr) {
+        std::cout << "CALC error: " << cr.error << "\n";
+        return;
+    }
+
+    auto rv = dottalk::expr::glue::make_record_view(A);
+    auto er = eval_program(cr.program.get(), rv);
+
+    // Render as Fox-style output
+    if (er.kind == EvalResult::K_Bool)   { std::cout << (er.tf ? ".T." : ".F.") << "\n"; return; }
+    if (er.kind == EvalResult::K_Number) { std::cout << er.number << "\n"; return; }
+    if (er.kind == EvalResult::K_String) { std::cout << er.text << "\n"; return; }
+    std::cout << "\n";
+}

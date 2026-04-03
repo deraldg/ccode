@@ -1,0 +1,5 @@
+name: tuptalk
+type: HYBRID
+created: 2026-03-18
+engine: DotTalk++
+notes:

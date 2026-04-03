@@ -1,3 +1,4 @@
+#if defined(DOTTALK_WITH_TV) || defined(DOTTALK_TV_AVAILABLE)
 #ifndef _TEST_H
 #define _TEST_H
 
@@ -25,3 +26,7 @@ private:
 };
 
 #endif // _TEST_H
+#else
+// TVision not enabled: header declarations not required in non-TV build.
+
+#endif  // TVISION guard

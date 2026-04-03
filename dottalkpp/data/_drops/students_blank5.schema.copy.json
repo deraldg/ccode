@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "name": "students",
+  "encoding": "UTF-8",
+  "date_policy": "ISO",
+  "null_policy": "EMPTY_AS_EMPTY",
+  "logical_policy": "TF",
+  "fields": [
+    { "name": "SID",      "type": "N", "length": 9, "decimals": 0, "required": true },
+    { "name": "LNAME",    "type": "C", "length": 20, "required": true, "trim": "right" },
+    { "name": "FNAME",    "type": "C", "length": 15, "required": true, "trim": "right" },
+    { "name": "DOB",      "type": "D", "length": 8, "zero_date": "ALLOW" },
+    { "name": "GENDER",   "type": "C", "length": 1 },
+    { "name": "MAJOR",    "type": "C", "length": 4 },
+    { "name": "ENROLL_D", "type": "D", "length": 8, "zero_date": "DISALLOW" },
+    { "name": "GPA",      "type": "N", "length": 4, "decimals": 2, "range": { "min": 0.00, "max": 4.00 } },
+    { "name": "EMAIL",    "type": "C", "length": 32 }
+  ],
+  "indexes": [
+    { "name": "SID_PK",   "engine": "CNX", "order": ["SID ASC"], "unique": true, "nullable": "DISALLOW" },
+    { "name": "NAME1",    "engine": "CNX", "order": ["LNAME ASC","FNAME ASC"], "collation": "nocase", "trim": "right" }
+  ]
+}

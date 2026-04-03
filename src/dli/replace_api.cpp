@@ -86,3 +86,6 @@ bool do_replace_memo_text(xbase::DbArea& db,
 }
 
 } // namespace dli
+
+
+

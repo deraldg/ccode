@@ -3,7 +3,7 @@
 #include <cctype>
 #include <string>
 #include <vector>
-#include "cli/browsetui.hpp"
+#include "dli/browsetui.hpp"
 
 // Helper to trim trailing spaces/tabs etc.
 static inline void rtrim_inplace(std::string& s) {
@@ -70,3 +70,6 @@ build_browse_lines(int inner_w, int inner_h, int recno,
 
     return out;
 }
+
+
+

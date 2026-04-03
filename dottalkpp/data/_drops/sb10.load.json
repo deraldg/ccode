@@ -1,0 +1,25 @@
+{
+  "engine": {
+    "name": "dottalkpp",
+    "platform": "dbf-header-v1",
+    "version": "alpha-8"
+  },
+  "operation": "SEED_BLANK",
+  "result": {
+    "rows_rejected": 0,
+    "rows_written": 10
+  },
+  "schema": {
+    "name": "sb10",
+    "path": "..\\schemas\\students.schema.json",
+    "version": "1.0"
+  },
+  "source": {
+    "count": 10,
+    "type": "BLANK"
+  },
+  "table": "sb10",
+  "timestamps": {
+    "finished": "2025-12-12T04:34:00Z"
+  }
+}

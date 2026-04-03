@@ -1,0 +1,731 @@
+// memostore.cpp
+// DTX-backed memo store for DotTalk++
+//
+// v1 characteristics:
+//   - text-first
+//   - append-only object store
+//   - update = append new object
+//   - erase = tombstone
+//   - rebuild index by scan on open
+//   - no free-list reuse yet
+//   - no CRC enforcement yet
+
+#include "memo/memostore.hpp"
+
+#include <algorithm>
+#include <array>
+#include <filesystem>
+#include <utility>
+
+namespace dottalk::memo {
+
+namespace {
+
+inline MemoOpResult ok_result() {
+    return MemoOpResult{true, {}};
+}
+
+inline MemoOpResult err_result(const std::string& s) {
+    return MemoOpResult{false, s};
+}
+
+inline MemoPutResult ok_put(const MemoRef& ref) {
+    return MemoPutResult{true, ref, {}};
+}
+
+inline MemoPutResult err_put(const std::string& s) {
+    return MemoPutResult{false, {}, s};
+}
+
+inline MemoGetResult ok_get_text(std::string text) {
+    MemoGetResult r;
+    r.ok = true;
+    r.text = std::move(text);
+    return r;
+}
+
+inline MemoGetResult err_get(const std::string& s) {
+    MemoGetResult r;
+    r.ok = false;
+    r.error = s;
+    return r;
+}
+
+inline bool state_is_live(std::uint16_t st) noexcept {
+    return st == static_cast<std::uint16_t>(dtx::ObjectState::Live);
+}
+
+inline bool state_is_tombstone(std::uint16_t st) noexcept {
+    return st == static_cast<std::uint16_t>(dtx::ObjectState::Tombstone);
+}
+
+} // namespace
+
+MemoStore::~MemoStore()
+{
+    close();
+}
+
+MemoStore::MemoStore(MemoStore&& other) noexcept
+    : _fp(std::move(other._fp))
+    , _path(std::move(other._path))
+    , _hdr(other._hdr)
+    , _live_index(std::move(other._live_index))
+{
+    other._hdr = dtx::make_default_header();
+}
+
+MemoStore& MemoStore::operator=(MemoStore&& other) noexcept
+{
+    if (this != &other) {
+        close();
+        _fp = std::move(other._fp);
+        _path = std::move(other._path);
+        _hdr = other._hdr;
+        _live_index = std::move(other._live_index);
+        other._hdr = dtx::make_default_header();
+    }
+    return *this;
+}
+
+bool MemoStore::is_open() const noexcept
+{
+    return _fp.is_open();
+}
+
+std::string MemoStore::path() const
+{
+    return _path;
+}
+
+MemoOpResult MemoStore::open(const std::string& sidecar_path, OpenMode mode)
+{
+    close();
+
+    switch (mode) {
+    case OpenMode::OpenExisting:
+        if (!open_existing_(sidecar_path)) {
+            return err_result("MemoStore: could not open existing DTX sidecar");
+        }
+        return ok_result();
+
+    case OpenMode::CreateIfMissing:
+        if (std::filesystem::exists(sidecar_path)) {
+            if (!open_existing_(sidecar_path)) {
+                return err_result("MemoStore: could not open existing DTX sidecar");
+            }
+        } else {
+            if (!create_new_(sidecar_path)) {
+                return err_result("MemoStore: could not create DTX sidecar");
+            }
+        }
+        return ok_result();
+
+    case OpenMode::TruncateAndCreate:
+        if (!create_new_(sidecar_path)) {
+            return err_result("MemoStore: could not truncate/create DTX sidecar");
+        }
+        return ok_result();
+    }
+
+    return err_result("MemoStore: unknown open mode");
+}
+
+MemoOpResult MemoStore::flush()
+{
+    if (!_fp.is_open()) return ok_result();
+
+    if (!write_header_()) {
+        return err_result("MemoStore: failed to write DTX header during flush");
+    }
+
+    _fp.flush();
+    if (!_fp) {
+        return err_result("MemoStore: flush failed");
+    }
+
+    return ok_result();
+}
+
+void MemoStore::close() noexcept
+{
+    if (_fp.is_open()) {
+        (void)write_header_();
+        _fp.flush();
+        _fp.close();
+    }
+
+    _path.clear();
+    _hdr = dtx::make_default_header();
+    _live_index.clear();
+}
+
+MemoPutResult MemoStore::put_text(std::string_view text)
+{
+    if (!_fp.is_open()) {
+        return err_put("MemoStore: sidecar is not open");
+    }
+
+    const std::uint64_t object_id = append_text_object_(text, 0);
+    if (object_id == dtx::kInvalidObjectId) {
+        return err_put("MemoStore: failed to append memo text object");
+    }
+
+    return ok_put(make_ref_from_object_id_(object_id));
+}
+
+MemoGetResult MemoStore::get_text(const MemoRef& ref)
+{
+    if (!_fp.is_open()) {
+        return err_get("MemoStore: sidecar is not open");
+    }
+
+    if (is_null_ref(ref)) {
+        return ok_get_text({});
+    }
+
+    std::uint64_t object_id = 0;
+    if (!try_parse_ref_(ref, object_id)) {
+        return err_get("MemoStore: invalid memo reference token");
+    }
+
+    std::string out;
+    if (!read_object_text_(object_id, out)) {
+        return err_get("MemoStore: memo object not found or unreadable");
+    }
+
+    return ok_get_text(std::move(out));
+}
+
+MemoPutResult MemoStore::update_text(const MemoRef& old_ref, std::string_view text)
+{
+    if (!_fp.is_open()) {
+        return err_put("MemoStore: sidecar is not open");
+    }
+
+    std::uint64_t prev = 0;
+    if (!is_null_ref(old_ref)) {
+        if (!try_parse_ref_(old_ref, prev)) {
+            return err_put("MemoStore: invalid memo reference token for update");
+        }
+    }
+
+    const std::uint64_t object_id = append_text_object_(text, prev);
+    if (object_id == dtx::kInvalidObjectId) {
+        return err_put("MemoStore: failed to append updated memo text object");
+    }
+
+    return ok_put(make_ref_from_object_id_(object_id));
+}
+
+MemoOpResult MemoStore::erase(const MemoRef& ref)
+{
+    if (!_fp.is_open()) {
+        return err_result("MemoStore: sidecar is not open");
+    }
+
+    if (is_null_ref(ref)) {
+        return ok_result();
+    }
+
+    std::uint64_t object_id = 0;
+    if (!try_parse_ref_(ref, object_id)) {
+        return err_result("MemoStore: invalid memo reference token for erase");
+    }
+
+    if (!tombstone_object_(object_id)) {
+        return err_result("MemoStore: could not tombstone memo object");
+    }
+
+    return ok_result();
+}
+
+MemoStat MemoStore::stat(const MemoRef& ref)
+{
+    MemoStat st{};
+
+    if (!_fp.is_open() || is_null_ref(ref)) {
+        return st;
+    }
+
+    std::uint64_t object_id = 0;
+    if (!try_parse_ref_(ref, object_id)) {
+        return st;
+    }
+
+    auto it = _live_index.find(object_id);
+    if (it == _live_index.end()) {
+        return st;
+    }
+
+    st.exists = true;
+    st.kind = (it->second.kind == static_cast<std::uint16_t>(dtx::PayloadKind::TextUtf8))
+                ? MemoPayloadKind::TextUtf8
+                : MemoPayloadKind::Binary;
+    st.logical_bytes = it->second.payload_bytes;
+    st.physical_bytes = it->second.payload_bytes;
+    return st;
+}
+
+MemoRef MemoStore::make_null_ref() const
+{
+    return MemoRef::nullref();
+}
+
+bool MemoStore::is_null_ref(const MemoRef& ref) const
+{
+    return ref.token.empty() || dtx::ref_token_is_blank(ref.token);
+}
+
+bool MemoStore::validate_ref(const MemoRef& ref) const
+{
+    if (is_null_ref(ref)) return true;
+
+    std::uint64_t object_id = 0;
+    return try_parse_ref_(ref, object_id);
+}
+
+// -----------------------------------------------------------------------------
+// x64 bridge helpers
+// -----------------------------------------------------------------------------
+
+std::uint64_t MemoStore::put_text_id(std::string_view text, std::string* err)
+{
+    const MemoPutResult pr = put_text(text);
+    if (!pr.ok) {
+        if (err) *err = pr.error;
+        return 0;
+    }
+
+    std::uint64_t object_id = 0;
+    if (!try_parse_ref_(pr.ref, object_id)) {
+        if (err) *err = "MemoStore: could not decode object id from new memo ref";
+        return 0;
+    }
+
+    return object_id;
+}
+
+bool MemoStore::get_text_id(std::uint64_t object_id, std::string& out, std::string* err)
+{
+    out.clear();
+
+    if (object_id == 0) {
+        return true;
+    }
+
+    const MemoRef ref = make_ref_from_object_id_(object_id);
+    const MemoGetResult gr = get_text(ref);
+    if (!gr.ok) {
+        if (err) *err = gr.error;
+        return false;
+    }
+
+    out = gr.text;
+    return true;
+}
+
+bool MemoStore::update_text_id(std::uint64_t old_object_id,
+                               std::string_view text,
+                               std::uint64_t& new_object_id,
+                               std::string* err)
+{
+    new_object_id = 0;
+
+    MemoRef old_ref = make_null_ref();
+    if (old_object_id != 0) {
+        old_ref = make_ref_from_object_id_(old_object_id);
+    }
+
+    const MemoPutResult pr = update_text(old_ref, text);
+    if (!pr.ok) {
+        if (err) *err = pr.error;
+        return false;
+    }
+
+    if (!try_parse_ref_(pr.ref, new_object_id)) {
+        if (err) *err = "MemoStore: could not decode object id from updated memo ref";
+        new_object_id = 0;
+        return false;
+    }
+
+    return true;
+}
+
+bool MemoStore::erase_id(std::uint64_t object_id, std::string* err)
+{
+    if (object_id == 0) {
+        return true;
+    }
+
+    const MemoRef ref = make_ref_from_object_id_(object_id);
+    const MemoOpResult r = erase(ref);
+    if (!r.ok) {
+        if (err) *err = r.error;
+        return false;
+    }
+
+    return true;
+}
+
+bool MemoStore::exists_id(std::uint64_t object_id) const noexcept
+{
+    if (object_id == 0) {
+        return false;
+    }
+
+    return _live_index.find(object_id) != _live_index.end();
+}
+
+MemoRef MemoStore::ref_from_object_id(std::uint64_t object_id) const
+{
+    if (object_id == 0) {
+        return make_null_ref();
+    }
+    return make_ref_from_object_id_(object_id);
+}
+
+bool MemoStore::try_object_id_from_ref(const MemoRef& ref, std::uint64_t& object_id) const noexcept
+{
+    return try_parse_ref_(ref, object_id);
+}
+
+bool MemoStore::create_empty(const std::string& sidecar_path)
+{
+    close();
+    return create_new_(sidecar_path);
+}
+
+bool MemoStore::header_valid() const noexcept
+{
+    return dtx::valid_magic(_hdr) &&
+           dtx::version_supported(_hdr) &&
+           dtx::header_shape_valid(_hdr);
+}
+
+bool MemoStore::open_existing_(const std::string& sidecar_path)
+{
+    _fp.open(sidecar_path, std::ios::in | std::ios::out | std::ios::binary);
+    if (!_fp.is_open()) {
+        return false;
+    }
+
+    _path = sidecar_path;
+
+    if (!load_header_()) {
+        close();
+        return false;
+    }
+
+    if (!rebuild_index_()) {
+        close();
+        return false;
+    }
+
+    return true;
+}
+
+bool MemoStore::create_new_(const std::string& sidecar_path)
+{
+    namespace fs = std::filesystem;
+
+    std::error_code ec;
+    fs::create_directories(fs::path(sidecar_path).parent_path(), ec);
+
+    {
+        std::fstream fp(sidecar_path,
+                        std::ios::out | std::ios::binary | std::ios::trunc);
+        if (!fp.is_open()) {
+            return false;
+        }
+
+        dtx::DtxHeader h = dtx::make_default_header();
+        fp.write(reinterpret_cast<const char*>(&h), sizeof(h));
+        if (!fp) {
+            return false;
+        }
+        fp.flush();
+        if (!fp) {
+            return false;
+        }
+    }
+
+    _fp.open(sidecar_path, std::ios::in | std::ios::out | std::ios::binary);
+    if (!_fp.is_open()) {
+        return false;
+    }
+
+    _path = sidecar_path;
+    _hdr = dtx::make_default_header();
+    _live_index.clear();
+
+    return true;
+}
+
+bool MemoStore::load_header_()
+{
+    _fp.clear();
+    _fp.seekg(0, std::ios::beg);
+    _fp.read(reinterpret_cast<char*>(&_hdr), sizeof(_hdr));
+    if (!_fp) {
+        return false;
+    }
+
+    return header_valid();
+}
+
+bool MemoStore::write_header_()
+{
+    if (!_fp.is_open()) return false;
+
+    _fp.clear();
+    _fp.seekp(0, std::ios::beg);
+    _fp.write(reinterpret_cast<const char*>(&_hdr), sizeof(_hdr));
+    return static_cast<bool>(_fp);
+}
+
+bool MemoStore::rebuild_index_()
+{
+    _live_index.clear();
+
+    if (!_fp.is_open()) return false;
+    if (!header_valid()) return false;
+
+    const std::uint64_t fsize = file_size_(_fp);
+    std::uint64_t off = _hdr.first_object_offset;
+
+    while (off + sizeof(dtx::DtxObjectHeader) <= fsize) {
+        _fp.clear();
+        _fp.seekg(static_cast<std::streamoff>(off), std::ios::beg);
+
+        dtx::DtxObjectHeader oh{};
+        _fp.read(reinterpret_cast<char*>(&oh), sizeof(oh));
+        if (!_fp) return false;
+
+        if (!dtx::valid_object_tag(oh)) {
+            // Stop at first non-object tag. v1 expects contiguous append region.
+            break;
+        }
+
+        const std::uint64_t span = dtx::object_span_bytes(oh.payload_bytes);
+        if (span < sizeof(dtx::DtxObjectHeader)) {
+            return false;
+        }
+        if (off + span > fsize) {
+            return false;
+        }
+
+        ObjectLoc loc;
+        loc.header_offset = off;
+        loc.payload_offset = off + sizeof(dtx::DtxObjectHeader);
+        loc.payload_bytes = oh.payload_bytes;
+        loc.state = oh.state;
+        loc.kind = oh.kind;
+
+        if (state_is_live(oh.state)) {
+            _live_index[oh.object_id] = loc;
+        } else if (state_is_tombstone(oh.state)) {
+            _live_index.erase(oh.object_id);
+        }
+
+        off += span;
+    }
+
+    _hdr.append_offset = off;
+
+    std::uint64_t live = 0;
+    std::uint64_t dead = 0;
+
+    // Conservative recount by scan again through known header region not needed;
+    // keep live exact, dead advisory.
+    live = static_cast<std::uint64_t>(_live_index.size());
+    _hdr.object_count_live = live;
+    _hdr.object_count_dead = dead;
+
+    return true;
+}
+
+std::uint64_t MemoStore::allocate_object_id_()
+{
+    const std::uint64_t id = _hdr.next_object_id;
+    if (id == dtx::kInvalidObjectId) {
+        return dtx::kInvalidObjectId;
+    }
+    ++_hdr.next_object_id;
+    return id;
+}
+
+std::uint64_t MemoStore::append_text_object_(std::string_view text,
+                                             std::uint64_t previous_version_of)
+{
+    if (!_fp.is_open()) return dtx::kInvalidObjectId;
+
+    const std::uint64_t object_id = allocate_object_id_();
+    if (object_id == dtx::kInvalidObjectId) {
+        return dtx::kInvalidObjectId;
+    }
+
+    const dtx::DtxObjectHeader oh_base =
+        dtx::make_object_header(object_id,
+                                static_cast<std::uint64_t>(text.size()),
+                                dtx::PayloadKind::TextUtf8);
+
+    dtx::DtxObjectHeader oh = oh_base;
+    oh.previous_version_of = previous_version_of;
+
+    const std::uint64_t header_off = _hdr.append_offset;
+    const std::uint64_t payload_off = header_off + sizeof(dtx::DtxObjectHeader);
+    const std::uint64_t span = dtx::object_span_bytes(
+        static_cast<std::uint64_t>(text.size()));
+
+    _fp.clear();
+    _fp.seekp(static_cast<std::streamoff>(header_off), std::ios::beg);
+    _fp.write(reinterpret_cast<const char*>(&oh), sizeof(oh));
+    if (!text.empty()) {
+        _fp.write(text.data(), static_cast<std::streamsize>(text.size()));
+    }
+
+    const std::uint64_t written = sizeof(dtx::DtxObjectHeader) +
+                                  static_cast<std::uint64_t>(text.size());
+    const std::uint64_t pad = span - written;
+    if (pad > 0) {
+        std::array<char, 16> zeros{};
+        std::uint64_t remain = pad;
+        while (remain > 0) {
+            const std::uint64_t chunk = (remain > zeros.size()) ? zeros.size() : remain;
+            _fp.write(zeros.data(), static_cast<std::streamsize>(chunk));
+            remain -= chunk;
+        }
+    }
+
+    if (!_fp) {
+        return dtx::kInvalidObjectId;
+    }
+
+    ObjectLoc loc;
+    loc.header_offset = header_off;
+    loc.payload_offset = payload_off;
+    loc.payload_bytes = static_cast<std::uint64_t>(text.size());
+    loc.state = static_cast<std::uint16_t>(dtx::ObjectState::Live);
+    loc.kind = static_cast<std::uint16_t>(dtx::PayloadKind::TextUtf8);
+    _live_index[object_id] = loc;
+
+    _hdr.append_offset += span;
+    _hdr.object_count_live = static_cast<std::uint64_t>(_live_index.size());
+    _hdr.file_flags |= static_cast<std::uint32_t>(dtx::FileFlags::Dirty);
+
+    if (!write_header_()) {
+        return dtx::kInvalidObjectId;
+    }
+
+    _fp.flush();
+    if (!_fp) {
+        return dtx::kInvalidObjectId;
+    }
+
+    return object_id;
+}
+
+bool MemoStore::read_object_text_(std::uint64_t object_id, std::string& out)
+{
+    out.clear();
+
+    auto it = _live_index.find(object_id);
+    if (it == _live_index.end()) {
+        return false;
+    }
+    if (it->second.kind != static_cast<std::uint16_t>(dtx::PayloadKind::TextUtf8)) {
+        return false;
+    }
+
+    _fp.clear();
+    _fp.seekg(static_cast<std::streamoff>(it->second.payload_offset), std::ios::beg);
+
+    out.resize(static_cast<std::size_t>(it->second.payload_bytes));
+    if (!out.empty()) {
+        _fp.read(out.data(), static_cast<std::streamsize>(out.size()));
+        if (!_fp) {
+            out.clear();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool MemoStore::tombstone_object_(std::uint64_t object_id)
+{
+    auto it = _live_index.find(object_id);
+    if (it == _live_index.end()) {
+        return false;
+    }
+
+    _fp.clear();
+    _fp.seekg(static_cast<std::streamoff>(it->second.header_offset), std::ios::beg);
+
+    dtx::DtxObjectHeader oh{};
+    _fp.read(reinterpret_cast<char*>(&oh), sizeof(oh));
+    if (!_fp) {
+        return false;
+    }
+    if (!dtx::valid_object_tag(oh)) {
+        return false;
+    }
+
+    oh.state = static_cast<std::uint16_t>(dtx::ObjectState::Tombstone);
+
+    _fp.clear();
+    _fp.seekp(static_cast<std::streamoff>(it->second.header_offset), std::ios::beg);
+    _fp.write(reinterpret_cast<const char*>(&oh), sizeof(oh));
+    if (!_fp) {
+        return false;
+    }
+
+    _live_index.erase(it);
+    _hdr.object_count_live = static_cast<std::uint64_t>(_live_index.size());
+    ++_hdr.object_count_dead;
+    _hdr.file_flags |= static_cast<std::uint32_t>(dtx::FileFlags::Dirty);
+
+    if (!write_header_()) {
+        return false;
+    }
+
+    _fp.flush();
+    return static_cast<bool>(_fp);
+}
+
+MemoRef MemoStore::make_ref_from_object_id_(std::uint64_t object_id) const
+{
+    const auto arr = dtx::encode_object_id_hex(object_id);
+    return MemoRef{std::string(arr.data(), arr.size())};
+}
+
+bool MemoStore::try_parse_ref_(const MemoRef& ref, std::uint64_t& object_id) const noexcept
+{
+    object_id = 0;
+
+    if (is_null_ref(ref)) {
+        return true;
+    }
+
+    return dtx::decode_object_id_hex(ref.token, object_id) &&
+           object_id != dtx::kInvalidObjectId;
+}
+
+std::uint64_t MemoStore::file_size_(std::fstream& fp)
+{
+    fp.clear();
+    const std::streampos curg = fp.tellg();
+    const std::streampos curp = fp.tellp();
+
+    fp.seekg(0, std::ios::end);
+    const std::streamoff end = fp.tellg();
+
+    fp.clear();
+    if (curg != std::streampos(-1)) fp.seekg(curg);
+    if (curp != std::streampos(-1)) fp.seekp(curp);
+
+    return static_cast<std::uint64_t>(end);
+}
+
+} // namespace dottalk::memo

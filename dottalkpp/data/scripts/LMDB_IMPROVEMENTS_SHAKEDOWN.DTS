@@ -1,0 +1,128 @@
+* ============================================================
+* LMDB_IMPROVEMENTS_SHAKEDOWN.DTS
+* DotTalk++ LMDB (SETLMDB) shake-down – script-safe
+*
+* Focus:
+*   - SETLMDB parsing + envdir resolution + tag selection/validation
+*   - ASC/DESC switches
+*   - Per-area persistence
+*
+* Notes:
+*   - This script intentionally avoids TOP/LIST/SMARTLIST checks after SETLMDB,
+*     because your current navigation still tries to open the legacy CDX file
+*     when an order is active (separate integration gap).
+*   - BUILDLMDB is not included because it prompts interactively.
+*
+* Keep ASCII only.
+* ============================================================
+
+SET ECHO OFF
+ECHO ===== LMDB IMPROVEMENTS SHAKE-DOWN START =====
+
+* --- Clean slate
+SCHEMAS CLOSE
+SELECT 0
+
+* --- Open target table
+USE STUDENTS
+AREA
+
+* ============================================================
+* 0) Baseline: ensure physical/natural ordering
+* ============================================================
+ECHO --- 0) SETLMDB 0 (clear) ---
+SETLMDB 0
+SETLMDB
+AREA
+
+* ============================================================
+* 1) SETLMDB with no args should report current state
+* ============================================================
+ECHO --- 1) SETLMDB (no args) when physical ---
+SETLMDB
+
+* ============================================================
+* 2) SETLMDB via STEM (students) => resolves to <indexes>\students.cdx and envdir <cdx>.d
+*    Expect: default tag selection prefers LNAME, then SID, then first key
+* ============================================================
+ECHO --- 2) SETLMDB students (stem) default tag ---
+SETLMDB students
+SETLMDB
+
+* ============================================================
+* 3) SETLMDB via explicit container students.cdx
+* ============================================================
+ECHO --- 3) SETLMDB students.cdx default tag ---
+SETLMDB students.cdx
+SETLMDB
+
+* ============================================================
+* 4) SETLMDB via explicit envdir
+*    CORRECT FORM:
+*      - students.cdx.d           (relative token anchored under INDEXES root)
+*      - OR absolute path to ...\indexes\students.cdx.d
+*
+*    DO NOT use: indexes\students.cdx.d
+*    because current resolver may treat it as "already under indexes" and double-prefix.
+* ============================================================
+ECHO --- 4) SETLMDB students.cdx.d (explicit envdir, relative) ---
+SETLMDB students.cdx.d
+SETLMDB
+
+* If you want an absolute-path form too, uncomment and edit the drive/path:
+* ECHO --- 4b) SETLMDB <ABS>\students.cdx.d (explicit envdir, absolute) ---
+* SETLMDB D:\code\ccode\dottalkpp\data\indexes\students.cdx.d
+* SETLMDB
+
+* ============================================================
+* 5) Tag switching (validation only)
+* ============================================================
+ECHO --- 5) Explicit TAG selection (SID) ---
+SETLMDB students SID
+SETLMDB
+
+ECHO --- 5b) Explicit TAG selection (LNAME) ---
+SETLMDB students LNAME
+SETLMDB
+
+* Negative test: missing tag should refuse and list available tags
+ECHO --- 5c) Missing tag should refuse ---
+SETLMDB students NOT_A_REAL_TAG
+
+* ============================================================
+* 6) ASC/DESC flags (state only)
+* ============================================================
+ECHO --- 6) DESC ---
+SETLMDB students LNAME --desc
+SETLMDB
+
+ECHO --- 6b) ASC ---
+SETLMDB students LNAME --asc
+SETLMDB
+
+* ============================================================
+* 7) Persistence model: GOTO should not alter SETLMDB-reported state
+* ============================================================
+ECHO --- 7) GOTO and confirm SETLMDB state unchanged ---
+GOTO 1
+SETLMDB
+GOTO 10
+SETLMDB
+
+* ============================================================
+* 8) Cross-area sanity: open another table and apply SETLMDB there
+* ============================================================
+ECHO --- 8) DEPT: apply SETLMDB and verify per-area state ---
+SELECT 3
+USE DEPT
+SETLMDB 0
+SETLMDB dept
+SETLMDB
+
+* Return to STUDENTS: confirm its orderstate remains intact
+ECHO --- 8b) Back to STUDENTS: state should remain per-area ---
+SELECT 0
+AREA
+SETLMDB
+
+ECHO ===== LMDB IMPROVEMENTS SHAKE-DOWN END =====

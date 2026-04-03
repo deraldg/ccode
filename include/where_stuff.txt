@@ -1,0 +1,16 @@
+# Remove the old test from this target
+# (it lived in src/cli; delete/rename that file or exclude it)
+# e.g., stop compiling it into dottalkpp:
+#   list(REMOVE_ITEM DOTTALKPP_SOURCES ${CMAKE_SOURCE_DIR}/src/cli/test_sql_where.cpp)
+
+# Add a standalone test target
+add_executable(dottalkpp_where_cache_tests
+    tests/test_where_cache_only.cpp
+)
+target_include_directories(dottalkpp_where_cache_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_compile_features(dottalkpp_where_cache_tests PRIVATE cxx_std_17)
+# Only needs headers; but link any core lib your headers expect (none for cache-only)
+# target_link_libraries(dottalkpp_where_cache_tests PRIVATE xbase)  # Not required for this test

@@ -1,0 +1,8 @@
+CALC DTOC(CTOD("2026-01-01"))        && expect 20260101
+CALC DTOC(CTOD("2026-01-01"), 1)     && expect 2026-01-01
+CALC DTOC(CTOD("2026-01-01"), 2)     && expect 2026/01/01
+
+USE STUDENTS
+CALC CONCAT("Cutoff=", DTOC(CTOD("2026-01-01"), 1))
+CALC CONCAT("GPA=", STR(GPA, 6, 2))
+CALC CONCAT("Student: ", LNAME, ", ", FNAME)

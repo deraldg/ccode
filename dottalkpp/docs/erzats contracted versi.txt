@@ -1,0 +1,452 @@
+Below is the **tight contracted version** for the ERSATZ console renderer.
+
+This is the version I would pin and code against.
+
+---
+
+# ERSATZ Console Renderer Contract
+
+## 1. Scope
+
+The console renderer is a **pure presentation layer**.
+
+It accepts completed browser snapshot data and prints it in a fixed textual layout.
+
+It must **not**:
+
+* inspect DBFs directly
+* traverse relations
+* infer fields or columns
+* mutate workareas
+* apply movement
+* resolve aliases
+* compute tuple rows
+
+That all belongs to the builder layer.
+
+---
+
+## 2. Public API
+
+```cpp
+// include/browser/browser_render_console.hpp
+#pragma once
+
+#include <string>
+#include <vector>
+#include "browser/browser_snapshot.hpp"
+
+namespace browser
+{
+    void render_browser_snapshot_console(const BrowserSnapshot& snap);
+    void render_walk_snapshot_console(const WalkSnapshot& walk);
+}
+```
+
+That is the only required public surface.
+
+Everything else may remain internal to the `.cpp` file unless later reuse justifies exposing it.
+
+---
+
+## 3. Required section order
+
+`render_browser_snapshot_console()` must print sections in this exact order:
+
+1. header
+2. warnings block, if any
+3. root record block
+4. relation tree block
+5. descendant summary block
+6. tuple grid block
+7. footer
+
+This order is fixed.
+
+---
+
+## 4. Header contract
+
+The header must print:
+
+* command name
+* root alias
+* current recno
+* resolved path
+* limit
+* order state
+
+### Required output shape
+
+```text
+ERSATZ Relational Browser
+ROOT: STUDENTS  RECNO: 21
+PATH: ENROLL -> CLASSES -> TASSIGN -> TEACHERS
+LIMIT: 10
+ORDER: STUDENTS.CDX  TAG LNAME  ASC
+```
+
+### Fallback order shape
+
+```text
+ORDER: physical
+```
+
+### Empty path shape
+
+```text
+PATH: (none)
+```
+
+---
+
+## 5. Warning block contract
+
+Warnings print only if `snap.warnings` is non-empty.
+
+### Required output shape
+
+```text
+WARNINGS
+  - no active order; using physical order
+  - descendant summary incomplete
+```
+
+### Rules
+
+* preserve warning order
+* do not deduplicate
+* do not invent warnings in renderer
+
+---
+
+## 6. Root record block contract
+
+The root record block must render the current root vertically.
+
+### Required output shape
+
+```text
+CURRENT ROOT RECORD
+  SID      : 50000020
+  LNAME    : Anderson
+  FNAME    : Taylor
+```
+
+### Rules
+
+* use `snap.root.fields` and `snap.root.values`
+* field names left-aligned
+* widest field name determines label width
+* values printed in field order
+* if field/value counts mismatch, print:
+
+```text
+CURRENT ROOT RECORD
+  (field/value mismatch)
+```
+
+and continue safely
+
+### Empty root shape
+
+```text
+CURRENT ROOT RECORD
+  (none)
+```
+
+---
+
+## 7. Relation tree block contract
+
+The relation tree block must render the structured tree, not re-derive it.
+
+### Required output shape
+
+```text
+RELATION TREE
+  STUDENTS
+    -> ENROLL   ON SID
+       -> CLASSES   ON CLS_ID
+```
+
+### Rules
+
+* stable traversal order from snapshot
+* indent by depth
+* print `ON` text exactly as provided in snapshot
+* do not normalize expressions in renderer
+
+### Empty tree shape
+
+```text
+RELATION TREE
+  (none)
+```
+
+---
+
+## 8. Descendant summary block contract
+
+The descendant summary block must render counts in supplied order.
+
+### Required output shape
+
+```text
+DESCENDANT SUMMARY
+  ENROLL   : 3
+  CLASSES  : 3
+  TEACHERS : 3
+```
+
+### Empty summary shape
+
+```text
+DESCENDANT SUMMARY
+  (none)
+```
+
+### Rules
+
+* do not sort
+* do not recompute totals
+
+---
+
+## 9. Tuple grid block contract
+
+This is the main browser body.
+
+### Required inputs
+
+* `snap.columns`
+* `snap.rows`
+
+### Required output shape
+
+```text
+TUPLE GRID
+SID       LNAME     FNAME    CLS_ID   GRADE
+50000020  Anderson  Taylor   ENG101   A
+50000020  Anderson  Taylor   HIS210   B+
+```
+
+### Rules
+
+* one header row
+* zero or more data rows
+* all rows aligned to computed display widths
+* renderer must not mutate rows or columns
+
+### Empty grid shape
+
+```text
+TUPLE GRID
+  (none)
+```
+
+---
+
+## 10. Column label contract
+
+Renderer must build visible column labels from `TupleColumnMeta.label`.
+
+### Duplicate-label rule
+
+If two or more labels are identical, renderer must disambiguate by prefixing source alias.
+
+Example:
+
+* `LNAME`
+* `LNAME`
+
+becomes:
+
+* `STUDENTS.LNAME`
+* `TEACHERS.LNAME`
+
+### Rule
+
+Disambiguation is presentation-only.
+It must not modify the snapshot.
+
+---
+
+## 11. Width contract
+
+Each visible tuple column width must be computed as:
+
+```text
+max(visible_label_width, requested_column_width)
+```
+
+then clamped to console bounds.
+
+### Clamp rule
+
+* minimum width: `1`
+* maximum width: `20`
+
+### Notes
+
+* use `TupleColumnMeta.width` as requested width
+* renderer may expand to fit label if needed
+* renderer must not scan all cell contents to widen columns beyond clamp in first pass
+
+That keeps output deterministic.
+
+---
+
+## 12. Alignment contract
+
+### Right align
+
+* columns where `col.type.is_numeric == true`
+
+### Left align
+
+* all others
+
+This rule is fixed for first pass.
+
+---
+
+## 13. Cell formatting contract
+
+Renderer must format each cell using only:
+
+* raw cell text
+* column type metadata
+* final display width
+
+### Rules
+
+* empty cell prints blank
+* overlong cell truncates hard to width
+* no ellipsis required in first pass
+* memo fields may truncate like any other text
+* dates print as supplied
+* numerics print as supplied, then right-align
+
+Renderer must not reinterpret values.
+
+---
+
+## 14. Footer contract
+
+Footer must print:
+
+* rows shown
+* limit
+* status
+
+### Required output shape
+
+```text
+ROWS SHOWN: 3 / LIMIT 10 | STATUS: OK
+```
+
+### Rules
+
+* `rows shown` comes from snapshot, not recomputed
+* do not append extra diagnostics in first pass
+
+---
+
+## 15. Walk renderer contract
+
+`render_walk_snapshot_console(const WalkSnapshot& walk)` must render:
+
+1. a walk header
+2. one full browser frame per entry in `walk.frames`
+
+### Required output shape
+
+```text
+ERSATZ WALK
+
+==== FRAME 1 ====
+...browser snapshot...
+
+==== FRAME 2 ====
+...browser snapshot...
+```
+
+### Rules
+
+* reuse `render_browser_snapshot_console()` for each frame
+* preserve frame order
+* if no frames:
+
+```text
+ERSATZ WALK
+  (none)
+```
+
+---
+
+## 16. Error-handling contract
+
+Renderer must be tolerant.
+
+If snapshot sections are incomplete or mismatched:
+
+* print a visible placeholder
+* continue rendering remaining sections
+* do not throw
+* do not abort output
+
+This is important for early green builds.
+
+---
+
+## 17. Internal helpers
+
+These may remain private to the `.cpp` file.
+
+```cpp
+static void render_header(const BrowserSnapshot& snap);
+static void render_warnings(const std::vector<std::string>& warnings);
+static void render_root(const RecordSnapshot& root);
+static void render_relation_tree(const RelationTreeSnapshot& tree);
+static void render_descendant_summary(const DescendantSummary& ds);
+static void render_tuple_grid(const std::vector<TupleColumnMeta>& cols,
+                              const std::vector<TupleRow>& rows);
+static void render_footer(const BrowserSnapshot& snap);
+
+static int clamp_console_width(int w);
+static bool is_right_aligned(const TupleColumnMeta& col);
+static std::string pad_left(const std::string& s, int width);
+static std::string pad_right(const std::string& s, int width);
+static std::string format_cell(const std::string& value,
+                               const TupleColumnMeta& col,
+                               int width);
+static std::vector<std::string> build_visible_labels(
+    const std::vector<TupleColumnMeta>& cols);
+```
+
+These are implementation details, not public contract.
+
+---
+
+## 18. Definition of done
+
+The renderer contract is satisfied when:
+
+* a valid snapshot renders fully
+* an incomplete snapshot renders safely
+* section order is fixed
+* duplicate labels disambiguate
+* numeric columns right-align
+* wide values truncate
+* renderer performs no database or relation logic
+
+---
+
+## 19. Pinned contract summary
+
+In one sentence:
+
+> The ERSATZ console renderer is a pure, tolerant formatter that prints a completed browser snapshot in a fixed seven-section layout, with type-aware alignment, bounded widths, duplicate-label disambiguation, and no engine-side logic.
+
+If you want, the next step is the **matching contracted builder API** in the same tight style so both halves line up exactly.

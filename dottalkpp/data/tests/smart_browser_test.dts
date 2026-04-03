@@ -1,0 +1,112 @@
+**TL;DR:** You were typing **pager commands at the top-level shell**. First start the pager with `SMART_BROWSER ...`, then enter commands **inside** the pager (no leading dots). `Q` only works **inside** SMART Browser, not at the shell.
+
+### How to run (manual)
+
+At your `.` prompt:
+
+```
+SMART_BROWSER * PAGESIZE 10 SHOW SCHEMA SHOW JSON
+```
+
+Then you’ll see the pager prompt like:
+
+```
+-- More -- (Enter=next, Q=quit, TOP/BOTTOM/...)
+```
+
+Now type pager commands (no leading dots):
+
+```
+SHOW AREA
+SHOW RELATIONS
+SKIP 2
+
+FOR RECNO() <= 10
+
+CLEAR FOR
+ORDER PHYSICAL
+
+TOP
+GOTO 5
+
+HIDE SCHEMA
+SHOW JSON
+
+BOTTOM
+
+Q
+```
+
+Notes:
+
+* If your table only has 8 rows, `GOTO 10` fails. Use a valid target like `GOTO 5`.
+* `SHOW TABLE/COLUMNS/INDEX` are **shell** commands; `SHOW SCHEMA/JSON/AREA/RELATIONS` are **pager** commands.
+
+### One-liner scripted runs
+
+Windows (PowerShell):
+
+```powershell
+$cmds = @'
+SMART_BROWSER * PAGESIZE 10 SHOW SCHEMA SHOW JSON
+
+SHOW AREA
+SHOW RELATIONS
+SKIP 2
+
+FOR RECNO() <= 10
+
+CLEAR FOR
+ORDER PHYSICAL
+
+TOP
+GOTO 5
+
+HIDE SCHEMA
+SHOW JSON
+
+BOTTOM
+
+Q
+'@
+$cmds | & ".\build\Release\dottalkpp.exe"
+```
+
+bash:
+
+```bash
+cat > /tmp/sb.cmds <<'EOF'
+SMART_BROWSER * PAGESIZE 10 SHOW SCHEMA SHOW JSON
+
+SHOW AREA
+SHOW RELATIONS
+SKIP 2
+
+FOR RECNO() <= 10
+
+CLEAR FOR
+ORDER PHYSICAL
+
+TOP
+GOTO 5
+
+HIDE SCHEMA
+SHOW JSON
+
+BOTTOM
+
+Q
+EOF
+./build/Release/dottalkpp < /tmp/sb.cmds
+```
+
+If you want, you can also use the test files I generated earlier:
+
+* `sb_test_commands.txt` → feed into the exe with `type`/`cat`.
+* Or run the helper scripts:
+
+  * PowerShell: `.\run_SMARTbrowser_test.ps1`
+  * bash: `./run_SMARTbrowser_test.sh`
+
+**a.** Want a second script that assumes an active `SET ORDER TO ...` and exercises `ORDER INX`/`ORDER CNX` branches?
+**b.** Want assertions (grep) added to scripts to fail CI if `AREA:` / `REL:` tokens are missing?

@@ -1,0 +1,64 @@
+  <diagram id="p0_diagram" name="Index / Architecture Map">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#D9D9D9">
+      <root>
+        <mxCell id="p0_0"/>
+        <mxCell id="p0_1" parent="p0_0"/>
+
+        <!-- WINDOW FRAME -->
+        <mxCell id="p0_frame" value="" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#C0C0C0;" vertex="1" parent="p0_1">
+          <mxGeometry x="80" y="60" width="1040" height="520" as="geometry"/>
+        </mxCell>
+
+        <!-- TITLE BAR -->
+        <mxCell id="p0_title" value="x64base Architecture Map" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#000080;fontColor=#FFFFFF;strokeColor=#000000;fontSize=14;fontStyle=1;" vertex="1" parent="p0_1">
+          <mxGeometry x="80" y="40" width="1040" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ICON STYLE -->
+        <!-- Row 1 -->
+        <mxCell id="p0_sys" value="System Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="140" y="120" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_eng" value="Engine Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="420" y="120" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_app" value="Application Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="700" y="120" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Row 2 -->
+        <mxCell id="p0_curr" value="Curriculum Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="140" y="220" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_codex" value="Codex Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="420" y="220" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_brand" value="Branding Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="700" y="220" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Row 3 -->
+        <mxCell id="p0_sql" value="SQLSEL / SmartList" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="140" y="320" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_term" value="Terminal / VT-100" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="420" y="320" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_store" value="Storage / LMDB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="700" y="320" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Row 4 -->
+        <mxCell id="p0_dial" value="DIAL / WebSurface" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="140" y="420" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_currpipe" value="Curriculum Pipeline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="420" y="420" width="200" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_codexpipe" value="Codex Pipeline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontSize=12;" vertex="1" parent="p0_1">
+          <mxGeometry x="700" y="420" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

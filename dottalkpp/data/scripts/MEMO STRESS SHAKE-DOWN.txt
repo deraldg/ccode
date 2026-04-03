@@ -1,0 +1,286 @@
+ECHO OFF
+SET TALK ON
+
+* =========================================================
+* MEMO STRESS / SHAKE-DOWN
+* =========================================================
+* PURPOSE
+*   1) Prove legacy memo contract still works
+*   2) Prove x64 memo create/update/clear/reinsert works
+*   3) Create orphan chains for future MEMO VERIFY / GC tests
+*   4) Verify DISPLAY and TUP both resolve x64 memo text
+* =========================================================
+
+CLOSE ALL
+SCHEMAS CLOSE
+
+ERASE LOCKTEST CONFIRM
+ERASE MEMO_MSDOS CONFIRM
+ERASE MEMO_FOX26 CONFIRM
+ERASE MEMO_VFP CONFIRM
+ERASE MEMO_X64 CONFIRM
+
+* =========================================================
+* 0) BASIC NON-MEMO SANITY
+* =========================================================
+ECHO [0] BASIC TABLE SANITY
+CREATE LOCKTEST (ID N(4,0), NAME C(20))
+APPEND
+REPLACE ID WITH 1
+REPLACE NAME WITH LOCKOK
+TUP
+DISPLAY
+CLOSE
+
+USE LOCKTEST
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 1) LEGACY MEMO CONTRACTS
+* =========================================================
+ECHO [1A] MSDOS LEGACY MEMO
+CREATE MSDOS MEMO_MSDOS (ID N(4,0), TITLE C(20), NOTES M)
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH MSDOS1
+REPLACE NOTES WITH "msdos memo one"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_MSDOS
+TUP
+DISPLAY
+STRUCT
+FIELDS
+CLOSE
+
+ECHO [1B] FOX26 LEGACY MEMO
+CREATE FOX26 MEMO_FOX26 (ID N(4,0), TITLE C(20), NOTES M)
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH FOX261
+REPLACE NOTES WITH "fox26 memo one"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_FOX26
+TUP
+DISPLAY
+STRUCT
+FIELDS
+CLOSE
+
+ECHO [1C] VFP LEGACY MEMO
+CREATE VFP MEMO_VFP (ID N(4,0), TITLE C(20), NOTES M)
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH VFP1
+REPLACE NOTES WITH "vfp memo one"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_VFP
+TUP
+DISPLAY
+STRUCT
+FIELDS
+CLOSE
+
+* =========================================================
+* 2) X64 CREATE / FIRST INSERT
+* =========================================================
+ECHO [2] X64 CREATE / FIRST INSERT
+CREATE X64 MEMO_X64 (ID N(8,0), TITLE C(20), NOTES M)
+STRUCT
+FIELDS
+
+APPEND
+REPLACE ID WITH 1
+REPLACE TITLE WITH X641
+REPLACE NOTES WITH "first x64 memo"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 3) X64 SINGLE-RECORD UPDATE CHAIN
+* =========================================================
+* Intentionally creates multiple historical memo objects for the same row.
+* This is the best setup for future MEMO VERIFY / GC.
+* =========================================================
+ECHO [3] X64 UPDATE CHAIN ON RECORD 1
+USE MEMO_X64
+
+REPLACE NOTES WITH "second x64 memo"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "third x64 memo"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "fourth x64 memo"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "fifth x64 memo"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "sixth x64 memo"
+TUP
+DISPLAY
+
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 4) X64 CLEAR / REINSERT CYCLE
+* =========================================================
+ECHO [4] X64 CLEAR / REINSERT
+USE MEMO_X64
+
+REPLACE NOTES WITH ""
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "reinserted memo after clear"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+TUP
+DISPLAY
+CLOSE
+
+* =========================================================
+* 5) X64 SECOND RECORD
+* =========================================================
+ECHO [5] X64 SECOND RECORD
+USE MEMO_X64
+APPEND
+REPLACE ID WITH 2
+REPLACE TITLE WITH X642
+REPLACE NOTES WITH "second record memo"
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+GO TOP
+DISPLAY
+GO BOTTOM
+DISPLAY
+CLOSE
+
+* =========================================================
+* 6) X64 THIRD RECORD + UPDATE CHAIN
+* =========================================================
+ECHO [6] X64 THIRD RECORD CHAIN
+USE MEMO_X64
+APPEND
+REPLACE ID WITH 3
+REPLACE TITLE WITH X643
+REPLACE NOTES WITH "r3 memo v1"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "r3 memo v2"
+TUP
+DISPLAY
+
+REPLACE NOTES WITH "r3 memo v3"
+TUP
+DISPLAY
+
+CLOSE
+
+USE MEMO_X64
+GO BOTTOM
+DISPLAY
+CLOSE
+
+* =========================================================
+* 7) NAVIGATION SANITY
+* =========================================================
+ECHO [7] NAVIGATION SANITY
+USE MEMO_X64
+GO TOP
+DISPLAY
+SKIP 1
+DISPLAY
+GO BOTTOM
+DISPLAY
+CLOSE
+
+* =========================================================
+* 8) REOPEN / PERSISTENCE CHECK
+* =========================================================
+ECHO [8] REOPEN / PERSISTENCE
+USE MEMO_X64
+GO TOP
+TUP
+DISPLAY
+SKIP 1
+TUP
+DISPLAY
+SKIP 1
+TUP
+DISPLAY
+CLOSE
+
+USE MEMO_X64
+GO TOP
+DISPLAY
+GO BOTTOM
+DISPLAY
+CLOSE
+
+* =========================================================
+* 9) FUTURE MAINTENANCE TOOL HOOKS
+* =========================================================
+* These commands are meant to be enabled once MEMO tools are wired in.
+* Leave them here now so the same script can become your long-term regression.
+* Uncomment when ready.
+* =========================================================
+ECHO [9] FUTURE MEMO TOOLING CHECKPOINT
+
+* MEMO STATUS
+* MEMO VERIFY
+* MEMO GC
+* MEMO GC CONFIRM
+* MEMO VERIFY
+
+* =========================================================
+* 10) EXPECTED HIGH-LEVEL RESULTS
+* =========================================================
+ECHO [10] EXPECTATIONS
+ECHO LOCKTEST should still be stable.
+ECHO MSDOS/FOX26/VFP memo fields should truncate to 10 chars.
+ECHO MEMO_X64 record 1 should show latest text, not numeric object id.
+ECHO MEMO_X64 record 2 should show second record memo.
+ECHO MEMO_X64 record 3 should show r3 memo v3.
+ECHO Future MEMO VERIFY should report orphans from update chains.
+ECHO Future MEMO GC CONFIRM should reclaim those orphan memo objects.
+
+ECHO DONE

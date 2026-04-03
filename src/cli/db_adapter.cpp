@@ -45,3 +45,6 @@ bool db_field_get_char(const std::string& n, std::string& out){ return xindex::d
 bool db_field_get_numeric(const std::string& n, double& out){ return xindex::db_field_get_numeric(n,out,A()); }
 bool db_field_get_logical(const std::string& n, bool& out){ return xindex::db_field_get_logical(n,out,A()); }
 bool db_field_get_date_yyyymmdd(const std::string& n, std::string& out){ return xindex::db_field_get_date_yyyymmdd(n,out,A()); }
+
+
+

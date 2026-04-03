@@ -1,0 +1,76 @@
+REL
+  REL <subcommand> ...
+  Relations graph + join enumeration (shared core with SQL joins).
+
+Purpose
+  - Define a parent→child relation graph (xBase-style).
+  - Use it for pointer-following (browsing/tuples) and for join expansion (REL JOIN / SQL JOIN).
+  - Graph is treated as a rooted tree (one parent per child; no cycles).
+
+Subcommands
+  REL LIST [FLAT] [COUNTS|NOCNT]
+      Show relations rooted at the current parent context (typically the selected area).
+      FLAT   : show immediate children only (non-recursive).
+      COUNTS : show match counts (optional; may be slow).
+      Note: tree glyph style can be controlled by env var REL_TREE_STYLE (ASCII default).
+
+  REL REFRESH
+      Reposition child areas to match the current parent record (pointer-following refresh).
+      This is the classic xBase behavior: children point to the “first match” by the child’s order.
+
+  REL SAVE [path] | REL SAVE AS <dataset>
+      Save the current relation graph to JSON.
+      Default path: .relations/relations.json
+      Dataset path: .relations/<dataset>.json
+
+  REL LOAD [path] | REL LOAD AS <dataset>
+      Load a relation graph from JSON (optionally clearing existing relations first).
+
+  REL ADD <parent> <child> ON <keySpec> [REQUIRED|OPTIONAL] [MATCH FIRST|ALL] [INDEX AUTO|REQUIRE|ALLOWSCAN]
+      Add an edge to the relations graph.
+
+      keySpec forms (recommended semantics):
+        ON SID
+            Means: parent.SID == child.SID
+        ON PARENT.SID = CHILD.STUD_ID
+            Means: parent.SID == child.STUD_ID
+        ON (TERM, CID, SEC)
+            Means: parent.(TERM,CID,SEC) == child.(TERM,CID,SEC)
+
+      OPTIONALITY (join behavior):
+        REQUIRED (default)  : INNER edge — if no match during join expansion, emits 0 rows.
+        OPTIONAL            : LEFT edge  — if no match, emits 1 row with child fields as NULL/blank.
+
+      MATCH:
+        FIRST (default for pointer-following) : child is positioned to the first matching record.
+        ALL (default for REL JOIN)            : enumerate all matching child records.
+
+      INDEX policy:
+        AUTO      : use a compatible order when available; otherwise fall back (may scan).
+        REQUIRE   : fail if no compatible order exists (no scan).
+        ALLOWSCAN : permit scan when no compatible order exists (explicitly requested).
+
+      Notes:
+        - Pointer-following uses FIRST semantics (FoxPro-like).
+        - Join enumeration uses ALL semantics (SQL-like).
+        - Deletion rules: deleted records are not eligible matches (respects “deleted” state).
+
+  REL CLEAR <parent> | REL CLEAR ALL
+      Remove edges for a parent, or clear the entire graph.
+
+  REL JOIN [ROOT <alias>] [ALL|FIRST] [INNER|LEFT] [LIMIT n] [ALLOWSCAN|BUILDHASH] [COUNT|PREVIEW n]
+      Enumerate joins using the relations graph (used by other programs, and aligned with SQL JOIN).
+      Recommended defaults:
+        ROOT   : current selected area
+        MODE   : ALL
+        TYPE   : per-edge REQUIRED/OPTIONAL (edge-local INNER/LEFT semantics)
+        ORDER  : stable depth-first expansion using each area’s active order
+      Output helpers (recommended):
+        COUNT       : print number of joined rows
+        PREVIEW n   : print first n joined rows (debug)
+
+Related commands
+  SET RELATIONS ...
+      Back-compat/alternate frontend for graph edits (ADD/CLEAR), used by tuple browsing.
+  SQL / SQLITE ...
+      SQL JOIN compiles to the same join executor as REL JOIN (recommended design).

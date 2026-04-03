@@ -1,0 +1,15 @@
+DTSHEMA 2
+AREA 0 | dbf=building.dbf | index=BUILDING.cdx | indextype=CDX | tag=none | alias=BUILDING
+AREA 1 | dbf=classes.dbf | index=CLASSES.cdx | indextype=CDX | tag=none | alias=CLASSES
+AREA 2 | dbf=CLIENTS.dbf | index=CLIENTS.cdx | indextype=CDX | tag=none | alias=CLIENTS
+AREA 3 | dbf=courses.dbf | index=COURSES.cdx | indextype=CDX | tag=none | alias=COURSES
+AREA 4 | dbf=dept.dbf | index=DEPT.cdx | indextype=CDX | tag=none | alias=DEPT
+AREA 5 | dbf=enroll.dbf | index=ENROLL.cdx | indextype=CDX | tag=none | alias=ENROLL
+AREA 6 | dbf=majors.dbf | index=MAJORS.cdx | indextype=CDX | tag=none | alias=MAJORS
+AREA 7 | dbf=rooms.dbf | index=ROOMS.cdx | indextype=CDX | tag=none | alias=ROOMS
+AREA 8 | dbf=stud_maj.dbf | index=STUD_MAJ.cdx | indextype=CDX | tag=none | alias=STUD_MAJ
+AREA 9 | dbf=students.dbf | index=STUDENTS.cdx | indextype=CDX | tag=none | alias=STUDENTS
+AREA 10 | dbf=tassign.dbf | index=TASSIGN.cdx | indextype=CDX | tag=none | alias=TASSIGN
+AREA 11 | dbf=teachers.dbf | index=TEACHERS.cdx | indextype=CDX | tag=none | alias=TEACHERS
+AREA 12 | dbf=terms.dbf | index=TERMS.cdx | indextype=CDX | tag=none | alias=TERMS
+AREA 13 | dbf=X64SAMPLE.dbf | index=X64SAMPLE.cdx | indextype=CDX | tag=none | alias=X64SAMPLE

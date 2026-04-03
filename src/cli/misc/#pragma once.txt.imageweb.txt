@@ -1,0 +1,52 @@
+#pragma once
+
+#include <filesystem>
+#include <optional>
+#include <string>
+
+namespace dottalk::cliutil {
+
+enum class PathSlot {
+    None,
+    DATA,
+    DBF,
+    INDEXES,
+    SCHEMAS,
+    SCRIPTS,
+    TESTS,
+    HELP,
+    LOGS,
+    TMP
+};
+
+enum class ResolveKind {
+    ExistingFile,
+    ExistingPath,
+    ForOutputFile
+};
+
+// Resolve a CLI-supplied path into an absolute path.
+//
+// Behavior:
+// - absolute input is preserved (normalized where possible)
+// - relative input first tries CWD
+// - if a preferred slot is supplied and path-slot support exists,
+//   it also tries slot-based resolution
+// - if kind requires an existing target, only existing candidates succeed
+// - for output files, returns an absolute candidate even if it does not exist
+//
+// Examples:
+//   resolve_cli_path("tmp/test.jpg", PathSlot::TMP, ResolveKind::ExistingFile)
+//   resolve_cli_path("students.schema.json", PathSlot::SCHEMAS, ResolveKind::ExistingFile)
+//   resolve_cli_path("out/test.csv", PathSlot::None, ResolveKind::ForOutputFile)
+std::filesystem::path resolve_cli_path(const std::string& raw,
+                                       PathSlot preferred_slot,
+                                       ResolveKind kind);
+
+// Utility: true if path exists and is a regular file.
+bool is_regular_file_path(const std::filesystem::path& p);
+
+// Utility: true if path exists.
+bool path_exists(const std::filesystem::path& p);
+
+} // namespace dottalk::cliutil

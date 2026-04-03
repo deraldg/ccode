@@ -46,3 +46,6 @@ bool SimpleIndex::build_and_save(xbase::DbArea& area,
 }
 
 } // namespace xindex
+
+
+

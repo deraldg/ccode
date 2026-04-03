@@ -1,0 +1,4 @@
+& $py12 -c "import pydottalk; from pydottalk import xbase; a=xbase.DbArea(); a.open(r'D:\code\ccode\dottalkpp\data\dbf\STUDENTS.dbf'); 
+for row in a: 
+    print(row['recno'], row['values'][0:3]); 
+    if row['recno']>=5: break"

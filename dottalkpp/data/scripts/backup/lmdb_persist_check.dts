@@ -1,0 +1,51 @@
+SET ECHO OFF
+ECHO ===== LMDB SHAKE-DOWN (CLI-PASTE SCRIPT) START =====
+COLOR DEFAULT
+VERSION
+
+* ---- sanity: show LMDB help + info while closed
+LMDB
+LMDB INFO
+
+* ---- open/close idempotence
+LMDB OPEN test1
+LMDB INFO
+LMDB CLOSE
+LMDB CLOSE
+LMDB OPEN test1
+LMDB INFO
+
+* ---- reset contents to a known-empty state
+LMDB CLEAR
+LMDB INFO
+
+* ---- insert duplicates + single
+LMDB PUT A 1
+LMDB PUT A 2
+LMDB PUT B 3
+LMDB INFO
+
+* ---- seek duplicates (expect A -> 1 and A -> 2)
+LMDB SEEK A
+
+* ---- scan inclusive range (expect A -> 1, A -> 2, B -> 3)
+LMDB SCAN A B
+
+* ---- delete one duplicate, then seek again (expect only A -> 1 remains)
+LMDB DEL A 2
+LMDB SEEK A
+LMDB SCAN A B
+
+* ---- persistence across process exit: write a follow-up script that reopens + checks
+! cmd /c "echo SET ECHO OFF>tmp\lmdb_persist_check.dts"
+! cmd /c "echo ECHO ===== LMDB PERSIST CHECK =====>>tmp\lmdb_persist_check.dts"
+! cmd /c "echo LMDB OPEN test1>>tmp\lmdb_persist_check.dts"
+! cmd /c "echo LMDB INFO>>tmp\lmdb_persist_check.dts"
+! cmd /c "echo LMDB SEEK A>>tmp\lmdb_persist_check.dts"
+! cmd /c "echo LMDB SEEK B>>tmp\lmdb_persist_check.dts"
+! cmd /c "echo LMDB SCAN A C>>tmp\lmdb_persist_check.dts"
+! cmd /c "echo LMDB CLOSE>>tmp\lmdb_persist_check.dts"
+! cmd /c "echo ECHO ===== LMDB PERSIST CHECK END =====>>tmp\lmdb_persist_check.dts"
+
+LMDB CLOSE
+QUIT

@@ -1,0 +1,16 @@
+# repo root
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -U pip
+pip install -e .
+
+
+
+
+dbconv --help
+dbconv map list
+dbconv job dry-run <MAP_NAME>
+
+
+# no installation necessary
+python -m db_converter.cli --help

@@ -1,0 +1,171 @@
+// src/cli/cmd_calcwrite.cpp
+#include <algorithm>
+#include <cctype>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "cli/order_state.hpp"
+#include "index_summary.hpp"
+
+#include "xbase.hpp"
+#include "xbase_locks.hpp"
+
+#include "cli/expr/api.hpp"
+#include "cli/expr/ast.hpp"
+#include "cli/expr/fn_date.hpp"
+#include "cli/expr/fn_string.hpp"
+#include "cli/expr/glue_xbase.hpp"
+
+#include "value_normalize.hpp"
+
+#include "cli/table_state.hpp"
+
+// Provided by the interactive shell.
+extern "C" xbase::XBaseEngine* shell_engine(void);
+
+using dottalk::expr::Arith;
+using dottalk::expr::CompileResult;
+using dottalk::expr::Expr;
+using dottalk::expr::LitNumber;
+using dottalk::expr::LitString;
+using dottalk::expr::RecordView;
+
+namespace {
+static inline std::string ltrim(std::string s) {
+    size_t i = 0;
+    while (i < s.size() && std::isspace((unsigned char)s[i])) ++i;
+    return s.substr(i);
+}
+static inline std::string rtrim(std::string s) {
+    if (s.empty()) return s;
+    size_t i = s.size();
+    while (i > 0 && std::isspace((unsigned char)s[i - 1])) --i;
+    s.resize(i);
+    return s;
+}
+static inline std::string trim(std::string s) { return rtrim(ltrim(std::move(s))); }
+static bool values_equal_for_stale_check(const std::string& before, const std::string& after) {
+    return before == after;
+}
+static bool should_mark_stale_for_field_change(const xbase::DbArea& area, int fidx) {
+    // TODO: check if field is part of any index tag
+    (void)area; (void)fidx; // placeholder
+    return true; // conservative: always stale for now
+}
+static int resolve_current_index(xbase::DbArea& A) {
+    xbase::XBaseEngine* eng = shell_engine();
+    if (!eng) return -1;
+    for (int i = 0; i < xbase::MAX_AREA; ++i) {
+        if (&eng->area(i) == &A) return i;
+    }
+    return -1;
+}
+} // namespace
+void cmd_CALCWRITE(xbase::DbArea& area, std::istringstream& in) {
+    if (!area.isOpen()) {
+        std::cout << "CALCWRITE: no file open.\n";
+        return;
+    }
+    // Parse CALC field = expr
+    std::string lhs, eq, rhs;
+    in >> lhs >> eq;
+    if (eq != "=") {
+        std::cout << "Usage: CALC <field> = <expr>\n";
+        return;
+    }
+    std::getline(in, rhs);
+    rhs = trim(rhs);
+    int area0 = resolve_current_index(area);
+    if (area0 < 0) {
+        std::cout << "CALCWRITE: cannot determine current area.\n";
+        return;
+    }
+    int fidx = xfg::resolve_field_index_std(area, lhs);
+    if (fidx < 0) {
+        std::cout << "Field not found.\n";
+        return;
+    }
+    int field1 = fidx + 1; // 1-based
+    const uint32_t rn = area.recno();
+    std::string lock_err;
+    if (!xbase::locks::try_lock_record(area, rn, &lock_err)) {
+        std::cout << "CALCWRITE: record locked (" << lock_err << ").\n";
+        return;
+    }
+    // Capture BEFORE for stale tracking.
+    std::string before;
+    try { before = area.get(field1); } catch (...) { before.clear(); }
+    std::string to_store;
+    if (rhs.empty()) {
+        std::cout << "No expression.\n";
+        xbase::locks::unlock_record(area, rn);
+        return;
+    }
+    CompileResult cr = dottalk::expr::compile(rhs);
+    if (cr.status != CompileResult::Status::OK) {
+        std::cout << "Compile failed.\n";
+        xbase::locks::unlock_record(area, rn);
+        return;
+    }
+    dottalk::expr::RecordView rv(area);
+    std::string v = dottalk::expr::eval_string(cr.expr, rv);
+    to_store = value_normalize(v, area.getFieldType(fidx), area.getFieldLen(fidx), area.getFieldDec(fidx));
+    // ────────────────────────────────────────────────────────────────────────
+    // BUFFING BRANCH - ADDED HERE (exact match to REPLACE style)
+    // ────────────────────────────────────────────────────────────────────────
+    if (dottalk::table::is_enabled(area0)) {
+        auto& tb = dottalk::table::get_tb(area0);
+        // Build field mask (0-based field index)
+        std::uint64_t field_mask[dottalk::table::kWords]{};
+        int idx0 = fidx - 1;
+        int word = idx0 / 64;
+        int bit = idx0 % 64;
+        field_mask[word] |= (std::uint64_t{1} << bit);
+        tb.add_change(static_cast<int>(rn), dottalk::table::CHANGE_UPDATE, field_mask, field1, to_store);
+        dottalk::table::set_dirty(area0, true);
+        dottalk::table::mark_stale_field(area0, field1);
+        // Deferred locking: hold the lock until COMMIT (do not unlock here)
+        // Track it for release later
+        tb.locked_recnos.insert(rn); // Add this line (requires locked_recnos in AreaState)
+        std::cout << "Buffered CALCWRITE " << lhs << " at rec " << rn << ".\n";
+        return;
+    }
+    // Direct write (TABLE OFF) - unchanged from your original
+    bool ok = false;
+    try {
+        ok = area.set(field1, to_store) && area.writeCurrent();
+    } catch (...) {
+        ok = false;
+    }
+    xbase::locks::unlock_record(area, rn);
+    if (!ok) {
+        std::cout << "CALCWRITE: write failed.\n";
+        return;
+    }
+    // Capture AFTER for stale tracking.
+    std::string after;
+    try { after = area.get(field1); } catch (...) { after.clear(); }
+    if (auto* eng = shell_engine()) {
+        const int area0 = eng->currentArea();
+        // DIRTY: any successful write when TABLE enabled.
+        if (dottalk::table::is_enabled(area0)) {
+            dottalk::table::set_dirty(area0, true);
+        }
+        // Field-level STALE: mark iff actual stored value changed.
+        if (before != after) {
+            dottalk::table::mark_stale_field(area0, fidx);
+        }
+        // Global STALE: only when a key/order field changed.
+        if (should_mark_stale_for_field_change(area, fidx)) {
+            dottalk::table::set_stale(area0, true);
+        }
+    }
+    std::cout << "CALCWRITE: wrote " << lhs << " = " << to_store << "\n";
+}

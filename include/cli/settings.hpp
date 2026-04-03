@@ -12,7 +12,10 @@ struct Settings {
     std::atomic<bool> talk_on{true};          // SET TALK
     std::atomic<bool> status_on{false};       // SET STATUS
     std::atomic<bool> time_on{false};         // SET TIME
+    std::atomic<bool> timer_on{false};        // SET TIMER
+    std::atomic<bool> polling_on{false};      // SET POLLING
     std::atomic<bool> clock_on{false};        // SET CLOCK
+
     std::atomic<bool> console_on{true};       // SET CONSOLE
     std::atomic<bool> bell_on{false};         // SET BELL
 

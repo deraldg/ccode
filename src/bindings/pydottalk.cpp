@@ -1,4 +1,4 @@
-﻿// src/bindings/pydottalk.cpp
+// src/bindings/pydottalk.cpp
 // Minimal pybind11 module exposing a CLI-backed Session (Windows-focused).
 // Build with: -DBUILD_PYDOT_TALK=ON -DDTX_BACKEND_NATIVE=OFF
 
@@ -215,4 +215,7 @@ PYBIND11_MODULE(pydottalk, m) {
     .def("fields", &Session::fields, py::arg("table"))
     .def("run", &Session::run, py::arg("table"), py::arg("commands"));
 }
+
+
+
 

@@ -1,0 +1,8 @@
+META_VERSION=1
+BACKEND=lmdb
+KIND=v64
+VERSION=100
+RECLEN=95
+FIELDS=7
+HASH=8,512,337,746,346,340,195
+SOURCE=D:\code\ccode\dottalkpp\data\xdbf\teachers.dbf

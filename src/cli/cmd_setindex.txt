@@ -1,0 +1,166 @@
+// src/cli/cmd_setindex.cpp
+// SET INDEX TO <container>
+//
+// Beta-0 contract:
+// - SET INDEX attaches an index container to the current area.
+// - Supported containers:
+//     .inx  legacy single-order index
+//     .cnx  multi-tag container
+//     .cdx  public compound container
+// - LMDB remains an implementation detail behind CDX.
+// - For CNX/CDX, SET INDEX attaches the container only.
+//   The active tag is chosen by SET ORDER TO TAG <tag>.
+// - For INX, the attached container is immediately usable as the active order
+//   because INX is single-order and has no tag concept.
+
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "xbase.hpp"
+#include "cli/order_state.hpp"
+#include "cli/path_resolver.hpp"
+
+namespace fs = std::filesystem;
+
+namespace {
+
+static std::string up_copy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return s;
+}
+
+static std::string lower_copy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+static bool ends_with_ci(const std::string& s, const char* suffix) {
+    const std::string sl = lower_copy(s);
+    const std::string su = lower_copy(std::string(suffix));
+    if (sl.size() < su.size()) return false;
+    return sl.compare(sl.size() - su.size(), su.size(), su) == 0;
+}
+
+static bool has_any_sep(const std::string& s) {
+    return s.find('/') != std::string::npos || s.find('\\') != std::string::npos;
+}
+
+static bool looks_absolute(const std::string& s) {
+    return (s.size() > 2 &&
+            std::isalpha(static_cast<unsigned char>(s[0])) &&
+            s[1] == ':') ||
+           (!s.empty() && (s[0] == '/' || s[0] == '\\'));
+}
+
+static bool is_supported_index_ext(const fs::path& p) {
+    const std::string ext = lower_copy(p.extension().string());
+    return ext == ".inx" || ext == ".cnx" || ext == ".cdx";
+}
+
+static fs::path resolve_index_token(const std::string& tok) {
+    // Normalize ".cdx.d" input back to public ".cdx" container identity.
+    if (ends_with_ci(tok, ".cdx.d")) {
+        std::string s = tok;
+        s.erase(s.size() - 2); // strip trailing ".d"
+        return has_any_sep(s) || looks_absolute(s)
+             ? fs::path(s)
+             : dottalk::paths::resolve_index(s);
+    }
+
+    return dottalk::paths::resolve_index(tok);
+}
+
+static bool choose_container_path(const std::string& tok, fs::path& out_path) {
+    fs::path base = resolve_index_token(tok);
+
+    // Explicit extension: accept only supported container types.
+    if (base.has_extension()) {
+        if (!is_supported_index_ext(base)) return false;
+        out_path = base;
+        return true;
+    }
+
+    // No extension: probe in modern/public order first.
+    fs::path cdx = base; cdx.replace_extension(".cdx");
+    fs::path cnx = base; cnx.replace_extension(".cnx");
+    fs::path inx = base; inx.replace_extension(".inx");
+
+    if (fs::exists(cdx)) {
+        out_path = cdx;
+        return true;
+    }
+    if (fs::exists(cnx)) {
+        out_path = cnx;
+        return true;
+    }
+    if (fs::exists(inx)) {
+        out_path = inx;
+        return true;
+    }
+
+    // Default when nothing exists yet: prefer the public CDX shape.
+    out_path = cdx;
+    return true;
+}
+
+} // namespace
+
+void cmd_SETINDEX(xbase::DbArea& A, std::istringstream& args)
+{
+    std::string tok;
+    if (!(args >> tok)) {
+        std::cout << "SET INDEX: missing filename.\n";
+        return;
+    }
+
+    if (up_copy(tok) == "TO") {
+        if (!(args >> tok)) {
+            std::cout << "SET INDEX: missing filename.\n";
+            return;
+        }
+    }
+
+    fs::path p;
+    if (!choose_container_path(tok, p)) {
+        std::cout << "SET INDEX: unsupported index container: " << tok << "\n";
+        std::cout << "Supported: .inx, .cnx, .cdx\n";
+        return;
+    }
+
+    if (!fs::exists(p)) {
+        std::cout << "SET INDEX: file not found: " << p.string() << "\n";
+        return;
+    }
+
+    const std::string ext = lower_copy(p.extension().string());
+
+    // Attach container only. Actual backend activation happens in SET ORDER
+    // for CNX/CDX. INX is single-order, so attachment is enough.
+    orderstate::setOrder(A, p.string());
+    orderstate::setAscending(A, true);
+
+    if (ext == ".cnx" || ext == ".cdx") {
+        orderstate::setActiveTag(A, "");
+    } else {
+        // INX has no tag.
+        orderstate::setActiveTag(A, "");
+    }
+
+    // Detach any currently-open backend. Public container attachment and backend
+    // activation are intentionally separate in the Beta-0 architecture.
+    A.indexManager().close();
+
+    std::cout << "Index set: " << p.filename().string();
+
+    if (ext == ".cnx" || ext == ".cdx") {
+        std::cout << " (container attached; use SET ORDER TO TAG <tag>)";
+    }
+
+    std::cout << "\n";
+}

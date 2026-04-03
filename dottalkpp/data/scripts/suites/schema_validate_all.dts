@@ -1,0 +1,10 @@
+ECHO === SCHEMA VALIDATION (ALL) ===
+FOR EACH FILE IN schemas/*.schema.json
+    ECHO Validating %FILE%
+    SCHEMA VALIDATE %FILE% USING schemas/spec/schema_json_v1.schema.json
+    IF ERROR
+        ECHO FAIL: %FILE%
+        EXIT 1
+    ENDIF
+ENDFOR
+ECHO OK: All schemas validated

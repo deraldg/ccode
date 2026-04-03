@@ -1,0 +1,62 @@
+  <!-- PAGE 5: Physical Storage / DBF / Index (Retro Yellowed Paper) -->
+  <diagram id="p5_diagram" name="Physical Storage / DBF / Index">
+    <mxGraphModel dx="2000" dy="2000" grid="1" gridSize="10" background="#FFF2CC">
+      <root>
+        <mxCell id="p5_0"/>
+        <mxCell id="p5_1" parent="p5_0"/>
+
+        <!-- DBF FILE STRUCTURE -->
+        <mxCell id="p5_dbf" value="DBF File Structure&#xa;---&#xa;Header&#xa;Field Descriptors&#xa;Record Area&#xa;Deleted Flags&#xa;EOF Marker"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="80" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- MEMO FILES -->
+        <mxCell id="p5_memo" value="Memo Files (DBT/FPT)&#xa;---&#xa;Block Table&#xa;Variable-Length Data&#xa;Pointer Fields&#xa;Garbage Collection"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="500" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- INDEX FILES -->
+        <mxCell id="p5_index" value="Index Files (NTX/CDX)&#xa;---&#xa;B-Tree Nodes&#xa;Key Expressions&#xa;Collation&#xa;Tag Headers&#xa;Auto-Update"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="920" y="40" width="360" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- LOCKING SYSTEM -->
+        <mxCell id="p5_locking" value="Locking System&#xa;---&#xa;Record Locks&#xa;File Locks&#xa;Advisory Lock Files&#xa;Engine-Level Lock Manager&#xa;LMDB Atomicity"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="80" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- BUFFER MANAGER -->
+        <mxCell id="p5_buffer" value="Buffer Manager&#xa;---&#xa;Read Cache&#xa;Write Buffer&#xa;Dirty Pages&#xa;Flush Policy&#xa;Consistency Rules"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="500" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- STORAGE API -->
+        <mxCell id="p5_api" value="Storage API&#xa;---&#xa;Open/Close&#xa;Read/Write&#xa;Seek&#xa;Index Ops&#xa;Transaction Hooks"
+          style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="p5_1">
+          <mxGeometry x="920" y="360" width="360" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- CONNECTORS -->
+        <mxCell id="p5_edge1" edge="1" parent="p5_1" source="p5_dbf" target="p5_memo"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge2" edge="1" parent="p5_1" source="p5_dbf" target="p5_index"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge3" edge="1" parent="p5_1" source="p5_index" target="p5_locking"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge4" edge="1" parent="p5_1" source="p5_locking" target="p5_buffer"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+        <mxCell id="p5_edge5" edge="1" parent="p5_1" source="p5_buffer" target="p5_api"
+          style="endArrow=block;endSize=6;html=1;"/>
+
+      </root>
+    </mxGraphModel>
+  </diagram>

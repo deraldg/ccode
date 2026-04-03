@@ -1,0 +1,19 @@
+* dotscript_var_validation_01.dts
+
+var alpha = 1
+var _temp = 2
+var all_rows = 3
+var ifx = 4
+
+* should fail
+var if = 1
+var and = 1
+var set = 1
+var all = 1
+var "if" = 1
+var 1abc = 1
+
+* should remain normal string data
+var fullname = "Derald Grimwood"
+var phrase = "IF ELSE ENDIF"
+var band = "Van Halen"

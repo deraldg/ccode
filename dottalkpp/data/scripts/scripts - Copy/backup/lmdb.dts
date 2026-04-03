@@ -1,0 +1,53 @@
+LMDB OPEN test1
+
+LMDB CLEAR
+
+LMDB INFO 
+
+* Insert duplicates + single
+
+LMDB PUT A 1
+
+LMDB PUT A 2
+
+LMDB PUT B 3
+
+LMDB INFO 
+
+* (entries should now be 3 if you’re counting each dup as an entry; LMDB stats vary by how you report)
+
+* Seek duplicates
+
+LMDB SEEK A
+
+* Expected: two lines: A -> 1 and A -> 2
+
+* Scan inclusive range
+
+LMDB SCAN A B
+
+* Expected: A -> 1, A -> 2, B -> 3
+* If B doesn’t appear: your scan termination logic is wrong (inclusive bound / compare / break condition).
+
+* Delete one duplicate
+
+LMDB DEL A 2
+
+LMDB SEEK A
+
+* Expected: one line A -> 1
+* Close / reopen persistence
+
+LMDB CLOSE
+
+QUIT
+
+* restart dottalkpp
+
+LMDB OPEN test1
+
+LMDB SEEK A (expect A -> 1)
+
+LMDB SEEK B (expect B -> 3)
+
+LMDB SCAN A C (expect A then B)

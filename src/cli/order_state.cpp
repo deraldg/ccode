@@ -1,98 +1,163 @@
-#include "order_state.hpp"
-#include "xbase.hpp"
-#include <unordered_map>
-#include <string>
+// src/cli/order_state.cpp
+#include "cli/order_state.hpp"
+
 #include <algorithm>
+#include <cctype>
+#include <mutex>
+#include <string>
+#include <unordered_map>
 
-namespace {
-    struct State {
-        bool has_order = false;
-        std::string path;       // container path (INX/IDX/CNX). Never a tag.
-        bool ascending = true;
-        std::string cnx_tag;    // active CNX tag (UPPER) if path is a .cnx; else empty.
-    };
-    // Track state per area pointer
-    std::unordered_map<const xbase::DbArea*, State> g;
-
-    static bool ends_with_icase(const std::string& s, const std::string& suf) {
-        if (s.size() < suf.size()) return false;
-        auto it = s.end() - (ptrdiff_t)suf.size();
-        for (size_t i = 0; i < suf.size(); ++i) {
-            char a = (char)std::tolower((unsigned char)it[i]);
-            char b = (char)std::tolower((unsigned char)suf[i]);
-            if (a != b) return false;
-        }
-        return true;
-    }
-
-    static std::string to_upper(std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(),
-            [](unsigned char c){ return (char)std::toupper(c); });
-        return s;
-    }
-}
+#include "xbase.hpp"
 
 namespace orderstate {
 
-bool hasOrder(const xbase::DbArea& a) {
-    auto it = g.find(&a);
-    return (it != g.end()) && it->second.has_order && !it->second.path.empty();
+namespace {
+
+struct State {
+    std::string container;  // path to .inx/.cnx/.cdx/.isx/.csx (empty => none)
+    std::string tag;        // tag name (canonicalized to upper)
+    bool        ascending{true};
+};
+
+std::mutex g_mtx;
+std::unordered_map<const xbase::DbArea*, State> g_state;
+
+static inline std::string lower_copy(std::string s) {
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
 }
 
-std::string orderName(const xbase::DbArea& a) {
-    auto it = g.find(&a);
-    return (it == g.end()) ? std::string() : it->second.path;
+static inline bool ends_with_ci(const std::string& s, const char* suffix) {
+    const std::string sl = lower_copy(s);
+    const std::string su = lower_copy(std::string(suffix));
+    if (sl.size() < su.size()) return false;
+    return sl.compare(sl.size() - su.size(), su.size(), su) == 0;
 }
 
-void setOrder(xbase::DbArea& a, const std::string& path) {
-    auto& st = g[&a];
-    st.has_order = !path.empty();
-    st.path = path;
-    // When container changes, clear any previous tag selection.
-    st.cnx_tag.clear();
-    // Preserve st.ascending as-is.
+static inline std::string canon_tag(std::string s) {
+    size_t b = 0, e = s.size();
+    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\0')) ++b;
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\0')) --e;
+    s = s.substr(b, e - b);
+
+    for (auto& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
 }
 
-void clearOrder(xbase::DbArea& a) {
-    auto& st = g[&a];
-    st.has_order = false;
-    st.path.clear();
-    st.cnx_tag.clear();
-    st.ascending = true;
+static inline State* find_state_unlocked(const xbase::DbArea& area) {
+    auto it = g_state.find(&area);
+    return (it == g_state.end()) ? nullptr : &it->second;
 }
 
-void setAscending(xbase::DbArea& a, bool asc) {
-    g[&a].ascending = asc;
+static inline State& state(const xbase::DbArea& area) {
+    return g_state[&area];
 }
 
-bool isAscending(const xbase::DbArea& a) {
-    auto it = g.find(&a);
-    return (it == g.end()) ? true : it->second.ascending;
+static inline bool container_supports_tag(const std::string& container_path) {
+    return ends_with_ci(container_path, ".cnx") || ends_with_ci(container_path, ".cdx");
 }
 
-void setActiveTag(xbase::DbArea& a, const std::string& tagUpper) {
-    auto& st = g[&a];
-    if (!st.path.empty() && ends_with_icase(st.path, ".cnx")) {
-        st.cnx_tag = to_upper(tagUpper);
-    } else {
-        st.cnx_tag.clear(); // not a CNX container; ignore
+} // namespace
+
+bool hasOrder(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st && !st->container.empty();
+}
+
+std::string orderName(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? st->container : std::string{};
+}
+
+void setOrder(xbase::DbArea& area, const std::string& container_path) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+
+    State& st = state(area);
+
+    const std::string old_container = st.container;
+    const bool changed = (old_container != container_path);
+
+    st.container = container_path;
+
+    if (st.container.empty()) {
+        st.tag.clear();
+        st.ascending = true;
+        return;
+    }
+
+    if (changed) {
+        st.tag.clear();
+    }
+
+    if (!container_supports_tag(st.container)) {
+        st.tag.clear();
     }
 }
 
-std::string activeTag(const xbase::DbArea& a) {
-    auto it = g.find(&a);
-    if (it == g.end()) return {};
-    const auto& st = it->second;
-    if (!st.path.empty() && ends_with_icase(st.path, ".cnx")) {
-        return st.cnx_tag;
-    }
-    return {};
+void clearOrder(xbase::DbArea& area) {
+    setOrder(area, std::string{});
 }
 
-bool isCnx(const xbase::DbArea& a) {
-    auto it = g.find(&a);
-    if (it == g.end()) return false;
-    return ends_with_icase(it->second.path, ".cnx");
+void setAscending(xbase::DbArea& area, bool ascending) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State& st = state(area);
+    st.ascending = ascending;
+}
+
+bool isAscending(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? st->ascending : true;
+}
+
+void setActiveTag(xbase::DbArea& area, const std::string& tag_name) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State& st = state(area);
+
+    if (!container_supports_tag(st.container)) {
+        st.tag.clear();
+        return;
+    }
+
+    st.tag = canon_tag(tag_name);
+}
+
+std::string activeTag(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? st->tag : std::string{};
+}
+
+bool isInx(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? ends_with_ci(st->container, ".inx") : false;
+}
+
+bool isCnx(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? ends_with_ci(st->container, ".cnx") : false;
+}
+
+bool isCdx(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? ends_with_ci(st->container, ".cdx") : false;
+}
+
+bool isIsx(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? ends_with_ci(st->container, ".isx") : false;
+}
+
+bool isCsx(const xbase::DbArea& area) {
+    std::lock_guard<std::mutex> lk(g_mtx);
+    State* st = find_state_unlocked(area);
+    return st ? ends_with_ci(st->container, ".csx") : false;
 }
 
 } // namespace orderstate

@@ -1,4 +1,4 @@
-// src/cli/cmd_select.cpp — SELECT <area#|name>
+// src/cli/cmd_select.cpp ? SELECT <area#|name>
 // Supports selecting by numeric slot (0..N-1) or by name/label (case-insensitive).
 // Name matching checks workareas::name(i) and the DBF base name from DbArea::filename().
 //
@@ -143,3 +143,6 @@ void cmd_SELECT(xbase::DbArea& /*A*/, std::istringstream& iss) {
         std::cout << "Current area: " << idx << "\n";
     }
 }
+
+
+

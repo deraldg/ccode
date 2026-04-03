@@ -1,84 +1,40 @@
-# Build trees
-/build*/
-/out/
-/dist/
-/bin/
-/obj/
-/CMakeCache.txt
-/CMakeFiles/
-/cmake-build-*/
-/.vs/
-*.vcxproj.user
-*.VC.db
+# Build
+build/
+build-*/
+bin/
+debug/
+release/
+out/
 
-# Compiled artifacts
-*.exe
-*.dll
-*.lib
-*.pdb
-*.obj
-*.ilk
-*.exp
-*.pch
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
 
-# CMake generators
-*.sln
-*.vcxproj
-*.vcxproj.filters
+# IDE
+.vs/
+.vscode/
+.idea/
 
-# Logs, temps
-*.log
-*.tmp
-*.cache
-
-# Python helpers
+# Python
 __pycache__/
 *.pyc
+.venv/
 
-# PowerShell transcript
-*.ps1xml
-
-# Test results
-/results/
-
-# === ccode canonical ignore (auto) ===
-# Builds
-/build/
-/build-*/
-/CMakeFiles/
-/CMakeCache.txt
-/build.ninja
-/compile_commands.json
-
-# Local-only outputs
-/_artifacts/
-/_bundles/
-/_drops/
-/zips/
-/dist/
-/vcpkg_installed/
-
-# Runtime data outputs
-/data/out/
-/data/tmp/
-/data/logs/
-
-# IDE/OS noise
-/.vscode/
-/.DS_Store
-Thumbs.db
-desktop.ini
-
-# Archives & bundles
-*.zip
-*.7z
-*.tar
-*.tar.gz
+# Runtime / indexes
+*.cdx.d/
+*.lmdb/
+*.db-lock
 
 # Logs
+dottalkpp/data/logs/
 *.log
-# === /ccode canonical ignore (auto) ===
 
+# Temp
+tmp/
+temp/
 
-
-.fake
+# Archives
+*.zip
+*.7z
